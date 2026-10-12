@@ -20,7 +20,7 @@ def generate_launch_description():
     slam_config_arg = DeclareLaunchArgument(
         "slam_config",
         default_value=os.path.join(
-            get_package_share_directory("bumperpot_mapping"),
+            get_package_share_directory("bumperbot_mapping"),
             "config",
             "slam_toolbox.yaml"
         )
@@ -53,8 +53,8 @@ def generate_launch_description():
         ]
     )
 
-    nav2_lifecyle_manager = Node(
-        package="nav2_lifecyle_manager",
+    nav2_lifecycle_manager = Node(
+        package="nav2_lifecycle_manager",
         executable="lifecycle_manager",
         name="lifecycle_manager",
         output="screen",
@@ -69,5 +69,5 @@ def generate_launch_description():
         slam_config_arg,
         slam_toolbox,
         nav2_map_saver,
-        nav2_lifecyle_manager,
+        nav2_lifecycle_manager,
     ])
