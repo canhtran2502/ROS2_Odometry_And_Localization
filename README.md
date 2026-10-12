@@ -1,1 +1,388 @@
-# ROS2_Odometry_And_Locolization
+# BumperBot ROS 2 Humble Workspace
+
+[![ROS 2](https://img.shields.io/badge/ROS_2-Humble_Hawksbill-22314E.svg?logo=ros&logoColor=white)](https://docs.ros.org/en/humble/)
+[![Ubuntu](https://img.shields.io/badge/Ubuntu-22.04_LTS-E95420.svg?logo=ubuntu&logoColor=white)](https://releases.ubuntu.com/22.04/)
+[![C++](https://img.shields.io/badge/C++-17-00599C.svg?logo=c%2B%2B&logoColor=white)](https://en.cppreference.com/)
+[![Python](https://img.shields.io/badge/Python-3.10-3776AB.svg?logo=python&logoColor=white)](https://www.python.org/)
+[![Gazebo](https://img.shields.io/badge/Gazebo-Fortress_6-FF7F00.svg)](https://gazebosim.org/)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+
+BumperBot is an end-to-end Autonomous Mobile Robot (AMR) system developed in **ROS 2 Humble** on **Ubuntu 22.04 LTS**. It bridges embedded hardware control, kinematics, multi-sensor perception, Kalman filtering, SLAM, and global localization into a unified, modular architecture.
+
+---
+
+## Table of Contents
+
+- [1. Project Overview](#1-project-overview)
+- [2. System Architecture](#2-system-architecture)
+- [3. Repository Structure](#3-repository-structure)
+- [4. Package Reference](#4-package-reference)
+- [5. Prerequisites](#5-prerequisites)
+- [6. Installation and Build](#6-installation-and-build)
+- [7. Quick Start](#7-quick-start)
+- [8. Feature Verification Guides](#8-feature-verification-guides)
+- [9. ROS 2 Command Reference](#9-ros-2-command-reference)
+- [10. Troubleshooting](#10-troubleshooting)
+- [11. Technical Documentation Index](#11-technical-documentation-index)
+- [12. Suggested Learning Path](#12-suggested-learning-path)
+
+---
+
+## 1. Project Overview
+
+BumperBot is designed for roboticists and embedded software engineers mastering differential-drive mobile robotics, sensor fusion, state estimation, and physical deployment.
+
+### Key Capabilities
+
+- **Kinematics & Control**: Differential-drive kinematics implemented in both C++ (`rclcpp`) and Python (`rclpy`), alongside standard `ros2_control` (`diff_drive_controller`).
+- **Physics Simulation**: Ignition Gazebo Fortress 6 integration with realistic physics, friction, LiDAR, and IMU sensor plugins using `ros_gz_bridge`.
+- **Velocity Multiplexing & Safety**: Priority-based command arbitration via `twist_mux` and a 2-tier reactive LiDAR safety supervisor with dynamic slowdown and emergency braking.
+- **State Estimation & Fusion**: 1D linear Kalman filter, Thrun's probabilistic sample odometry motion model, and 15-state Extended Kalman Filter (`robot_localization`).
+- **Mapping & SLAM**: Known-pose ray-projection occupancy grid mapper and full Graph SLAM using `slam_toolbox`.
+- **Global Localization**: Adaptive Monte Carlo Localization (`nav2_amcl`) with particle cloud convergence in pre-mapped environments.
+- **Physical Robot Interface**: Custom `hardware_interface::SystemInterface` plugin communicating with an Arduino PID controller over serial (`libserial`), coupled with an MPU6050 I2C IMU driver.
+- **Pedagogical Foundations**: 12 mirrored tutorial modules comparing C++ and Python ROS 2 implementations (Pub/Sub, Services, Actions, Parameters, QoS, Lifecycle nodes, and TF2).
+
+### Current Implementation Status
+
+| Subsystem | Status | Implementation Details |
+| :--- | :---: | :--- |
+| **URDF / Xacro Modeling** | Verified | Visual/collision meshes, inertia tensors, sensor frames |
+| **Gazebo Physics Simulation** | Verified | Ignition Fortress 6 world, `ros_gz_bridge`, sensor topics |
+| **Differential Drive Control** | Verified | `diff_drive_controller`, custom C++/Python kinematics nodes |
+| **Safety Supervisor & Mux** | Verified | 2-tier range check (`/safety_stop`), priority arbitration |
+| **Sensor Fusion (EKF)** | Verified | `robot_localization` fusing noisy wheel odometry & IMU |
+| **Known-Pose Mapping** | Verified | Custom occupancy grid generator (`mapping_with_known_poses`) |
+| **2D Graph SLAM** | Verified | `slam_toolbox` asynchronous cartographic mapping |
+| **AMCL Localization** | Verified | `nav2_amcl` particle filter with map server lifecycle |
+| **Hardware Interface** | Verified | C++ `hardware_interface` over `/dev/ttyUSB0` + Arduino PID |
+| **Autonomous Navigation (Nav2)** | Planned | Architectural blueprint provided in [doc/10_navigation.md](doc/10_navigation.md) |
+
+---
+
+## 2. System Architecture
+
+The robot software stack is organized into 7 decoupled layers:
+
+```mermaid
+graph TD
+    subgraph Tier7["Tier 7: User Interface & Teleop"]
+        RVIZ["RViz2 Visualization"]
+        JOY["Gamepad Teleop (joy_teleop)"]
+        KEY["Keyboard Teleop (teleop_twist_keyboard)"]
+    end
+
+    subgraph Tier6["Tier 6: Global Localization & SLAM"]
+        AMCL["nav2_amcl (Particle Filter)"]
+        SLAM["slam_toolbox (Graph SLAM)"]
+        MAPS["nav2_map_server (Occupancy Grid)"]
+    end
+
+    subgraph Tier5["Tier 5: State Estimation & Sensor Fusion"]
+        EKF["robot_localization (15-state EKF)"]
+        KF["kalman_filter (1D Linear Filter)"]
+        OMM["odometry_motion_model (Particle Samples)"]
+    end
+
+    subgraph Tier4["Tier 4: Reactive Safety Supervisor"]
+        SAFETY["safety_stop_node (Range Monitor)"]
+    end
+
+    subgraph Tier3["Tier 3: Velocity Multiplexing"]
+        TMUX["twist_mux (Priority Arbitrator)"]
+        TREL["twist_relay (Stamped Converter)"]
+    end
+
+    subgraph Tier2["Tier 2: ROS 2 Control & Kinematics"]
+        CM["controller_manager"]
+        DIFF["diff_drive_controller"]
+        JSB["joint_state_broadcaster"]
+        SKIN["simple_controller (Analytical Kinematics)"]
+    end
+
+    subgraph Tier1["Tier 1: Hardware Abstraction & Simulation"]
+        GZ["Ignition Gazebo Fortress 6"]
+        HW["BumperbotInterface (libserial C++)"]
+        IMU["mpu6050_driver (I2C Python)"]
+    end
+
+    KEY -->|/key_vel (Pri: 90)| TMUX
+    JOY -->|/joy_vel (Pri: 99)| TMUX
+    SAFETY -->|/safety_stop lock (Pri: 255)| TMUX
+    TMUX --> TREL -->|/bumperbot_controller/cmd_vel| DIFF
+    DIFF --> CM
+    CM <-->|ros2_control| GZ
+    CM <-->|Hardware Plugin| HW
+
+    GZ -->|/scan| SAFETY
+    GZ -->|/scan| SLAM
+    GZ -->|/scan| AMCL
+    GZ -->|/imu/out| EKF
+    DIFF -->|/bumperbot_controller/odom| EKF
+    EKF -->|/odometry/filtered & TF: odom -> base_footprint| RVIZ
+    AMCL -->|TF: map -> odom| RVIZ
+    SLAM -->|TF: map -> odom| RVIZ
+    MAPS -->|/map| AMCL
+```
+
+For complete architectural details, concurrency models, and sequence diagrams, see [doc/02_system_architecture.md](doc/02_system_architecture.md).
+
+---
+
+## 3. Repository Structure
+
+```text
+bumperbot_ws/
+├── doc/                                # Comprehensive technical manuals
+│   ├── 00_project_overview.md          # Architecture overview & feature matrix
+│   ├── 01_repository_structure.md      # Detailed directory tree & dependency graph
+│   ├── 02_system_architecture.md       # 7-tier architecture & data pipelines
+│   ├── 03_ros2_nodes_topics_services.md# Full catalog of nodes, topics & services
+│   ├── 04_tf_and_coordinate_frames.md  # REP-105 coordinate frames & TF2 trees
+│   ├── 05_robot_description_and_simulation.md # URDF, Xacro & Gazebo configuration
+│   ├── 06_odometry_and_motion_control.md      # Kinematics equations & twist_mux
+│   ├── 07_lidar_and_sensor_processing.md      # LiDAR supervisor, IMU & safety stop
+│   ├── 08_mapping_and_slam.md          # Known-pose mapping & slam_toolbox
+│   ├── 09_localization.md              # 1D Kalman filter, EKF & AMCL
+│   ├── 10_navigation.md                # Nav2 gap analysis & implementation plan
+│   ├── 11_build_run_and_command_reference.md  # Verified build, launch & test commands
+│   └── 12_troubleshooting.md           # Master diagnostic matrix & known fixes
+├── src/
+│   ├── bumperbot_bringup/              # Master launch files for sim & physical robot
+│   ├── bumperbot_controller/           # Kinematics, odometry, teleop & twist_mux
+│   ├── bumperbot_description/          # URDF/Xacro models, meshes, Gazebo worlds
+│   ├── bumperbot_firmware/             # Hardware interface, serial drivers, Arduino
+│   ├── bumperbot_localization/         # Kalman filter, EKF configs & AMCL launch
+│   ├── bumperbot_mapping/              # Known-pose occupancy mapper & SLAM Toolbox
+│   ├── bumperbot_msgs/                 # Custom ROS 2 IDL messages, services, actions
+│   ├── bumperbot_utils/                # Reactive LiDAR safety supervisor
+│   ├── bumperbot_cpp_examples/         # C++ (rclcpp) tutorials & API patterns
+│   └── bumperbot_py_examples/          # Python (rclpy) tutorials & API patterns
+├── README.md                           # Master repository guide (this file)
+```
+
+---
+
+## 4. Package Reference
+
+| Package | Type | Primary Responsibilities | Key Nodes & Entry Points | Documentation |
+| :--- | :--- | :--- | :--- | :--- |
+| **`bumperbot_bringup`** | `ament_cmake` | Master system integration & unified launch orchestration | `simulated_robot.launch.py`, `real_robot.launch.py` | [doc/01_repository_structure.md](doc/01_repository_structure.md) |
+| **`bumperbot_controller`** | `ament_cmake` + Python | Analytical kinematics, noisy odometry, and teleop arbitration | `simple_controller`, `noisy_controller`, `twist_relay` | [doc/06_odometry_and_motion_control.md](doc/06_odometry_and_motion_control.md) |
+| **`bumperbot_description`** | `ament_cmake` | URDF/Xacro modeling, visual/collision meshes, Gazebo worlds | `display.launch.py`, `gazebo.launch.py` | [doc/05_robot_description_and_simulation.md](doc/05_robot_description_and_simulation.md) |
+| **`bumperbot_firmware`** | `ament_cmake` + Python | Hardware interface plugin, serial transceiver, Arduino PID | `bumperbot_interface` (plugin), `mpu6050_driver` | [doc/06_odometry_and_motion_control.md](doc/06_odometry_and_motion_control.md) |
+| **`bumperbot_localization`** | `ament_cmake` + Python | 1D Kalman filter, particle sampling, EKF & AMCL configs | `kalman_filter`, `odometry_motion_model`, `imu_republisher` | [doc/09_localization.md](doc/09_localization.md) |
+| **`bumperbot_mapping`** | `ament_cmake` + Python | Known-pose occupancy grid generation & Graph SLAM | `mapping_with_known_poses`, `slam.launch.py` | [doc/08_mapping_and_slam.md](doc/08_mapping_and_slam.md) |
+| **`bumperbot_utils`** | `ament_cmake` + Python | 2-tier reactive LiDAR safety supervisor with RViz markers | `safety_stop` (.cpp/.py) | [doc/07_lidar_and_sensor_processing.md](doc/07_lidar_and_sensor_processing.md) |
+| **`bumperbot_msgs`** | `ament_cmake` | Custom IDL definitions (`AddTwoInts`, `GetTransform`, `Fibonacci`) | Interfaces generation | [doc/03_ros2_nodes_topics_services.md](doc/03_ros2_nodes_topics_services.md) |
+| **`bumperbot_cpp_examples`** | `ament_cmake` | C++ (`rclcpp`) reference implementations | 12 tutorial nodes (Pub/Sub, Service, Action, TF2, QoS) | [doc/03_ros2_nodes_topics_services.md](doc/03_ros2_nodes_topics_services.md) |
+| **`bumperbot_py_examples`** | `ament_python` | Python (`rclpy`) reference implementations | 12 tutorial nodes (Pub/Sub, Service, Action, TF2, QoS) | [doc/03_ros2_nodes_topics_services.md](doc/03_ros2_nodes_topics_services.md) |
+
+---
+
+## 5. Prerequisites
+
+- **Operating System**: Ubuntu 22.04 LTS (Jammy Jellyfish) 64-bit x86_64 or ARM64
+- **ROS 2 Distribution**: ROS 2 Humble Hawksbill
+- **Simulator**: Ignition Gazebo Fortress 6 (`ign gazebo` / `ros-humble-ros-gz`)
+- **Compilers & Interpreters**: GCC/G++ 11.4+, Python 3.10+, CMake 3.22+
+- **Serial & I2C Libraries**: `libserial-dev`, `python3-smbus`
+
+---
+
+## 6. Installation and Build
+
+### Step 1: Install System & ROS 2 Dependencies
+
+```bash
+sudo apt update
+sudo apt install -y \
+  ros-humble-ros-gz \
+  ros-humble-ros-gz-sim \
+  ros-humble-ros-gz-bridge \
+  ros-humble-ros2-control \
+  ros-humble-ros2-controllers \
+  ros-humble-diff-drive-controller \
+  ros-humble-joint-state-broadcaster \
+  ros-humble-joy \
+  ros-humble-joy-teleop \
+  ros-humble-twist-mux \
+  ros-humble-slam-toolbox \
+  ros-humble-nav2-amcl \
+  ros-humble-nav2-map-server \
+  ros-humble-nav2-lifecycle-manager \
+  ros-humble-robot-localization \
+  ros-humble-tf-transformations \
+  ros-humble-teleop-twist-keyboard \
+  libserial-dev \
+  python3-smbus
+```
+
+### Step 2: Build the Workspace
+
+```bash
+cd ~/Working/04_Investigating/udemy/ros2_map_localization/ws/bumperbot_ws
+source /opt/ros/humble/setup.bash
+
+# Build all packages with symbolic install links
+colcon build --symlink-install
+```
+
+### Step 3: Source the Overlay
+
+```bash
+source install/setup.bash
+```
+
+> [!TIP]
+> Add `source ~/bumperbot_ws/install/setup.bash` to your `~/.bashrc` for automatic environment setup in new terminal windows.
+
+---
+
+## 7. Quick Start
+
+### Simulation with Pre-Mapped Localization (AMCL)
+
+Launch the simulated robot in a fully furnished house with AMCL localization, the reactive safety stop supervisor, and RViz2:
+
+```bash
+# Terminal 1: Full Simulation Bringup
+source install/setup.bash
+ros2 launch bumperbot_bringup simulated_robot.launch.py world_name:=small_house use_slam:=False
+```
+
+```bash
+# Terminal 2: Keyboard Teleoperation
+source install/setup.bash
+ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -r cmd_vel:=/key_vel
+```
+
+**What to expect:**
+1. **Ignition Gazebo**: Displays BumperBot inside the `small_house` world.
+2. **RViz2**: Visualizes the robot 3D model, laser scan (`/scan`), occupancy grid map, and the green AMCL particle cloud converging around the robot.
+3. **Teleop & Safety**: Control the robot using keys `i`, `j`, `k`, `l`, `,`. If you drive towards a wall, the robot automatically slows down within 0.40m (warning zone) and comes to an emergency halt within 0.20m (danger zone).
+
+---
+
+## 8. Feature Verification Guides
+
+### 1. Robot Model & Kinematic Sliders
+
+Visualize the robot model in RViz2 and articulate joints manually:
+
+```bash
+ros2 launch bumperbot_description display.launch.py
+```
+
+### 2. Standalone Physics Simulation
+
+Launch Ignition Gazebo Fortress with simulated sensors without the full bringup stack:
+
+```bash
+ros2 launch bumperbot_description gazebo.launch.py world_name:=small_house
+```
+
+### 3. Real-Time SLAM (Mapping an Unknown Environment)
+
+Map a world dynamically using `slam_toolbox`:
+
+```bash
+# Terminal 1: Launch simulation in SLAM mode
+ros2 launch bumperbot_bringup simulated_robot.launch.py world_name:=small_house use_slam:=True
+
+# Terminal 2: Teleoperate to map the room
+ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -r cmd_vel:=/key_vel
+
+# Terminal 3: Save the completed map
+ros2 run nav2_map_server map_saver_cli -f ~/my_new_map --ros-args -p use_sim_time:=True
+```
+
+### 4. Sensor Fusion with Extended Kalman Filter (EKF)
+
+Fuse wheel odometry with simulated IMU orientation:
+
+```bash
+ros2 launch bumperbot_localization local_localization.launch.py
+```
+
+Inspect the filtered odometry output:
+```bash
+ros2 topic echo /odometry/filtered --field pose.pose.position
+```
+
+### 5. Probabilistic Motion Model (Particle Sampling)
+
+Visualize Thrun's sample odometry motion model particle distributions in RViz2:
+
+```bash
+ros2 run bumperbot_localization odometry_motion_model
+```
+
+---
+
+## 9. ROS 2 Command Reference
+
+A quick reference for inspecting the active BumperBot system:
+
+```bash
+# Node & Lifecycle Inspection
+ros2 node list
+ros2 node info /simple_controller
+ros2 lifecycle get /map_server
+
+# Topic Verification
+ros2 topic list
+ros2 topic hz /scan
+ros2 topic echo /bumperbot_controller/odom --field pose.pose.position
+ros2 topic pub --once /key_vel geometry_msgs/msg/Twist "{linear: {x: 0.2}}"
+
+# Service Invocations
+ros2 service list
+ros2 service call /add_two_ints bumperbot_msgs/srv/AddTwoInts "{a: 10, b: 25}"
+
+# Action Invocations
+ros2 action list
+ros2 action send_goal /fibonacci bumperbot_msgs/action/Fibonacci "{order: 10}"
+
+# Coordinate Frames & TF2
+ros2 run tf2_tools view_frames
+ros2 run tf2_ros tf2_echo odom base_footprint
+ros2 run tf2_ros tf2_echo map odom
+```
+
+For the comprehensive command handbook, see [doc/11_build_run_and_command_reference.md](doc/11_build_run_and_command_reference.md).
+
+---
+
+## 10. Troubleshooting
+
+| Symptom | Root Cause | Solution |
+| :--- | :--- | :--- |
+| **`Could not contact service /controller_manager/list_controllers`** | Orphaned Gazebo process holding lock on transport socket | Run `killall -9 ign ruby gz 2>/dev/null` before relaunching. |
+| **`PackageNotFoundError: package 'twist_mux' not found`** | Missing binary ROS 2 dependency | Run `sudo apt install ros-humble-twist-mux`. |
+| **Distorted/curved walls when turning robot fast during mapping** | Using `TimePointZero` instead of scan timestamp for TF lookup | Use `scan.header.stamp` for transform lookups in `mapping_with_known_poses.py`. |
+| **`failed to create symbolic link ... Is a directory`** | Corrupted CMake/ament symlink artifact after build interrupt | Run `rm -rf build/<pkg> install/<pkg>` and rebuild. |
+| **`Permission denied: /dev/ttyUSB0`** | User account lacks `dialout` group permissions | Run `sudo usermod -aG dialout $USER`, then log out and back in. |
+| **Robot meshes invisible in Gazebo** | Ignition cannot locate resource directory | Export mesh path: `export IGN_GAZEBO_RESOURCE_PATH=$IGN_GAZEBO_RESOURCE_PATH:$(ros2 pkg prefix bumperbot_description)/share`. |
+
+For the complete diagnostic decision tree, see [doc/12_troubleshooting.md](doc/12_troubleshooting.md).
+
+---
+
+## 11. Technical Documentation Index
+
+Detailed architectural and theoretical guides are available in the [doc/](doc/) directory:
+
+1. [**00. Project Overview & Feature Matrix**](doc/00_project_overview.md) — Scope, verification matrix, and architectural rationale.
+2. [**01. Repository Structure & Dependencies**](doc/01_repository_structure.md) — Detailed file hierarchy and dependency breakdown.
+3. [**02. System Architecture & Concurrency**](doc/02_system_architecture.md) — 7-tier pipeline, threading model, and sequence diagrams.
+4. [**03. ROS 2 Nodes, Topics, Services & Actions**](doc/03_ros2_nodes_topics_services.md) — Exhaustive catalog of all ROS 2 communications.
+5. [**04. Coordinate Frames, TF2 & REP-105**](doc/04_tf_and_coordinate_frames.md) — Transform trees, coordinate math, and REP-105 compliance.
+6. [**05. Robot Description & Simulation**](doc/05_robot_description_and_simulation.md) — URDF/Xacro modeling, physics parameters, and Gazebo Fortress plugins.
+7. [**06. Odometry & Motion Control**](doc/06_odometry_and_motion_control.md) — Differential kinematics, controller tuning, and `twist_mux`.
+8. [**07. LiDAR Processing & Reactive Safety**](doc/07_lidar_and_sensor_processing.md) — Ray range filtering, IMU republisher, and safety supervisors.
+9. [**08. Mapping & SLAM**](doc/08_mapping_and_slam.md) — Occupancy grid algorithms, raycasting, and `slam_toolbox`.
+10. [**09. State Estimation & Localization**](doc/09_localization.md) — 1D Kalman filter, sample motion models, EKF, and AMCL.
+11. [**10. Navigation & Path Planning (Nav2)**](doc/10_navigation.md) — Nav2 gap analysis and step-by-step production implementation blueprint.
+12. [**11. Build, Run & Command Reference**](doc/11_build_run_and_command_reference.md) — Complete handbook of verified commands.
+13. [**12. Troubleshooting & Diagnostics**](doc/12_troubleshooting.md) — Master failure diagnostic matrix and resolution procedures.
