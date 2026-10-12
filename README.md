@@ -221,7 +221,7 @@ sudo apt install -y \
 ### Step 2: Build the Workspace
 
 ```bash
-cd ~/Working/04_Investigating/udemy/ros2_map_localization/ws/bumperbot_ws
+cd ~/bumperbot_ws
 source /opt/ros/humble/setup.bash
 
 # Build all packages with symbolic install links
