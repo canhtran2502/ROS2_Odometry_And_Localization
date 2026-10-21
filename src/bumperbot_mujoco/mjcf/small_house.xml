@@ -1,0 +1,773 @@
+<mujoco model="small_house">
+  <compiler angle="radian" meshdir="../meshes" />
+  <option timestep="0.002" integrator="implicitfast" gravity="0 0 -9.81" />
+  <visual>
+    <headlight ambient="0.4 0.4 0.4" diffuse="0.6 0.6 0.6" />
+    <global offwidth="1280" offheight="720" />
+  </visual>
+  <statistic center="0 0 1" extent="12" />
+  <asset>
+    <texture name="skybox" type="skybox" builtin="gradient" rgb1="0.45 0.6 0.8" rgb2="0.05 0.05 0.1" width="512" height="3072" />
+    <texture name="grid" type="2d" builtin="checker" rgb1="0.75 0.75 0.75" rgb2="0.65 0.65 0.65" width="300" height="300" />
+    <material name="grid" texture="grid" texrepeat="50 50" reflectance="0" />
+    <mesh name="residential_AirconditionerA_01_link_c0_0" file="models/residential_AirconditionerA_01/residential_AirconditionerA_01_link_c0_0.stl" />
+    <mesh name="residential_AirconditionerA_01_link_c0_1" file="models/residential_AirconditionerA_01/residential_AirconditionerA_01_link_c0_1.stl" />
+    <mesh name="residential_AirconditionerA_01_link_c0_2" file="models/residential_AirconditionerA_01/residential_AirconditionerA_01_link_c0_2.stl" />
+    <mesh name="residential_AirconditionerA_01_v0" file="models/residential_AirconditionerA_01/residential_AirconditionerA_01_v0.stl" inertia="shell" />
+    <mesh name="residential_AirconditionerB_01_link_c0_0" file="models/residential_AirconditionerB_01/residential_AirconditionerB_01_link_c0_0.stl" />
+    <mesh name="residential_AirconditionerB_01_v0" file="models/residential_AirconditionerB_01/residential_AirconditionerB_01_v0.stl" inertia="shell" />
+    <mesh name="residential_BalconyTable_01_link_c0_0" file="models/residential_BalconyTable_01/residential_BalconyTable_01_link_c0_0.stl" />
+    <mesh name="residential_BalconyTable_01_link_c0_1" file="models/residential_BalconyTable_01/residential_BalconyTable_01_link_c0_1.stl" />
+    <mesh name="residential_BalconyTable_01_link_c0_2" file="models/residential_BalconyTable_01/residential_BalconyTable_01_link_c0_2.stl" />
+    <mesh name="residential_BalconyTable_01_link_c0_3" file="models/residential_BalconyTable_01/residential_BalconyTable_01_link_c0_3.stl" />
+    <mesh name="residential_BalconyTable_01_v0" file="models/residential_BalconyTable_01/residential_BalconyTable_01_v0.stl" inertia="shell" />
+    <mesh name="residential_Bed_01_link_c0_0" file="models/residential_Bed_01/residential_Bed_01_link_c0_0.stl" />
+    <mesh name="residential_Bed_01_link_c0_1" file="models/residential_Bed_01/residential_Bed_01_link_c0_1.stl" />
+    <mesh name="residential_Bed_01_link_c0_2" file="models/residential_Bed_01/residential_Bed_01_link_c0_2.stl" />
+    <mesh name="residential_Bed_01_link_c0_3" file="models/residential_Bed_01/residential_Bed_01_link_c0_3.stl" />
+    <mesh name="residential_Bed_01_v0" file="models/residential_Bed_01/residential_Bed_01_v0.stl" inertia="shell" />
+    <mesh name="residential_Board_01_link_c0_0" file="models/residential_Board_01/residential_Board_01_link_c0_0.stl" />
+    <mesh name="residential_Board_01_v0" file="models/residential_Board_01/residential_Board_01_v0.stl" inertia="shell" />
+    <mesh name="residential_Carpet_01_link_c0_0" file="models/residential_Carpet_01/residential_Carpet_01_link_c0_0.stl" />
+    <mesh name="residential_Carpet_01_v0" file="models/residential_Carpet_01/residential_Carpet_01_v0.stl" inertia="shell" />
+    <mesh name="residential_ChairA_01_link_c0_0" file="models/residential_ChairA_01/residential_ChairA_01_link_c0_0.stl" />
+    <mesh name="residential_ChairA_01_link_c0_1" file="models/residential_ChairA_01/residential_ChairA_01_link_c0_1.stl" />
+    <mesh name="residential_ChairA_01_link_c0_2" file="models/residential_ChairA_01/residential_ChairA_01_link_c0_2.stl" />
+    <mesh name="residential_ChairA_01_link_c0_3" file="models/residential_ChairA_01/residential_ChairA_01_link_c0_3.stl" />
+    <mesh name="residential_ChairA_01_link_c0_4" file="models/residential_ChairA_01/residential_ChairA_01_link_c0_4.stl" />
+    <mesh name="residential_ChairA_01_link_c0_5" file="models/residential_ChairA_01/residential_ChairA_01_link_c0_5.stl" />
+    <mesh name="residential_ChairA_01_link_c0_6" file="models/residential_ChairA_01/residential_ChairA_01_link_c0_6.stl" />
+    <mesh name="residential_ChairA_01_link_c0_7" file="models/residential_ChairA_01/residential_ChairA_01_link_c0_7.stl" />
+    <mesh name="residential_ChairA_01_v0" file="models/residential_ChairA_01/residential_ChairA_01_v0.stl" inertia="shell" />
+    <mesh name="residential_ChairD_01_link_c0_0" file="models/residential_ChairD_01/residential_ChairD_01_link_c0_0.stl" />
+    <mesh name="residential_ChairD_01_link_c0_1" file="models/residential_ChairD_01/residential_ChairD_01_link_c0_1.stl" />
+    <mesh name="residential_ChairD_01_link_c0_2" file="models/residential_ChairD_01/residential_ChairD_01_link_c0_2.stl" />
+    <mesh name="residential_ChairD_01_link_c0_3" file="models/residential_ChairD_01/residential_ChairD_01_link_c0_3.stl" />
+    <mesh name="residential_ChairD_01_link_c0_4" file="models/residential_ChairD_01/residential_ChairD_01_link_c0_4.stl" />
+    <mesh name="residential_ChairD_01_link_c0_5" file="models/residential_ChairD_01/residential_ChairD_01_link_c0_5.stl" />
+    <mesh name="residential_ChairD_01_link_c0_6" file="models/residential_ChairD_01/residential_ChairD_01_link_c0_6.stl" />
+    <mesh name="residential_ChairD_01_link_c0_7" file="models/residential_ChairD_01/residential_ChairD_01_link_c0_7.stl" />
+    <mesh name="residential_ChairD_01_v0" file="models/residential_ChairD_01/residential_ChairD_01_v0.stl" inertia="shell" />
+    <mesh name="residential_Chandelier_01_link_c0_0" file="models/residential_Chandelier_01/residential_Chandelier_01_link_c0_0.stl" />
+    <mesh name="residential_Chandelier_01_v0" file="models/residential_Chandelier_01/residential_Chandelier_01_v0.stl" inertia="shell" />
+    <mesh name="residential_CoffeeTable_01_link_c0_0" file="models/residential_CoffeeTable_01/residential_CoffeeTable_01_link_c0_0.stl" />
+    <mesh name="residential_CoffeeTable_01_link_c0_1" file="models/residential_CoffeeTable_01/residential_CoffeeTable_01_link_c0_1.stl" />
+    <mesh name="residential_CoffeeTable_01_link_c0_2" file="models/residential_CoffeeTable_01/residential_CoffeeTable_01_link_c0_2.stl" />
+    <mesh name="residential_CoffeeTable_01_link_c0_3" file="models/residential_CoffeeTable_01/residential_CoffeeTable_01_link_c0_3.stl" />
+    <mesh name="residential_CoffeeTable_01_link_c0_4" file="models/residential_CoffeeTable_01/residential_CoffeeTable_01_link_c0_4.stl" />
+    <mesh name="residential_CoffeeTable_01_link_c0_5" file="models/residential_CoffeeTable_01/residential_CoffeeTable_01_link_c0_5.stl" />
+    <mesh name="residential_CoffeeTable_01_link_c0_6" file="models/residential_CoffeeTable_01/residential_CoffeeTable_01_link_c0_6.stl" />
+    <mesh name="residential_CoffeeTable_01_link_c0_7" file="models/residential_CoffeeTable_01/residential_CoffeeTable_01_link_c0_7.stl" />
+    <mesh name="residential_CoffeeTable_01_v0" file="models/residential_CoffeeTable_01/residential_CoffeeTable_01_v0.stl" inertia="shell" />
+    <mesh name="residential_CookingBench_01_link_c0_0" file="models/residential_CookingBench_01/residential_CookingBench_01_link_c0_0.stl" />
+    <mesh name="residential_CookingBench_01_v0" file="models/residential_CookingBench_01/residential_CookingBench_01_v0.stl" inertia="shell" />
+    <mesh name="residential_Curtain_01_link_c0_0" file="models/residential_Curtain_01/residential_Curtain_01_link_c0_0.stl" />
+    <mesh name="residential_Curtain_01_link_c0_1" file="models/residential_Curtain_01/residential_Curtain_01_link_c0_1.stl" />
+    <mesh name="residential_Curtain_01_link_c0_2" file="models/residential_Curtain_01/residential_Curtain_01_link_c0_2.stl" />
+    <mesh name="residential_Curtain_01_v0" file="models/residential_Curtain_01/residential_Curtain_01_v0.stl" inertia="shell" />
+    <mesh name="residential_DeskPortraitA_01_link_c0_0" file="models/residential_DeskPortraitA_01/residential_DeskPortraitA_01_link_c0_0.stl" />
+    <mesh name="residential_DeskPortraitA_01_link_c0_1" file="models/residential_DeskPortraitA_01/residential_DeskPortraitA_01_link_c0_1.stl" />
+    <mesh name="residential_DeskPortraitA_01_v0" file="models/residential_DeskPortraitA_01/residential_DeskPortraitA_01_v0.stl" inertia="shell" />
+    <mesh name="residential_DeskPortraitA_02_link_c0_0" file="models/residential_DeskPortraitA_02/residential_DeskPortraitA_02_link_c0_0.stl" />
+    <mesh name="residential_DeskPortraitA_02_link_c0_1" file="models/residential_DeskPortraitA_02/residential_DeskPortraitA_02_link_c0_1.stl" />
+    <mesh name="residential_DeskPortraitA_02_v0" file="models/residential_DeskPortraitA_02/residential_DeskPortraitA_02_v0.stl" inertia="shell" />
+    <mesh name="residential_DeskPortraitB_01_link_c0_0" file="models/residential_DeskPortraitB_01/residential_DeskPortraitB_01_link_c0_0.stl" />
+    <mesh name="residential_DeskPortraitB_01_link_c0_1" file="models/residential_DeskPortraitB_01/residential_DeskPortraitB_01_link_c0_1.stl" />
+    <mesh name="residential_DeskPortraitB_01_v0" file="models/residential_DeskPortraitB_01/residential_DeskPortraitB_01_v0.stl" inertia="shell" />
+    <mesh name="residential_DeskPortraitB_02_link_c0_0" file="models/residential_DeskPortraitB_02/residential_DeskPortraitB_02_link_c0_0.stl" />
+    <mesh name="residential_DeskPortraitB_02_link_c0_1" file="models/residential_DeskPortraitB_02/residential_DeskPortraitB_02_link_c0_1.stl" />
+    <mesh name="residential_DeskPortraitB_02_v0" file="models/residential_DeskPortraitB_02/residential_DeskPortraitB_02_v0.stl" inertia="shell" />
+    <mesh name="residential_DeskPortraitC_01_link_c0_0" file="models/residential_DeskPortraitC_01/residential_DeskPortraitC_01_link_c0_0.stl" />
+    <mesh name="residential_DeskPortraitC_01_link_c0_1" file="models/residential_DeskPortraitC_01/residential_DeskPortraitC_01_link_c0_1.stl" />
+    <mesh name="residential_DeskPortraitC_01_v0" file="models/residential_DeskPortraitC_01/residential_DeskPortraitC_01_v0.stl" inertia="shell" />
+    <mesh name="residential_DeskPortraitC_02_link_c0_0" file="models/residential_DeskPortraitC_02/residential_DeskPortraitC_02_link_c0_0.stl" />
+    <mesh name="residential_DeskPortraitC_02_link_c0_1" file="models/residential_DeskPortraitC_02/residential_DeskPortraitC_02_link_c0_1.stl" />
+    <mesh name="residential_DeskPortraitC_02_v0" file="models/residential_DeskPortraitC_02/residential_DeskPortraitC_02_v0.stl" inertia="shell" />
+    <mesh name="residential_DeskPortraitD_01_link_c0_0" file="models/residential_DeskPortraitD_01/residential_DeskPortraitD_01_link_c0_0.stl" />
+    <mesh name="residential_DeskPortraitD_01_link_c0_1" file="models/residential_DeskPortraitD_01/residential_DeskPortraitD_01_link_c0_1.stl" />
+    <mesh name="residential_DeskPortraitD_01_v0" file="models/residential_DeskPortraitD_01/residential_DeskPortraitD_01_v0.stl" inertia="shell" />
+    <mesh name="residential_DeskPortraitD_02_link_c0_0" file="models/residential_DeskPortraitD_02/residential_DeskPortraitD_02_link_c0_0.stl" />
+    <mesh name="residential_DeskPortraitD_02_link_c0_1" file="models/residential_DeskPortraitD_02/residential_DeskPortraitD_02_link_c0_1.stl" />
+    <mesh name="residential_DeskPortraitD_02_v0" file="models/residential_DeskPortraitD_02/residential_DeskPortraitD_02_v0.stl" inertia="shell" />
+    <mesh name="residential_DeskPortraitD_03_link_c0_0" file="models/residential_DeskPortraitD_03/residential_DeskPortraitD_03_link_c0_0.stl" />
+    <mesh name="residential_DeskPortraitD_03_link_c0_1" file="models/residential_DeskPortraitD_03/residential_DeskPortraitD_03_link_c0_1.stl" />
+    <mesh name="residential_DeskPortraitD_03_v0" file="models/residential_DeskPortraitD_03/residential_DeskPortraitD_03_v0.stl" inertia="shell" />
+    <mesh name="residential_DeskPortraitD_04_link_c0_0" file="models/residential_DeskPortraitD_04/residential_DeskPortraitD_04_link_c0_0.stl" />
+    <mesh name="residential_DeskPortraitD_04_link_c0_1" file="models/residential_DeskPortraitD_04/residential_DeskPortraitD_04_link_c0_1.stl" />
+    <mesh name="residential_DeskPortraitD_04_v0" file="models/residential_DeskPortraitD_04/residential_DeskPortraitD_04_v0.stl" inertia="shell" />
+    <mesh name="residential_Door_01_link_c0_0" file="models/residential_Door_01/residential_Door_01_link_c0_0.stl" />
+    <mesh name="residential_Door_01_v0" file="models/residential_Door_01/residential_Door_01_v0.stl" inertia="shell" />
+    <mesh name="residential_Dumbbell_01_link_c0_0" file="models/residential_Dumbbell_01/residential_Dumbbell_01_link_c0_0.stl" />
+    <mesh name="residential_Dumbbell_01_link_c0_1" file="models/residential_Dumbbell_01/residential_Dumbbell_01_link_c0_1.stl" />
+    <mesh name="residential_Dumbbell_01_link_c0_2" file="models/residential_Dumbbell_01/residential_Dumbbell_01_link_c0_2.stl" />
+    <mesh name="residential_Dumbbell_01_v0" file="models/residential_Dumbbell_01/residential_Dumbbell_01_v0.stl" inertia="shell" />
+    <mesh name="residential_FitnessEquipment_01_link_c0_0" file="models/residential_FitnessEquipment_01/residential_FitnessEquipment_01_link_c0_0.stl" />
+    <mesh name="residential_FitnessEquipment_01_link_c0_1" file="models/residential_FitnessEquipment_01/residential_FitnessEquipment_01_link_c0_1.stl" />
+    <mesh name="residential_FitnessEquipment_01_link_c0_2" file="models/residential_FitnessEquipment_01/residential_FitnessEquipment_01_link_c0_2.stl" />
+    <mesh name="residential_FitnessEquipment_01_link_c0_3" file="models/residential_FitnessEquipment_01/residential_FitnessEquipment_01_link_c0_3.stl" />
+    <mesh name="residential_FitnessEquipment_01_link_c0_4" file="models/residential_FitnessEquipment_01/residential_FitnessEquipment_01_link_c0_4.stl" />
+    <mesh name="residential_FitnessEquipment_01_link_c0_5" file="models/residential_FitnessEquipment_01/residential_FitnessEquipment_01_link_c0_5.stl" />
+    <mesh name="residential_FitnessEquipment_01_link_c0_6" file="models/residential_FitnessEquipment_01/residential_FitnessEquipment_01_link_c0_6.stl" />
+    <mesh name="residential_FitnessEquipment_01_link_c0_7" file="models/residential_FitnessEquipment_01/residential_FitnessEquipment_01_link_c0_7.stl" />
+    <mesh name="residential_FitnessEquipment_01_v0" file="models/residential_FitnessEquipment_01/residential_FitnessEquipment_01_v0.stl" inertia="shell" />
+    <mesh name="residential_FloorB_01_link_c0_0" file="models/residential_FloorB_01/residential_FloorB_01_link_c0_0.stl" />
+    <mesh name="residential_FloorB_01_v0" file="models/residential_FloorB_01/residential_FloorB_01_v0.stl" inertia="shell" />
+    <mesh name="residential_FoldingDoor_01_link_c0_0" file="models/residential_FoldingDoor_01/residential_FoldingDoor_01_link_c0_0.stl" />
+    <mesh name="residential_FoldingDoor_01_v0" file="models/residential_FoldingDoor_01/residential_FoldingDoor_01_v0.stl" inertia="shell" />
+    <mesh name="residential_FoldingDoor_02_link_c0_0" file="models/residential_FoldingDoor_02/residential_FoldingDoor_02_link_c0_0.stl" />
+    <mesh name="residential_FoldingDoor_02_v0" file="models/residential_FoldingDoor_02/residential_FoldingDoor_02_v0.stl" inertia="shell" />
+    <mesh name="residential_Handle_01_link_c0_0" file="models/residential_Handle_01/residential_Handle_01_link_c0_0.stl" />
+    <mesh name="residential_Handle_01_link_c0_1" file="models/residential_Handle_01/residential_Handle_01_link_c0_1.stl" />
+    <mesh name="residential_Handle_01_link_c0_2" file="models/residential_Handle_01/residential_Handle_01_link_c0_2.stl" />
+    <mesh name="residential_Handle_01_link_c0_3" file="models/residential_Handle_01/residential_Handle_01_link_c0_3.stl" />
+    <mesh name="residential_Handle_01_v0" file="models/residential_Handle_01/residential_Handle_01_v0.stl" inertia="shell" />
+    <mesh name="residential_HouseWallB_01_link_c0_0" file="models/residential_HouseWallB_01/residential_HouseWallB_01_link_c0_0.stl" />
+    <mesh name="residential_HouseWallB_01_link_c0_1" file="models/residential_HouseWallB_01/residential_HouseWallB_01_link_c0_1.stl" />
+    <mesh name="residential_HouseWallB_01_link_c0_2" file="models/residential_HouseWallB_01/residential_HouseWallB_01_link_c0_2.stl" />
+    <mesh name="residential_HouseWallB_01_link_c0_3" file="models/residential_HouseWallB_01/residential_HouseWallB_01_link_c0_3.stl" />
+    <mesh name="residential_HouseWallB_01_link_c0_4" file="models/residential_HouseWallB_01/residential_HouseWallB_01_link_c0_4.stl" />
+    <mesh name="residential_HouseWallB_01_link_c0_5" file="models/residential_HouseWallB_01/residential_HouseWallB_01_link_c0_5.stl" />
+    <mesh name="residential_HouseWallB_01_link_c0_6" file="models/residential_HouseWallB_01/residential_HouseWallB_01_link_c0_6.stl" />
+    <mesh name="residential_HouseWallB_01_link_c0_7" file="models/residential_HouseWallB_01/residential_HouseWallB_01_link_c0_7.stl" />
+    <mesh name="residential_HouseWallB_01_v0" file="models/residential_HouseWallB_01/residential_HouseWallB_01_v0.stl" inertia="shell" />
+    <mesh name="residential_KitchenCabinet_01_link_c0_0" file="models/residential_KitchenCabinet_01/residential_KitchenCabinet_01_link_c0_0.stl" />
+    <mesh name="residential_KitchenCabinet_01_link_c0_1" file="models/residential_KitchenCabinet_01/residential_KitchenCabinet_01_link_c0_1.stl" />
+    <mesh name="residential_KitchenCabinet_01_link_c0_2" file="models/residential_KitchenCabinet_01/residential_KitchenCabinet_01_link_c0_2.stl" />
+    <mesh name="residential_KitchenCabinet_01_link_c0_3" file="models/residential_KitchenCabinet_01/residential_KitchenCabinet_01_link_c0_3.stl" />
+    <mesh name="residential_KitchenCabinet_01_v0" file="models/residential_KitchenCabinet_01/residential_KitchenCabinet_01_v0.stl" inertia="shell" />
+    <mesh name="residential_KitchenTable_01_link_c0_0" file="models/residential_KitchenTable_01/residential_KitchenTable_01_link_c0_0.stl" />
+    <mesh name="residential_KitchenTable_01_link_c0_1" file="models/residential_KitchenTable_01/residential_KitchenTable_01_link_c0_1.stl" />
+    <mesh name="residential_KitchenTable_01_link_c0_2" file="models/residential_KitchenTable_01/residential_KitchenTable_01_link_c0_2.stl" />
+    <mesh name="residential_KitchenTable_01_link_c0_3" file="models/residential_KitchenTable_01/residential_KitchenTable_01_link_c0_3.stl" />
+    <mesh name="residential_KitchenTable_01_link_c0_4" file="models/residential_KitchenTable_01/residential_KitchenTable_01_link_c0_4.stl" />
+    <mesh name="residential_KitchenTable_01_link_c0_5" file="models/residential_KitchenTable_01/residential_KitchenTable_01_link_c0_5.stl" />
+    <mesh name="residential_KitchenTable_01_link_c0_6" file="models/residential_KitchenTable_01/residential_KitchenTable_01_link_c0_6.stl" />
+    <mesh name="residential_KitchenTable_01_link_c0_7" file="models/residential_KitchenTable_01/residential_KitchenTable_01_link_c0_7.stl" />
+    <mesh name="residential_KitchenTable_01_v0" file="models/residential_KitchenTable_01/residential_KitchenTable_01_v0.stl" inertia="shell" />
+    <mesh name="residential_KitchenUtensils_01_link_c0_0" file="models/residential_KitchenUtensils_01/residential_KitchenUtensils_01_link_c0_0.stl" />
+    <mesh name="residential_KitchenUtensils_01_link_c0_1" file="models/residential_KitchenUtensils_01/residential_KitchenUtensils_01_link_c0_1.stl" />
+    <mesh name="residential_KitchenUtensils_01_link_c0_2" file="models/residential_KitchenUtensils_01/residential_KitchenUtensils_01_link_c0_2.stl" />
+    <mesh name="residential_KitchenUtensils_01_link_c0_3" file="models/residential_KitchenUtensils_01/residential_KitchenUtensils_01_link_c0_3.stl" />
+    <mesh name="residential_KitchenUtensils_01_link_c0_4" file="models/residential_KitchenUtensils_01/residential_KitchenUtensils_01_link_c0_4.stl" />
+    <mesh name="residential_KitchenUtensils_01_link_c0_5" file="models/residential_KitchenUtensils_01/residential_KitchenUtensils_01_link_c0_5.stl" />
+    <mesh name="residential_KitchenUtensils_01_link_c0_6" file="models/residential_KitchenUtensils_01/residential_KitchenUtensils_01_link_c0_6.stl" />
+    <mesh name="residential_KitchenUtensils_01_v0" file="models/residential_KitchenUtensils_01/residential_KitchenUtensils_01_v0.stl" inertia="shell" />
+    <mesh name="residential_LightC_01_link_c0_0" file="models/residential_LightC_01/residential_LightC_01_link_c0_0.stl" />
+    <mesh name="residential_LightC_01_link_c0_1" file="models/residential_LightC_01/residential_LightC_01_link_c0_1.stl" />
+    <mesh name="residential_LightC_01_v0" file="models/residential_LightC_01/residential_LightC_01_v0.stl" inertia="shell" />
+    <mesh name="residential_NightStand_01_link_c0_0" file="models/residential_NightStand_01/residential_NightStand_01_link_c0_0.stl" />
+    <mesh name="residential_NightStand_01_v0" file="models/residential_NightStand_01/residential_NightStand_01_v0.stl" inertia="shell" />
+    <mesh name="residential_PortraitA_01_link_c0_0" file="models/residential_PortraitA_01/residential_PortraitA_01_link_c0_0.stl" />
+    <mesh name="residential_PortraitA_01_v0" file="models/residential_PortraitA_01/residential_PortraitA_01_v0.stl" inertia="shell" />
+    <mesh name="residential_PortraitA_02_link_c0_0" file="models/residential_PortraitA_02/residential_PortraitA_02_link_c0_0.stl" />
+    <mesh name="residential_PortraitA_02_v0" file="models/residential_PortraitA_02/residential_PortraitA_02_v0.stl" inertia="shell" />
+    <mesh name="residential_PortraitB_01_link_c0_0" file="models/residential_PortraitB_01/residential_PortraitB_01_link_c0_0.stl" />
+    <mesh name="residential_PortraitB_01_v0" file="models/residential_PortraitB_01/residential_PortraitB_01_v0.stl" inertia="shell" />
+    <mesh name="residential_PortraitB_02_link_c0_0" file="models/residential_PortraitB_02/residential_PortraitB_02_link_c0_0.stl" />
+    <mesh name="residential_PortraitB_02_v0" file="models/residential_PortraitB_02/residential_PortraitB_02_v0.stl" inertia="shell" />
+    <mesh name="residential_PortraitB_03_link_c0_0" file="models/residential_PortraitB_03/residential_PortraitB_03_link_c0_0.stl" />
+    <mesh name="residential_PortraitB_03_v0" file="models/residential_PortraitB_03/residential_PortraitB_03_v0.stl" inertia="shell" />
+    <mesh name="residential_PortraitC_01_link_c0_0" file="models/residential_PortraitC_01/residential_PortraitC_01_link_c0_0.stl" />
+    <mesh name="residential_PortraitC_01_v0" file="models/residential_PortraitC_01/residential_PortraitC_01_v0.stl" inertia="shell" />
+    <mesh name="residential_PortraitD_01_link_c0_0" file="models/residential_PortraitD_01/residential_PortraitD_01_link_c0_0.stl" />
+    <mesh name="residential_PortraitD_01_v0" file="models/residential_PortraitD_01/residential_PortraitD_01_v0.stl" inertia="shell" />
+    <mesh name="residential_PortraitD_02_link_c0_0" file="models/residential_PortraitD_02/residential_PortraitD_02_link_c0_0.stl" />
+    <mesh name="residential_PortraitD_02_v0" file="models/residential_PortraitD_02/residential_PortraitD_02_v0.stl" inertia="shell" />
+    <mesh name="residential_PortraitE_01_link_c0_0" file="models/residential_PortraitE_01/residential_PortraitE_01_link_c0_0.stl" />
+    <mesh name="residential_PortraitE_01_v0" file="models/residential_PortraitE_01/residential_PortraitE_01_v0.stl" inertia="shell" />
+    <mesh name="residential_PortraitE_02_link_c0_0" file="models/residential_PortraitE_02/residential_PortraitE_02_link_c0_0.stl" />
+    <mesh name="residential_PortraitE_02_v0" file="models/residential_PortraitE_02/residential_PortraitE_02_v0.stl" inertia="shell" />
+    <mesh name="residential_Rangehood_01_link_c0_0" file="models/residential_Rangehood_01/residential_Rangehood_01_link_c0_0.stl" />
+    <mesh name="residential_Rangehood_01_link_c0_1" file="models/residential_Rangehood_01/residential_Rangehood_01_link_c0_1.stl" />
+    <mesh name="residential_Rangehood_01_link_c0_2" file="models/residential_Rangehood_01/residential_Rangehood_01_link_c0_2.stl" />
+    <mesh name="residential_Rangehood_01_link_c0_3" file="models/residential_Rangehood_01/residential_Rangehood_01_link_c0_3.stl" />
+    <mesh name="residential_Rangehood_01_v0" file="models/residential_Rangehood_01/residential_Rangehood_01_v0.stl" inertia="shell" />
+    <mesh name="residential_ReadingDesk_01_link_c0_0" file="models/residential_ReadingDesk_01/residential_ReadingDesk_01_link_c0_0.stl" />
+    <mesh name="residential_ReadingDesk_01_link_c0_1" file="models/residential_ReadingDesk_01/residential_ReadingDesk_01_link_c0_1.stl" />
+    <mesh name="residential_ReadingDesk_01_link_c0_2" file="models/residential_ReadingDesk_01/residential_ReadingDesk_01_link_c0_2.stl" />
+    <mesh name="residential_ReadingDesk_01_link_c0_3" file="models/residential_ReadingDesk_01/residential_ReadingDesk_01_link_c0_3.stl" />
+    <mesh name="residential_ReadingDesk_01_link_c0_4" file="models/residential_ReadingDesk_01/residential_ReadingDesk_01_link_c0_4.stl" />
+    <mesh name="residential_ReadingDesk_01_link_c0_5" file="models/residential_ReadingDesk_01/residential_ReadingDesk_01_link_c0_5.stl" />
+    <mesh name="residential_ReadingDesk_01_link_c0_6" file="models/residential_ReadingDesk_01/residential_ReadingDesk_01_link_c0_6.stl" />
+    <mesh name="residential_ReadingDesk_01_link_c0_7" file="models/residential_ReadingDesk_01/residential_ReadingDesk_01_link_c0_7.stl" />
+    <mesh name="residential_ReadingDesk_01_v0" file="models/residential_ReadingDesk_01/residential_ReadingDesk_01_v0.stl" inertia="shell" />
+    <mesh name="residential_Refrigerator_01_link_c0_0" file="models/residential_Refrigerator_01/residential_Refrigerator_01_link_c0_0.stl" />
+    <mesh name="residential_Refrigerator_01_v0" file="models/residential_Refrigerator_01/residential_Refrigerator_01_v0.stl" inertia="shell" />
+    <mesh name="residential_RoomWall_01_link_c0_0" file="models/residential_RoomWall_01/residential_RoomWall_01_link_c0_0.stl" />
+    <mesh name="residential_RoomWall_01_v0" file="models/residential_RoomWall_01/residential_RoomWall_01_v0.stl" inertia="shell" />
+    <mesh name="residential_RoomWindow_01_link_c0_0" file="models/residential_RoomWindow_01/residential_RoomWindow_01_link_c0_0.stl" />
+    <mesh name="residential_RoomWindow_01_v0" file="models/residential_RoomWindow_01/residential_RoomWindow_01_v0.stl" inertia="shell" />
+    <mesh name="residential_SeasoningBox_01_link_c0_0" file="models/residential_SeasoningBox_01/residential_SeasoningBox_01_link_c0_0.stl" />
+    <mesh name="residential_SeasoningBox_01_v0" file="models/residential_SeasoningBox_01/residential_SeasoningBox_01_v0.stl" inertia="shell" />
+    <mesh name="residential_SecurityCamera_01_link_c0_0" file="models/residential_SecurityCamera_01/residential_SecurityCamera_01_link_c0_0.stl" />
+    <mesh name="residential_SecurityCamera_01_link_c0_1" file="models/residential_SecurityCamera_01/residential_SecurityCamera_01_link_c0_1.stl" />
+    <mesh name="residential_SecurityCamera_01_link_c0_2" file="models/residential_SecurityCamera_01/residential_SecurityCamera_01_link_c0_2.stl" />
+    <mesh name="residential_SecurityCamera_01_v0" file="models/residential_SecurityCamera_01/residential_SecurityCamera_01_v0.stl" inertia="shell" />
+    <mesh name="residential_SofaC_01_link_c0_0" file="models/residential_SofaC_01/residential_SofaC_01_link_c0_0.stl" />
+    <mesh name="residential_SofaC_01_link_c0_1" file="models/residential_SofaC_01/residential_SofaC_01_link_c0_1.stl" />
+    <mesh name="residential_SofaC_01_link_c0_2" file="models/residential_SofaC_01/residential_SofaC_01_link_c0_2.stl" />
+    <mesh name="residential_SofaC_01_link_c0_3" file="models/residential_SofaC_01/residential_SofaC_01_link_c0_3.stl" />
+    <mesh name="residential_SofaC_01_link_c0_4" file="models/residential_SofaC_01/residential_SofaC_01_link_c0_4.stl" />
+    <mesh name="residential_SofaC_01_link_c0_5" file="models/residential_SofaC_01/residential_SofaC_01_link_c0_5.stl" />
+    <mesh name="residential_SofaC_01_link_c0_6" file="models/residential_SofaC_01/residential_SofaC_01_link_c0_6.stl" />
+    <mesh name="residential_SofaC_01_link_c0_7" file="models/residential_SofaC_01/residential_SofaC_01_link_c0_7.stl" />
+    <mesh name="residential_SofaC_01_v0" file="models/residential_SofaC_01/residential_SofaC_01_v0.stl" inertia="shell" />
+    <mesh name="residential_TVCabinet_01_link_c0_0" file="models/residential_TVCabinet_01/residential_TVCabinet_01_link_c0_0.stl" />
+    <mesh name="residential_TVCabinet_01_link_c0_1" file="models/residential_TVCabinet_01/residential_TVCabinet_01_link_c0_1.stl" />
+    <mesh name="residential_TVCabinet_01_link_c0_2" file="models/residential_TVCabinet_01/residential_TVCabinet_01_link_c0_2.stl" />
+    <mesh name="residential_TVCabinet_01_link_c0_3" file="models/residential_TVCabinet_01/residential_TVCabinet_01_link_c0_3.stl" />
+    <mesh name="residential_TVCabinet_01_link_c0_4" file="models/residential_TVCabinet_01/residential_TVCabinet_01_link_c0_4.stl" />
+    <mesh name="residential_TVCabinet_01_link_c0_5" file="models/residential_TVCabinet_01/residential_TVCabinet_01_link_c0_5.stl" />
+    <mesh name="residential_TVCabinet_01_v0" file="models/residential_TVCabinet_01/residential_TVCabinet_01_v0.stl" inertia="shell" />
+    <mesh name="residential_TV_01_link_c0_0" file="models/residential_TV_01/residential_TV_01_link_c0_0.stl" />
+    <mesh name="residential_TV_01_v0" file="models/residential_TV_01/residential_TV_01_v0.stl" inertia="shell" />
+    <mesh name="residential_TV_02_link_c0_0" file="models/residential_TV_02/residential_TV_02_link_c0_0.stl" />
+    <mesh name="residential_TV_02_v0" file="models/residential_TV_02/residential_TV_02_v0.stl" inertia="shell" />
+    <mesh name="residential_Tablet_01_link_c0_0" file="models/residential_Tablet_01/residential_Tablet_01_link_c0_0.stl" />
+    <mesh name="residential_Tablet_01_v0" file="models/residential_Tablet_01/residential_Tablet_01_v0.stl" inertia="shell" />
+    <mesh name="residential_Tableware_01_link_c0_0" file="models/residential_Tableware_01/residential_Tableware_01_link_c0_0.stl" />
+    <mesh name="residential_Tableware_01_link_c0_1" file="models/residential_Tableware_01/residential_Tableware_01_link_c0_1.stl" />
+    <mesh name="residential_Tableware_01_link_c0_2" file="models/residential_Tableware_01/residential_Tableware_01_link_c0_2.stl" />
+    <mesh name="residential_Tableware_01_link_c0_3" file="models/residential_Tableware_01/residential_Tableware_01_link_c0_3.stl" />
+    <mesh name="residential_Tableware_01_link_c0_4" file="models/residential_Tableware_01/residential_Tableware_01_link_c0_4.stl" />
+    <mesh name="residential_Tableware_01_link_c0_5" file="models/residential_Tableware_01/residential_Tableware_01_link_c0_5.stl" />
+    <mesh name="residential_Tableware_01_link_c0_6" file="models/residential_Tableware_01/residential_Tableware_01_link_c0_6.stl" />
+    <mesh name="residential_Tableware_01_link_c0_7" file="models/residential_Tableware_01/residential_Tableware_01_link_c0_7.stl" />
+    <mesh name="residential_Tableware_01_v0" file="models/residential_Tableware_01/residential_Tableware_01_v0.stl" inertia="shell" />
+    <mesh name="residential_Trash_01_link_c0_0" file="models/residential_Trash_01/residential_Trash_01_link_c0_0.stl" />
+    <mesh name="residential_Trash_01_link_c0_1" file="models/residential_Trash_01/residential_Trash_01_link_c0_1.stl" />
+    <mesh name="residential_Trash_01_link_c0_2" file="models/residential_Trash_01/residential_Trash_01_link_c0_2.stl" />
+    <mesh name="residential_Trash_01_link_c0_3" file="models/residential_Trash_01/residential_Trash_01_link_c0_3.stl" />
+    <mesh name="residential_Trash_01_link_c0_4" file="models/residential_Trash_01/residential_Trash_01_link_c0_4.stl" />
+    <mesh name="residential_Trash_01_link_c0_5" file="models/residential_Trash_01/residential_Trash_01_link_c0_5.stl" />
+    <mesh name="residential_Trash_01_link_c0_6" file="models/residential_Trash_01/residential_Trash_01_link_c0_6.stl" />
+    <mesh name="residential_Trash_01_link_c0_7" file="models/residential_Trash_01/residential_Trash_01_link_c0_7.stl" />
+    <mesh name="residential_Trash_01_v0" file="models/residential_Trash_01/residential_Trash_01_v0.stl" inertia="shell" />
+    <mesh name="residential_Vase_01_link_c0_0" file="models/residential_Vase_01/residential_Vase_01_link_c0_0.stl" />
+    <mesh name="residential_Vase_01_link_c0_1" file="models/residential_Vase_01/residential_Vase_01_link_c0_1.stl" />
+    <mesh name="residential_Vase_01_link_c0_2" file="models/residential_Vase_01/residential_Vase_01_link_c0_2.stl" />
+    <mesh name="residential_Vase_01_link_c0_3" file="models/residential_Vase_01/residential_Vase_01_link_c0_3.stl" />
+    <mesh name="residential_Vase_01_link_c0_4" file="models/residential_Vase_01/residential_Vase_01_link_c0_4.stl" />
+    <mesh name="residential_Vase_01_link_c0_5" file="models/residential_Vase_01/residential_Vase_01_link_c0_5.stl" />
+    <mesh name="residential_Vase_01_v0" file="models/residential_Vase_01/residential_Vase_01_v0.stl" inertia="shell" />
+    <mesh name="residential_Wardrobe_01_link_c0_0" file="models/residential_Wardrobe_01/residential_Wardrobe_01_link_c0_0.stl" />
+    <mesh name="residential_Wardrobe_01_v0" file="models/residential_Wardrobe_01/residential_Wardrobe_01_v0.stl" inertia="shell" />
+  </asset>
+  <worldbody>
+    <light name="sun" directional="true" pos="0 0 10" dir="-0.5 0.1 -0.9" diffuse="0.7 0.7 0.7" />
+    <geom name="safety_floor" type="plane" size="50 50 0.1" pos="0 0 -0.1" rgba="0 0 0 0" friction="1 0.005 0.0001" />
+    <body name="AirconditionerA_01_001" pos="-9.19941 2.41123 2.08454" quat="1 0 0 0">
+      <geom type="mesh" group="4" mesh="residential_AirconditionerA_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_AirconditionerA_01_link_c0_1" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_AirconditionerA_01_link_c0_2" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_AirconditionerA_01_v0" contype="0" conaffinity="0" rgba="0.73 0.71 0.69 1" />
+    </body>
+    <body name="AirconditionerB_01_001" pos="-2.00466 -5.22661 0.003485" quat="1 0 0 0">
+      <geom type="mesh" group="4" mesh="residential_AirconditionerB_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_AirconditionerB_01_v0" contype="0" conaffinity="0" rgba="0.96 0.98 0.99 1" />
+    </body>
+    <body name="Ball_01_001" pos="3.2955 4.22567 0.318684" quat="1 0 0 0">
+      <geom type="sphere" group="4" size="0.31" pos="0 0 0" quat="1 0 0 0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+    </body>
+    <body name="Ball_01_003" pos="-6.9455 -4.22174 0.318684" quat="1 0 0 0">
+      <geom type="sphere" group="4" size="0.31" pos="0 0 0" quat="1 0 0 0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+    </body>
+    <body name="Bed_01_001" pos="-6.16507 2.03056 -1e-05" quat="1 0 0 0">
+      <geom type="mesh" group="4" mesh="residential_Bed_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_Bed_01_link_c0_1" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_Bed_01_link_c0_2" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_Bed_01_link_c0_3" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_Bed_01_v0" contype="0" conaffinity="0" rgba="0.98 0.98 0.97 1" />
+    </body>
+    <body name="NightStand_01_001" pos="-7.72551 2.86042 0.005258" quat="1 -1e-06 -0 9.54098e-17">
+      <geom type="mesh" group="4" mesh="residential_NightStand_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_NightStand_01_v0" contype="0" conaffinity="0" rgba="0.99 0.99 0.97 1" />
+    </body>
+    <body name="NightStand_01_002" pos="-4.40734 2.86042 0.005256" quat="1 0 1e-06 -1.11022e-16">
+      <geom type="mesh" group="4" mesh="residential_NightStand_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_NightStand_01_v0" contype="0" conaffinity="0" rgba="0.99 0.99 0.97 1" />
+    </body>
+    <body name="Board_01_001" pos="2.77907 -5.3927 1.53817" quat="1 0 0 0">
+      <geom type="mesh" group="4" mesh="residential_Board_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_Board_01_v0" contype="0" conaffinity="0" rgba="0.56 0.32 0.17 1" />
+    </body>
+    <body name="ChairA_01_001" pos="7.11516 0.209028 0.024685" quat="0.712294 3.56147e-07 -3.50941e-07 -0.701881">
+      <geom type="mesh" group="4" mesh="residential_ChairA_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_ChairA_01_link_c0_1" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_ChairA_01_link_c0_2" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_ChairA_01_link_c0_3" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_ChairA_01_link_c0_4" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_ChairA_01_link_c0_5" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_ChairA_01_link_c0_6" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_ChairA_01_link_c0_7" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_ChairA_01_v0" contype="0" conaffinity="0" rgba="0.03 0.04 0.2 1" />
+    </body>
+    <body name="ChairA_01_002" pos="6.25506 0.219468 0.011308" quat="0.730276 0 0 -0.683152">
+      <geom type="mesh" group="4" mesh="residential_ChairA_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_ChairA_01_link_c0_1" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_ChairA_01_link_c0_2" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_ChairA_01_link_c0_3" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_ChairA_01_link_c0_4" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_ChairA_01_link_c0_5" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_ChairA_01_link_c0_6" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_ChairA_01_link_c0_7" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_ChairA_01_v0" contype="0" conaffinity="0" rgba="0.03 0.04 0.2 1" />
+    </body>
+    <body name="ChairA_01_003" pos="6.06678 1.68075 0.01" quat="0.707438 0 0 0.706776">
+      <geom type="mesh" group="4" mesh="residential_ChairA_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_ChairA_01_link_c0_1" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_ChairA_01_link_c0_2" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_ChairA_01_link_c0_3" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_ChairA_01_link_c0_4" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_ChairA_01_link_c0_5" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_ChairA_01_link_c0_6" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_ChairA_01_link_c0_7" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_ChairA_01_v0" contype="0" conaffinity="0" rgba="0.03 0.04 0.2 1" />
+    </body>
+    <body name="ChairA_01_004" pos="7.00277 1.67074 0" quat="0.723584 0 0 0.690236">
+      <geom type="mesh" group="4" mesh="residential_ChairA_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_ChairA_01_link_c0_1" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_ChairA_01_link_c0_2" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_ChairA_01_link_c0_3" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_ChairA_01_link_c0_4" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_ChairA_01_link_c0_5" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_ChairA_01_link_c0_6" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_ChairA_01_link_c0_7" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_ChairA_01_v0" contype="0" conaffinity="0" rgba="0.03 0.04 0.2 1" />
+    </body>
+    <body name="ChairA_01_005" pos="-8.27094 1.91665 0.03665" quat="1 0 0 0">
+      <geom type="mesh" group="4" mesh="residential_ChairA_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_ChairA_01_link_c0_1" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_ChairA_01_link_c0_2" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_ChairA_01_link_c0_3" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_ChairA_01_link_c0_4" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_ChairA_01_link_c0_5" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_ChairA_01_link_c0_6" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_ChairA_01_link_c0_7" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_ChairA_01_v0" contype="0" conaffinity="0" rgba="0.03 0.04 0.2 1" />
+    </body>
+    <body name="ChairD_01_001" pos="-1.38078 4.10446 0" quat="1 0 0 0">
+      <geom type="mesh" group="4" mesh="residential_ChairD_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_ChairD_01_link_c0_1" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_ChairD_01_link_c0_2" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_ChairD_01_link_c0_3" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_ChairD_01_link_c0_4" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_ChairD_01_link_c0_5" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_ChairD_01_link_c0_6" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_ChairD_01_link_c0_7" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_ChairD_01_v0" contype="0" conaffinity="0" rgba="0.58 0.26 0.12 1" />
+    </body>
+    <body name="ChairD_01_002" pos="0.325214 4.10446 0" quat="0.00142583 0 0 -0.999999">
+      <geom type="mesh" group="4" mesh="residential_ChairD_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_ChairD_01_link_c0_1" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_ChairD_01_link_c0_2" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_ChairD_01_link_c0_3" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_ChairD_01_link_c0_4" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_ChairD_01_link_c0_5" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_ChairD_01_link_c0_6" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_ChairD_01_link_c0_7" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_ChairD_01_v0" contype="0" conaffinity="0" rgba="0.58 0.26 0.12 1" />
+    </body>
+    <body name="ChairD_01_003" pos="-8.27078 -4.50446 0" quat="0.906939 0 0 0.421262">
+      <geom type="mesh" group="4" mesh="residential_ChairD_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_ChairD_01_link_c0_1" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_ChairD_01_link_c0_2" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_ChairD_01_link_c0_3" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_ChairD_01_link_c0_4" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_ChairD_01_link_c0_5" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_ChairD_01_link_c0_6" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_ChairD_01_link_c0_7" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_ChairD_01_v0" contype="0" conaffinity="0" rgba="0.58 0.26 0.12 1" />
+    </body>
+    <body name="Chandelier_01_001" pos="1.22106 4.15574 1.295" quat="1 0 0 0">
+      <geom type="mesh" group="4" mesh="residential_Chandelier_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_Chandelier_01_v0" contype="0" conaffinity="0" rgba="0.33 0.22 0.14 1" />
+    </body>
+    <body name="Chandelier_01_002" pos="-6.45106 -0.69204 1.81" quat="1 0 0 0">
+      <geom type="mesh" group="4" mesh="residential_Chandelier_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_Chandelier_01_v0" contype="0" conaffinity="0" rgba="0.33 0.22 0.14 1" />
+    </body>
+    <body name="Chandelier_01_003" pos="7.82406 -1.59 1.751" quat="1 0 0 0">
+      <geom type="mesh" group="4" mesh="residential_Chandelier_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_Chandelier_01_v0" contype="0" conaffinity="0" rgba="0.33 0.22 0.14 1" />
+    </body>
+    <body name="Chandelier_01_004" pos="1.22106 -1.59204 1.7873" quat="1 0 0 0">
+      <geom type="mesh" group="4" mesh="residential_Chandelier_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_Chandelier_01_v0" contype="0" conaffinity="0" rgba="0.33 0.22 0.14 1" />
+    </body>
+    <body name="Carpet_01_001" pos="0.78505 -1.10665 0.001106" quat="1 0 0 0">
+      <geom type="mesh" group="4" mesh="residential_Carpet_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_Carpet_01_v0" contype="0" conaffinity="0" rgba="0.5 0.48 0.47 1" />
+    </body>
+    <body name="Carpet_01_002" pos="2.85405 3.45 0.000585" quat="1 0 0 0">
+      <geom type="mesh" group="4" mesh="residential_Carpet_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_Carpet_01_v0" contype="0" conaffinity="0" rgba="0.5 0.48 0.47 1" />
+    </body>
+    <body name="SecurityCamera_01_001" pos="0.842134 -4.99629 0.495067" quat="0.149712 0 0 -0.98873">
+      <geom type="mesh" group="4" mesh="residential_SecurityCamera_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_SecurityCamera_01_link_c0_1" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_SecurityCamera_01_link_c0_2" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_SecurityCamera_01_v0" contype="0" conaffinity="0" rgba="0.82 0.82 0.81 1" />
+    </body>
+    <body name="CoffeeTable_01_001" pos="1.5123 -1.73344 0.041983" quat="0.999988 0 0 0.00499998">
+      <geom type="mesh" group="4" mesh="residential_CoffeeTable_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_CoffeeTable_01_link_c0_1" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_CoffeeTable_01_link_c0_2" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_CoffeeTable_01_link_c0_3" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_CoffeeTable_01_link_c0_4" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_CoffeeTable_01_link_c0_5" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_CoffeeTable_01_link_c0_6" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_CoffeeTable_01_link_c0_7" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_CoffeeTable_01_v0" contype="0" conaffinity="0" rgba="0.85 0.62 0.4 1" />
+    </body>
+    <body name="CookingBench_01_001" pos="9.03838 -3.35114 0.90361" quat="0.00222982 0 0 0.999998">
+      <geom type="mesh" group="4" mesh="residential_CookingBench_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_CookingBench_01_v0" contype="0" conaffinity="0" rgba="0.54 0.5 0.46 1" />
+    </body>
+    <body name="Curtain_01_001" pos="-9.17264 0.20376 0" quat="1 0 0 0">
+      <geom type="mesh" group="4" mesh="residential_Curtain_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_Curtain_01_link_c0_1" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_Curtain_01_link_c0_2" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_Curtain_01_v0" contype="0" conaffinity="0" rgba="0.75 0.79 0.8 1" />
+    </body>
+    <body name="KitchenTable_01_001" pos="6.55269 0.951173 -6e-06" quat="0.70946 0 0 -0.704746">
+      <geom type="mesh" group="4" mesh="residential_KitchenTable_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_KitchenTable_01_link_c0_1" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_KitchenTable_01_link_c0_2" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_KitchenTable_01_link_c0_3" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_KitchenTable_01_link_c0_4" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_KitchenTable_01_link_c0_5" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_KitchenTable_01_link_c0_6" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_KitchenTable_01_link_c0_7" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_KitchenTable_01_v0" contype="0" conaffinity="0" rgba="0.95 0.87 0.77 1" />
+    </body>
+    <body name="ReadingDesk_01_001" pos="-8.98726 2.05706 0" quat="0.999997 0 0 -0.002319">
+      <geom type="mesh" group="4" mesh="residential_ReadingDesk_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_ReadingDesk_01_link_c0_1" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_ReadingDesk_01_link_c0_2" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_ReadingDesk_01_link_c0_3" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_ReadingDesk_01_link_c0_4" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_ReadingDesk_01_link_c0_5" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_ReadingDesk_01_link_c0_6" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_ReadingDesk_01_link_c0_7" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_ReadingDesk_01_v0" contype="0" conaffinity="0" rgba="0.85 0.62 0.4 1" />
+    </body>
+    <body name="BalconyTable_01_001" pos="-0.55624 4.11124 0" quat="1 0 0 0">
+      <geom type="mesh" group="4" mesh="residential_BalconyTable_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_BalconyTable_01_link_c0_1" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_BalconyTable_01_link_c0_2" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_BalconyTable_01_link_c0_3" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_BalconyTable_01_v0" contype="0" conaffinity="0" rgba="0.58 0.26 0.12 1" />
+    </body>
+    <body name="Door_01_001" pos="6.00145 -5.549 0" quat="1 0 0 0">
+      <geom type="mesh" group="4" mesh="residential_Door_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_Door_01_v0" contype="0" conaffinity="0" rgba="0.81 0.56 0.36 1" />
+    </body>
+    <body name="Dumbbell_01_001" pos="2.51285 2.71779 0.002183" quat="1 0 0 0">
+      <geom type="mesh" group="4" mesh="residential_Dumbbell_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_Dumbbell_01_link_c0_1" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_Dumbbell_01_link_c0_2" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_Dumbbell_01_v0" contype="0" conaffinity="0" rgba="0.56 0.56 0.56 1" />
+    </body>
+    <body name="Tablet_01_001" pos="1.57283 -1.77586 0.40179" quat="0.999942 -0.0103124 -7.42627e-06 -0.00315874">
+      <geom type="mesh" group="4" mesh="residential_Tablet_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_Tablet_01_v0" contype="0" conaffinity="0" rgba="0.1 0.1 0.1 1" />
+    </body>
+    <body name="FitnessEquipment_01_001" pos="3.48472 3.1691 0.003168" quat="1 0 0 0">
+      <geom type="mesh" group="4" mesh="residential_FitnessEquipment_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_FitnessEquipment_01_link_c0_1" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_FitnessEquipment_01_link_c0_2" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_FitnessEquipment_01_link_c0_3" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_FitnessEquipment_01_link_c0_4" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_FitnessEquipment_01_link_c0_5" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_FitnessEquipment_01_link_c0_6" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_FitnessEquipment_01_link_c0_7" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_FitnessEquipment_01_v0" contype="0" conaffinity="0" rgba="0.3 0.3 0.3 1" />
+    </body>
+    <body name="FoldingDoor_01_001" pos="-2.4611 1.84422 0.041881" quat="1 0 0 0">
+      <geom type="mesh" group="4" mesh="residential_FoldingDoor_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_FoldingDoor_01_v0" contype="0" conaffinity="0" rgba="0.46 0.48 0.48 1" />
+    </body>
+    <body name="FoldingDoor_01_002" pos="-2.4611 -4.05332 0.041881" quat="1 0 0 0">
+      <geom type="mesh" group="4" mesh="residential_FoldingDoor_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_FoldingDoor_01_v0" contype="0" conaffinity="0" rgba="0.46 0.48 0.48 1" />
+    </body>
+    <body name="Handle_01_001" pos="5.724 -5.523 0.9938" quat="4.63268e-05 0 0 -1">
+      <geom type="mesh" group="4" mesh="residential_Handle_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_Handle_01_link_c0_1" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_Handle_01_link_c0_2" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_Handle_01_link_c0_3" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_Handle_01_v0" contype="0" conaffinity="0" rgba="0.63 0.56 0.44 1" />
+    </body>
+    <body name="HouseWallB_01_001" pos="0 0 0" quat="1 0 0 0">
+      <geom type="mesh" group="4" mesh="residential_HouseWallB_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_HouseWallB_01_link_c0_1" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_HouseWallB_01_link_c0_2" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_HouseWallB_01_link_c0_3" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_HouseWallB_01_link_c0_4" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_HouseWallB_01_link_c0_5" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_HouseWallB_01_link_c0_6" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_HouseWallB_01_link_c0_7" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_HouseWallB_01_v0" contype="0" conaffinity="0" rgba="0.94 0.97 0.95 1" />
+    </body>
+    <body name="FloorB_01_001" pos="0 0 0" quat="1 0 0 0">
+      <geom type="mesh" group="4" mesh="residential_FloorB_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_FloorB_01_v0" contype="0" conaffinity="0" rgba="0.81 0.75 0.59 1" />
+    </body>
+    <body name="FoldingDoor_02_001" pos="4.67423 2.46451 0" quat="1.32679e-06 0 0 1">
+      <geom type="mesh" group="4" mesh="residential_FoldingDoor_02_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_FoldingDoor_02_v0" contype="0" conaffinity="0" rgba="0.81 0.56 0.35 1" />
+    </body>
+    <body name="FoldingDoor_02_002" pos="4.8912 -4.84968 0" quat="1 0 0 0">
+      <geom type="mesh" group="4" mesh="residential_FoldingDoor_02_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_FoldingDoor_02_v0" contype="0" conaffinity="0" rgba="0.81 0.56 0.35 1" />
+    </body>
+    <body name="KitchenCabinet_01_001" pos="8.00201 -3.83651 0.012068" quat="0.000795827 0 0 -1">
+      <geom type="mesh" group="4" mesh="residential_KitchenCabinet_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_KitchenCabinet_01_link_c0_1" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_KitchenCabinet_01_link_c0_2" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_KitchenCabinet_01_link_c0_3" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_KitchenCabinet_01_v0" contype="0" conaffinity="0" rgba="0.95 0.95 0.94 1" />
+    </body>
+    <body name="KitchenUtensils_01_001" pos="9.28548 -5.02126 1.1418" quat="1 0 0 0">
+      <geom type="mesh" group="4" mesh="residential_KitchenUtensils_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_KitchenUtensils_01_link_c0_1" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_KitchenUtensils_01_link_c0_2" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_KitchenUtensils_01_link_c0_3" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_KitchenUtensils_01_link_c0_4" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_KitchenUtensils_01_link_c0_5" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_KitchenUtensils_01_link_c0_6" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_KitchenUtensils_01_v0" contype="0" conaffinity="0" rgba="0.85 0.78 0.74 1" />
+    </body>
+    <body name="LightC_01_001" pos="1.76957 -5.44437 2" quat="1 0 0 0">
+      <geom type="mesh" group="4" mesh="residential_LightC_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_LightC_01_link_c0_1" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_LightC_01_v0" contype="0" conaffinity="0" rgba="0.6 0.66 0.62 1" />
+    </body>
+    <body name="LightC_01_002" pos="-0.138245 -5.44437 2" quat="1 0 0 0">
+      <geom type="mesh" group="4" mesh="residential_LightC_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_LightC_01_link_c0_1" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_LightC_01_v0" contype="0" conaffinity="0" rgba="0.6 0.66 0.62 1" />
+    </body>
+    <body name="PortraitA_01" pos="-2.71236 -4.81754 1" quat="0.70852 0 0 0.705691">
+      <geom type="mesh" group="4" mesh="residential_PortraitA_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_PortraitA_01_v0" contype="0" conaffinity="0" rgba="0.86 0.93 0.95 1" />
+    </body>
+    <body name="PortraitB_01" pos="-1.27968 -5.42963 0" quat="0.0124278 -0.000478091 0.0384381 -0.999184">
+      <geom type="mesh" group="4" mesh="residential_PortraitB_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_PortraitB_01_v0" contype="0" conaffinity="0" rgba="0.96 0.99 0.99 1" />
+    </body>
+    <body name="PortraitB_02" pos="5.73702 3.08031 0.3" quat="1 0 0 0">
+      <geom type="mesh" group="4" mesh="residential_PortraitB_02_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_PortraitB_02_v0" contype="0" conaffinity="0" rgba="0.96 0.99 0.99 1" />
+    </body>
+    <body name="PortraitB_03" pos="3.07138 -5.34937 0.005494" quat="0.018613 -0.00157119 -0.0840998 0.996282">
+      <geom type="mesh" group="4" mesh="residential_PortraitB_03_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_PortraitB_03_v0" contype="0" conaffinity="0" rgba="0.96 0.99 0.99 1" />
+    </body>
+    <body name="PortraitA_02" pos="7.93702 3.08031 0.3" quat="0.000796327 0 0 1">
+      <geom type="mesh" group="4" mesh="residential_PortraitA_02_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_PortraitA_02_v0" contype="0" conaffinity="0" rgba="0.86 0.93 0.95 1" />
+    </body>
+    <body name="PortraitC_01" pos="-9.2949 -4.52608 1" quat="0.712763 0 0 0.701405">
+      <geom type="mesh" group="4" mesh="residential_PortraitC_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_PortraitC_01_v0" contype="0" conaffinity="0" rgba="0.09 0.02 0 1" />
+    </body>
+    <body name="PortraitD_01" pos="0.789763 -5.47872 1.8" quat="0.00153083 0 0 0.999999">
+      <geom type="mesh" group="4" mesh="residential_PortraitD_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_PortraitD_01_v0" contype="0" conaffinity="0" rgba="0.12 0 0 1" />
+    </body>
+    <body name="PortraitD_02" pos="6.87018 3.08031 1.48844" quat="1 0 0 0">
+      <geom type="mesh" group="4" mesh="residential_PortraitD_02_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_PortraitD_02_v0" contype="0" conaffinity="0" rgba="0.12 0 0 1" />
+    </body>
+    <body name="PortraitE_01" pos="-5.77309 -5.49247 1" quat="0.00448281 0 0 0.99999">
+      <geom type="mesh" group="4" mesh="residential_PortraitE_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_PortraitE_01_v0" contype="0" conaffinity="0" rgba="0.86 0.93 0.95 1" />
+    </body>
+    <body name="PortraitE_02" pos="-6.19302 -1.59021 0.3" quat="0.999998 0 0 0.002145">
+      <geom type="mesh" group="4" mesh="residential_PortraitE_02_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_PortraitE_02_v0" contype="0" conaffinity="0" rgba="0.86 0.93 0.95 1" />
+    </body>
+    <body name="DeskPortraitA_01" pos="-0.036864 -5.11016 0.49866" quat="0.106701 0 0 0.994291">
+      <geom type="mesh" group="4" mesh="residential_DeskPortraitA_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_DeskPortraitA_01_link_c0_1" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_DeskPortraitA_01_v0" contype="0" conaffinity="0" rgba="0.86 0.93 0.95 1" />
+    </body>
+    <body name="DeskPortraitA_02" pos="2.04608 -1.89293 0.070388" quat="0.70516 -0.00630592 -0.00665286 0.708989">
+      <geom type="mesh" group="4" mesh="residential_DeskPortraitA_02_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_DeskPortraitA_02_link_c0_1" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_DeskPortraitA_02_v0" contype="0" conaffinity="0" rgba="0.86 0.93 0.95 1" />
+    </body>
+    <body name="DeskPortraitC_01" pos="-7.74638 2.73108 0.69462" quat="0.999615 0.000238926 -0.000186201 -0.0277459">
+      <geom type="mesh" group="4" mesh="residential_DeskPortraitC_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_DeskPortraitC_01_link_c0_1" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_DeskPortraitC_01_v0" contype="0" conaffinity="0" rgba="0.96 0.99 0.99 1" />
+    </body>
+    <body name="DeskPortraitC_02" pos="0.964613 -1.58695 0.127676" quat="0.704307 0.000374929 -0.000764809 -0.709895">
+      <geom type="mesh" group="4" mesh="residential_DeskPortraitC_02_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_DeskPortraitC_02_link_c0_1" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_DeskPortraitC_02_v0" contype="0" conaffinity="0" rgba="0.96 0.99 0.99 1" />
+    </body>
+    <body name="DeskPortraitD_01" pos="2.64556 -5.37622 1.57374" quat="0.0143828 0 0 -0.999897">
+      <geom type="mesh" group="4" mesh="residential_DeskPortraitD_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_DeskPortraitD_01_link_c0_1" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_DeskPortraitD_01_v0" contype="0" conaffinity="0" rgba="0.96 0.99 0.99 1" />
+    </body>
+    <body name="DeskPortraitD_02" pos="-0.589211 -5.10989 0.192145" quat="0.0145238 -8.70998e-05 6.23564e-06 -0.999895">
+      <geom type="mesh" group="4" mesh="residential_DeskPortraitD_02_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_DeskPortraitD_02_link_c0_1" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_DeskPortraitD_02_v0" contype="0" conaffinity="0" rgba="0.96 0.99 0.99 1" />
+    </body>
+    <body name="DeskPortraitD_03" pos="1.82673 -1.46488 0.126208" quat="0.0136059 3.06775e-06 -4.95872e-06 -0.999907">
+      <geom type="mesh" group="4" mesh="residential_DeskPortraitD_03_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_DeskPortraitD_03_link_c0_1" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_DeskPortraitD_03_v0" contype="0" conaffinity="0" rgba="0.96 0.99 0.99 1" />
+    </body>
+    <body name="DeskPortraitD_04" pos="4.30213 -5.17657 0.202496" quat="0.0474367 0.000169327 0.00355496 0.998868">
+      <geom type="mesh" group="4" mesh="residential_DeskPortraitD_04_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_DeskPortraitD_04_link_c0_1" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_DeskPortraitD_04_v0" contype="0" conaffinity="0" rgba="0.96 0.99 0.99 1" />
+    </body>
+    <body name="DeskPortraitB_01" pos="3.54738 -5.0839 -0.01266" quat="0.0467382 -0.00794118 -0.167329 0.984761">
+      <geom type="mesh" group="4" mesh="residential_DeskPortraitB_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_DeskPortraitB_01_link_c0_1" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_DeskPortraitB_01_v0" contype="0" conaffinity="0" rgba="0.1 0 0 1" />
+    </body>
+    <body name="DeskPortraitB_02" pos="2.48627 -5.10252 -0.01266" quat="0.0467101 -0.00793688 -0.167329 0.984762">
+      <geom type="mesh" group="4" mesh="residential_DeskPortraitB_02_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_DeskPortraitB_02_link_c0_1" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_DeskPortraitB_02_v0" contype="0" conaffinity="0" rgba="0.1 0 0 1" />
+    </body>
+    <body name="Rangehood_01_001" pos="9.01979 -3.36994 1.50761" quat="1 0 0 0">
+      <geom type="mesh" group="4" mesh="residential_Rangehood_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_Rangehood_01_link_c0_1" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_Rangehood_01_link_c0_2" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_Rangehood_01_link_c0_3" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_Rangehood_01_v0" contype="0" conaffinity="0" rgba="0.64 0.64 0.64 1" />
+    </body>
+    <body name="Refrigerator_01_001" pos="8.70273 -1.03203 0" quat="0.709682 0 0 -0.704522">
+      <geom type="mesh" group="4" mesh="residential_Refrigerator_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_Refrigerator_01_v0" contype="0" conaffinity="0" rgba="0.6 0.59 0.59 1" />
+    </body>
+    <body name="SeasoningBox_01_001" pos="9.10797 -2.65173 0.902458" quat="1 -3.01096e-06 1.69981e-05 0.000645">
+      <geom type="mesh" group="4" mesh="residential_SeasoningBox_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_SeasoningBox_01_v0" contype="0" conaffinity="0" rgba="0.65 0.58 0.58 1" />
+    </body>
+    <body name="SofaC_01_001" pos="0.330699 -1.90279 0.065992" quat="0.706776 0 0 0.707438">
+      <geom type="mesh" group="4" mesh="residential_SofaC_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_SofaC_01_link_c0_1" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_SofaC_01_link_c0_2" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_SofaC_01_link_c0_3" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_SofaC_01_link_c0_4" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_SofaC_01_link_c0_5" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_SofaC_01_link_c0_6" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_SofaC_01_link_c0_7" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_SofaC_01_v0" contype="0" conaffinity="0" rgba="0.93 0.91 0.87 1" />
+    </body>
+    <body name="Tableware_01_001" pos="7.15317 0.982767 0.817812" quat="0.87158 -0.000300265 -0.000728798 0.490253">
+      <geom type="mesh" group="4" mesh="residential_Tableware_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_Tableware_01_link_c0_1" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_Tableware_01_link_c0_2" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_Tableware_01_link_c0_3" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_Tableware_01_link_c0_4" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_Tableware_01_link_c0_5" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_Tableware_01_link_c0_6" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_Tableware_01_link_c0_7" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_Tableware_01_v0" contype="0" conaffinity="0" rgba="0.91 0.92 0.95 1" />
+    </body>
+    <body name="Trash_01_001" pos="2.36015 -0.796238 0.011" quat="1 0 0 0">
+      <geom type="mesh" group="4" mesh="residential_Trash_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_Trash_01_link_c0_1" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_Trash_01_link_c0_2" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_Trash_01_link_c0_3" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_Trash_01_link_c0_4" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_Trash_01_link_c0_5" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_Trash_01_link_c0_6" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_Trash_01_link_c0_7" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_Trash_01_v0" contype="0" conaffinity="0" rgba="0.92 0.98 0.98 1" />
+    </body>
+    <body name="Trash_01_002" pos="-8.70415 1.00058 0.011" quat="1 0 0 0">
+      <geom type="mesh" group="4" mesh="residential_Trash_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_Trash_01_link_c0_1" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_Trash_01_link_c0_2" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_Trash_01_link_c0_3" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_Trash_01_link_c0_4" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_Trash_01_link_c0_5" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_Trash_01_link_c0_6" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_Trash_01_link_c0_7" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_Trash_01_v0" contype="0" conaffinity="0" rgba="0.92 0.98 0.98 1" />
+    </body>
+    <body name="TV_01_001" pos="0.824259 -5.38297 0.676282" quat="0.7103 0 0 -0.703899">
+      <geom type="mesh" group="4" mesh="residential_TV_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_TV_01_v0" contype="0" conaffinity="0" rgba="0.27 0.27 0.27 1" />
+    </body>
+    <body name="TV_02_001" pos="-6.19732 -1.38874 0.676282" quat="0.7103 0 0 -0.703899">
+      <geom type="mesh" group="4" mesh="residential_TV_02_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_TV_02_v0" contype="0" conaffinity="0" rgba="0.28 0.29 0.31 1" />
+    </body>
+    <body name="TVCabinet_01_001" pos="0.629509 -5.18358 -0.017049" quat="0.704129 0 0 0.710072">
+      <geom type="mesh" group="4" mesh="residential_TVCabinet_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_TVCabinet_01_link_c0_1" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_TVCabinet_01_link_c0_2" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_TVCabinet_01_link_c0_3" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_TVCabinet_01_link_c0_4" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_TVCabinet_01_link_c0_5" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_TVCabinet_01_v0" contype="0" conaffinity="0" rgba="0.85 0.62 0.4 1" />
+    </body>
+    <body name="Vase_01_001" pos="3.05566 -5.41308 1.57496" quat="1 1.143e-06 0.00085 0.000419999">
+      <geom type="mesh" group="4" mesh="residential_Vase_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_Vase_01_link_c0_1" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_Vase_01_link_c0_2" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_Vase_01_link_c0_3" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_Vase_01_link_c0_4" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="residential_Vase_01_link_c0_5" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_Vase_01_v0" contype="0" conaffinity="0" rgba="0.79 0.8 0.75 1" />
+    </body>
+    <body name="RoomWall_01_001" pos="-6.09755 -1.49618 0.028124" quat="1 0 0 0">
+      <geom type="mesh" group="4" mesh="residential_RoomWall_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_RoomWall_01_v0" contype="0" conaffinity="0" rgba="0.79 0.79 0.77 1" />
+    </body>
+    <body name="Wardrobe_01_001" pos="-3.14671 2.4762 0.000704" quat="0.707504 0 0 -0.70671">
+      <geom type="mesh" group="4" mesh="residential_Wardrobe_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_Wardrobe_01_v0" contype="0" conaffinity="0" rgba="0.94 0.9 0.82 1" />
+    </body>
+    <body name="RoomWindow_01_001" pos="-9.4186 -0.026285 0.502739" quat="1 0 0 0">
+      <geom type="mesh" group="4" mesh="residential_RoomWindow_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_RoomWindow_01_v0" contype="0" conaffinity="0" rgba="0.94 0.94 0.91 1" />
+    </body>
+    <body name="RoomWindow_01_002" pos="-9.4186 -2.37409 0.502739" quat="1 0 0 0">
+      <geom type="mesh" group="4" mesh="residential_RoomWindow_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_RoomWindow_01_v0" contype="0" conaffinity="0" rgba="0.94 0.94 0.91 1" />
+    </body>
+    <body name="RoomWindow_01_003" pos="9.42262 -3.37398 0.502739" quat="0.00274682 0 0 -0.999996">
+      <geom type="mesh" group="4" mesh="residential_RoomWindow_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_RoomWindow_01_v0" contype="0" conaffinity="0" rgba="0.94 0.94 0.91 1" />
+    </body>
+    <body name="RoomWindow_01_004" pos="9.42256 0.96852 0.496581" quat="0.00274682 0 0 -0.999996">
+      <geom type="mesh" group="4" mesh="residential_RoomWindow_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_RoomWindow_01_v0" contype="0" conaffinity="0" rgba="0.94 0.94 0.91 1" />
+    </body>
+    <body name="RoomWindow_01_005" pos="4.72232 4.47028 0.502739" quat="0.00274682 0 0 -0.999996">
+      <geom type="mesh" group="4" mesh="residential_RoomWindow_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_RoomWindow_01_v0" contype="0" conaffinity="0" rgba="0.94 0.94 0.91 1" />
+    </body>
+    <body name="RoomWindow_01_006" pos="3.48852 5.60069 0.502739" quat="0.708704 0 0 -0.705506">
+      <geom type="mesh" group="4" mesh="residential_RoomWindow_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_RoomWindow_01_v0" contype="0" conaffinity="0" rgba="0.94 0.94 0.91 1" />
+    </body>
+    <body name="RoomWindow_01_007" pos="1.14095 5.60069 0.502739" quat="0.708704 0 0 -0.705506">
+      <geom type="mesh" group="4" mesh="residential_RoomWindow_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_RoomWindow_01_v0" contype="0" conaffinity="0" rgba="0.94 0.94 0.91 1" />
+    </body>
+    <body name="RoomWindow_01_008" pos="-1.19934 5.60069 0.502739" quat="0.708704 0 0 -0.705506">
+      <geom type="mesh" group="4" mesh="residential_RoomWindow_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_RoomWindow_01_v0" contype="0" conaffinity="0" rgba="0.94 0.94 0.91 1" />
+    </body>
+    <body name="RoomWindow_01_009" pos="-2.39662 4.38761 0.502739" quat="1 0 0 0">
+      <geom type="mesh" group="4" mesh="residential_RoomWindow_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="residential_RoomWindow_01_v0" contype="0" conaffinity="0" rgba="0.94 0.94 0.91 1" />
+    </body>
+  </worldbody>
+  <include file="robot.xml" />
+</mujoco>

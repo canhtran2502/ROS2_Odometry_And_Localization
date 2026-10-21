@@ -35,7 +35,7 @@ BumperBot is designed for roboticists and embedded software engineers mastering 
 ### Key Capabilities
 
 - **Kinematics & Control**: Differential-drive kinematics implemented in both C++ (`rclcpp`) and Python (`rclpy`), alongside standard `ros2_control` (`diff_drive_controller`).
-- **Physics Simulation**: Ignition Gazebo Fortress 6 integration with realistic physics, friction, LiDAR, and IMU sensor plugins using `ros_gz_bridge`.
+- **Physics Simulation**: Ignition Gazebo Fortress 6 integration with realistic physics, friction, LiDAR, and IMU sensor plugins using `ros_gz_bridge`, or MuJoCo (`simulator:=mujoco`) with the same worlds and sensor topics.
 - **Velocity Multiplexing & Safety**: Priority-based command arbitration via `twist_mux` and a 2-tier reactive LiDAR safety supervisor with dynamic slowdown and emergency braking.
 - **State Estimation & Fusion**: 1D linear Kalman filter, Thrun's probabilistic sample odometry motion model, and 15-state Extended Kalman Filter (`robot_localization`).
 - **Mapping & SLAM**: Known-pose ray-projection occupancy grid mapper and full Graph SLAM using `slam_toolbox`.
@@ -155,6 +155,7 @@ bumperbot_ws/
 │   ├── bumperbot_localization/         # Kalman filter, EKF configs & AMCL launch
 │   ├── bumperbot_mapping/              # Known-pose occupancy mapper & SLAM Toolbox
 │   ├── bumperbot_msgs/                 # Custom ROS 2 IDL messages, services, actions
+│   ├── bumperbot_mujoco/               # MuJoCo robot/world models, ROS 2 bridge node, converters
 │   ├── bumperbot_utils/                # Reactive LiDAR safety supervisor
 │   ├── bumperbot_cpp_examples/         # C++ (rclcpp) tutorials & API patterns
 │   └── bumperbot_py_examples/          # Python (rclpy) tutorials & API patterns
@@ -170,6 +171,7 @@ bumperbot_ws/
 | **`bumperbot_bringup`** | `ament_cmake` | Master system integration & unified launch orchestration | `simulated_robot.launch.py`, `real_robot.launch.py` | [doc/01_repository_structure.md](doc/01_repository_structure.md) |
 | **`bumperbot_controller`** | `ament_cmake` + Python | Analytical kinematics, noisy odometry, and teleop arbitration | `simple_controller`, `noisy_controller`, `twist_relay` | [doc/06_odometry_and_motion_control.md](doc/06_odometry_and_motion_control.md) |
 | **`bumperbot_description`** | `ament_cmake` | URDF/Xacro modeling, visual/collision meshes, Gazebo worlds | `display.launch.py`, `gazebo.launch.py` | [doc/05_robot_description_and_simulation.md](doc/05_robot_description_and_simulation.md) |
+| **`bumperbot_mujoco`** | `ament_python` | MuJoCo simulation: robot and world MJCF models, ROS 2 bridge (`/clock`, `/scan`, `/imu/out`, wheel commands) | `mujoco_sim_node`, `mujoco.launch.py` | [doc/05_robot_description_and_simulation.md](doc/05_robot_description_and_simulation.md) |
 | **`bumperbot_firmware`** | `ament_cmake` + Python | Hardware interface plugin, serial transceiver, Arduino PID | `bumperbot_interface` (plugin), `mpu6050_driver` | [doc/06_odometry_and_motion_control.md](doc/06_odometry_and_motion_control.md) |
 | **`bumperbot_localization`** | `ament_cmake` + Python | 1D Kalman filter, particle sampling, EKF & AMCL configs | `kalman_filter`, `odometry_motion_model`, `imu_republisher` | [doc/09_localization.md](doc/09_localization.md) |
 | **`bumperbot_mapping`** | `ament_cmake` + Python | Known-pose occupancy grid generation & Graph SLAM | `mapping_with_known_poses`, `slam.launch.py` | [doc/08_mapping_and_slam.md](doc/08_mapping_and_slam.md) |
@@ -280,6 +282,14 @@ Launch Ignition Gazebo Fortress with simulated sensors without the full bringup 
 
 ```bash
 ros2 launch bumperbot_description gazebo.launch.py world_name:=small_house
+```
+
+The same worlds run in MuJoCo (requires `pip install mujoco` and `ros-humble-topic-based-ros2-control`):
+
+```bash
+ros2 launch bumperbot_mujoco mujoco.launch.py world_name:=small_house
+# or the full stack on top of MuJoCo
+ros2 launch bumperbot_bringup simulated_robot.launch.py simulator:=mujoco world_name:=small_house
 ```
 
 ### 3. Real-Time SLAM (Mapping an Unknown Environment)

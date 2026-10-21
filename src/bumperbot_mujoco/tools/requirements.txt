@@ -1,0 +1,10 @@
+# Only needed to regenerate mjcf/ and meshes/ with the scripts in this folder
+mujoco
+trimesh
+pycollada
+coacd
+fast-simplification
+scipy
+pillow
+numpy
+xacro

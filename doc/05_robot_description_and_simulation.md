@@ -130,3 +130,38 @@ ros2 launch bumperbot_description gazebo.launch.py world_name:=small_house
 ros2 launch bumperbot_description gazebo.launch.py world_name:=small_warehouse
 ```
 
+---
+
+## E. MuJoCo Simulation (`bumperbot_mujoco`)
+
+MuJoCo is an alternative to Ignition Gazebo. Both use the same xacro (`simulator:=gazebo|mujoco`), the same worlds and the same sensor topics, so controllers, EKF, AMCL, SLAM and `safety_stop` run unchanged.
+
+```text
+robot xacro --(simulator:=mujoco)--> topic_based_ros2_control/TopicBasedSystem
+                                          |  JointState topics
+                                          v
+ /mujoco/joint_commands  --> mujoco_sim_node (MuJoCo physics) --> /mujoco/joint_states
+                                          |--> /clock, /scan (5 Hz), /imu/out (100 Hz)
+```
+
+- `ros2_control_node` hosts `diff_drive_controller` (there is no simulator plugin to host it); the hardware plugin exchanges wheel velocity commands and joint states with `mujoco_sim_node`.
+- `mujoco_sim_node` wraps `bumperbot_mujoco/sim_core.py` (pure Python, no ROS). Wheels use velocity servos, the IMU uses MuJoCo `gyro`/`accelerometer`/`framequat` sensors with the Gazebo noise values, and the lidar casts 360 rays with `mj_multiRay` against the world collision geoms only.
+- Geom groups: 1 robot visual, 2 world visual, 3 robot collision, 4 world collision (hidden in the viewer, hit by the lidar).
+
+### Generated assets
+
+`mjcf/` and `meshes/` are generated and committed, so normal users do not need the converters. Regenerate them after changing the URDF or the SDF worlds (`pip install -r src/bumperbot_mujoco/tools/requirements.txt`):
+
+```bash
+python3 src/bumperbot_mujoco/tools/generate_robot.py   # xacro -> mjcf/robot.xml + meshes/robot/
+python3 src/bumperbot_mujoco/tools/sdf_to_mjcf.py      # worlds/*.world -> mjcf/<world>.xml + meshes/models/
+```
+
+Differences from Gazebo to be aware of:
+- MuJoCo cannot load Collada; visual meshes are decimated STL with one flat colour per material (textures are not carried over) and collision meshes are convex decompositions (CoACD).
+- All world models are static (Gazebo treats a few warehouse props as dynamic).
+- Wheel/ground friction and caster behaviour are tuned for MuJoCo; expect slightly different wheel slip than Gazebo.
+
+```bash
+ros2 launch bumperbot_mujoco mujoco.launch.py world_name:=small_house   # empty | small_house | small_warehouse
+```

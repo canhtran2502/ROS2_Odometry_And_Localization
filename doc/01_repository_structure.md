@@ -63,6 +63,7 @@ bumperbot_ws/
     │       └── joystick_teleop.launch.py              # Joy, teleop, twist_mux, and relay launch
     │
     ├── bumperbot_description/                         # Robot kinematics, visual/collision meshes, worlds
+    ├── bumperbot_mujoco/                              # MuJoCo models, ROS 2 bridge node, SDF/URDF converters
     │   ├── CMakeLists.txt
     │   ├── package.xml
     │   ├── urdf/
@@ -257,6 +258,7 @@ The repository dependencies form a clean layered architecture without circular r
 | `bumperbot_msgs` | `ament_cmake` | None | `rosidl_default_generators`, `geometry_msgs` |
 | `bumperbot_description` | `ament_cmake` | None | `urdf`, `xacro`, `ros_gz_sim`, `ros_gz_bridge` |
 | `bumperbot_controller` | `ament_cmake` | None | `rclcpp`, `rclpy`, `geometry_msgs`, `sensor_msgs`, `nav_msgs`, `tf2`, `tf2_ros`, `Eigen3`, `diff_drive_controller` |
+| `bumperbot_mujoco` | `ament_python` | `bumperbot_description`, `bumperbot_controller` | `rclpy`, `sensor_msgs`, `topic_based_ros2_control`, `mujoco` (pip) |
 | `bumperbot_firmware` | `ament_cmake` | `bumperbot_controller`, `bumperbot_description` | `hardware_interface`, `pluginlib`, `rclcpp`, `rclpy`, `libserial-dev` |
 | `bumperbot_utils` | `ament_cmake` | None | `rclcpp`, `rclpy`, `sensor_msgs`, `std_msgs`, `visualization_msgs`, `twist_mux_msgs` |
 | `bumperbot_localization`| `ament_cmake` | `bumperbot_controller` | `rclcpp`, `rclpy`, `nav_msgs`, `sensor_msgs`, `geometry_msgs`, `robot_localization`, `nav2_amcl`, `nav2_map_server` |

@@ -1,0 +1,64 @@
+<mujoco>
+  <asset>
+    <mesh name="base_link" file="robot/base_link.stl" />
+    <mesh name="wheel_right_link" file="robot/wheel_right_link.stl" />
+    <mesh name="wheel_left_link" file="robot/wheel_left_link.stl" />
+    <mesh name="caster_front_link" file="robot/caster_front_link.stl" />
+    <mesh name="caster_rear_link" file="robot/caster_rear_link.stl" />
+    <mesh name="imu_link" file="robot/imu_link.stl" />
+    <mesh name="laser_link" file="robot/laser_link.stl" />
+  </asset>
+  <worldbody>
+    <body name="base_footprint" pos="0 0 0.001">
+      <freejoint name="base_freejoint" />
+      <body name="base_link" pos="0 0 0.033">
+        <inertial pos="0 0 0.04" quat="0.995224 -0.0215167 0.0403209 0.0862534" mass="0.825735" diaginertia="0.0221987 0.0211778 0.0200059" />
+        <geom quat="1 0 0 0" type="mesh" contype="0" conaffinity="0" group="1" rgba="0 0 0 1" mesh="base_link" name="base_link_visual" />
+        <geom quat="1 0 0 0" type="mesh" rgba="0 0 0 1" mesh="base_link" group="3" name="base_link_collision" />
+        <body name="wheel_right_link" pos="0 -0.0701102 0">
+          <inertial pos="0 -0.014 0" quat="0.676729 -0.204983 -0.204987 0.676757" mass="0.0530086" diaginertia="3.11511e-05 1.88302e-05 1.87894e-05" />
+          <joint name="wheel_right_joint" axis="0 1 0" />
+          <geom quat="0.707388 0.706825 0 0" type="mesh" contype="0" conaffinity="0" group="1" rgba="0 0 1 1" mesh="wheel_right_link" name="wheel_right_link_visual" />
+          <geom size="0.033" pos="0 -0.015 0" quat="0.707388 0.706825 0 0" rgba="0 0 1 1" group="3" name="wheel_right_link_collision" friction="1.5 0.005 0.0001" />
+        </body>
+        <body name="wheel_left_link" pos="0 0.0701102 0">
+          <inertial pos="0 0.014 0" quat="0.568498 0.420504 0.42051 0.56847" mass="0.0530086" diaginertia="3.11511e-05 1.88302e-05 1.87894e-05" />
+          <joint name="wheel_left_joint" axis="0 1 0" />
+          <geom quat="0.707388 -0.706825 0 0" type="mesh" contype="0" conaffinity="0" group="1" rgba="0 0 1 1" mesh="wheel_left_link" name="wheel_left_link_visual" />
+          <geom size="0.033" pos="0 0.015 0" quat="0.707388 -0.706825 0 0" rgba="0 0 1 1" group="3" name="wheel_left_link_collision" friction="1.5 0.005 0.0001" />
+        </body>
+        <body name="caster_front_link" pos="0.04755 0 -0.0275">
+          <inertial pos="3.89968e-07 2.40073e-07 0.00219173" quat="0.500036 0.500003 -0.499973 0.499988" mass="1.44379e-06" diaginertia="1.00967e-10 7.23075e-11 3.87138e-11" />
+          <geom quat="1 0 0 0" type="mesh" contype="0" conaffinity="0" group="1" rgba="0.79 0.82 0.93 1" mesh="caster_front_link" name="caster_front_link_visual" />
+          <geom size="0.005" rgba="0.79 0.82 0.93 1" group="3" name="caster_front_link_collision" condim="1" />
+        </body>
+        <body name="caster_rear_link" pos="-0.04755 0 -0.0275">
+          <inertial pos="3.89968e-07 2.40073e-07 0.00219173" quat="0.500036 0.500003 -0.499973 0.499988" mass="1.44379e-06" diaginertia="1.00967e-10 7.23075e-11 3.87138e-11" />
+          <geom quat="1 0 0 0" type="mesh" contype="0" conaffinity="0" group="1" rgba="0.79 0.82 0.93 1" mesh="caster_rear_link" name="caster_rear_link_visual" />
+          <geom size="0.005" rgba="0.79 0.82 0.93 1" group="3" name="caster_rear_link_collision" condim="1" />
+        </body>
+        <body name="imu_link" pos="0 0 0.0698986">
+          <inertial pos="-0.00552434 0.00016821 0.000514" quat="0.494232 0.505589 -0.494082 0.505962" mass="0.000528415" diaginertia="2.30279e-08 1.46209e-08 8.59337e-09" />
+          <geom quat="1 0 0 0" type="mesh" contype="0" conaffinity="0" group="1" rgba="0 0 1 1" mesh="imu_link" name="imu_link_visual" />
+          <geom quat="1 0 0 0" type="mesh" rgba="0 0 1 1" mesh="imu_link" group="3" name="imu_link_collision" />
+          <site name="imu_site" size="0.002" />
+        </body>
+        <body name="laser_link" pos="-0.0050526 -0.0023221 0.1208" quat="0.000796327 0 0 1">
+          <inertial pos="-0.0119458 -0.000381929 -0.0170649" quat="-0.0283365 0.713445 0.0281056 0.699573" mass="0.0730844" diaginertia="4.14268e-05 2.41274e-05 1.95701e-05" />
+          <geom quat="1 0 0 0" type="mesh" contype="0" conaffinity="0" group="1" rgba="0.79 0.82 0.93 1" mesh="laser_link" name="laser_link_visual" />
+          <geom quat="1 0 0 0" type="mesh" rgba="0.79 0.82 0.93 1" mesh="laser_link" group="3" name="laser_link_collision" />
+          <site name="laser_site" size="0.002" />
+        </body>
+      </body>
+    </body>
+  </worldbody>
+  <actuator>
+    <velocity name="wheel_left_joint_motor" joint="wheel_left_joint" kv="0.2" ctrllimited="true" ctrlrange="-40 40" forcelimited="true" forcerange="-0.3 0.3" />
+    <velocity name="wheel_right_joint_motor" joint="wheel_right_joint" kv="0.2" ctrllimited="true" ctrlrange="-40 40" forcelimited="true" forcerange="-0.3 0.3" />
+  </actuator>
+  <sensor>
+    <gyro name="imu_gyro" site="imu_site" noise="0.0002" />
+    <accelerometer name="imu_accel" site="imu_site" noise="0.017" />
+    <framequat name="imu_quat" objtype="site" objname="imu_site" />
+  </sensor>
+</mujoco>
