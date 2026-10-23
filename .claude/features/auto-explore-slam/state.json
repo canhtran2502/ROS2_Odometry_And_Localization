@@ -1,8 +1,16 @@
 {
   "slug": "auto-explore-slam",
   "title": "Autonomous frontier exploration with SLAM",
-  "stage": "implement",
+  "stage": "test",
   "iteration": 1,
   "max_iterations": 5,
-  "history": []
+  "history": [
+    {
+      "iteration": 1,
+      "verdict": "FAIL",
+      "passed": 6,
+      "total": 8,
+      "at": "2026-10-23T10:34:41Z"
+    }
+  ]
 }
