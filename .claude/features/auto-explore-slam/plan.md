@@ -31,6 +31,15 @@ maintenance and could not be tested by the same suite. So the node is Python-onl
 down in `doc/03` and in the module docstring. A C++ port would be a separate feature, with the pure
 module as its reference.
 
+### Amendment (iteration 3): SLAM map quality
+
+AC1-AC8 pass, but a manual run of `auto_explore.launch.py simulator:=mujoco` produced a warped
+SLAM map (copy in `.claude/features/auto-explore-slam/explored_map.pgm`): the walls fan out by about
++-8-15 deg and there is a seam near x = -2.3 m. No AC checked SLAM map quality. This amendment:
+1. adds an end-to-end SLAM map quality test (AC9) with a reusable pure-Python map comparison helper;
+2. fixes the root cause found in the investigation, a MuJoCo contact-model bug that gives the wheel
+   odometry a large heading scale error, and pins it with a sim-level drift test (AC10).
+
 ## Architecture
 
 ### Nodes
@@ -184,6 +193,110 @@ wins. On the real robot nothing publishes on `explore_vel`, so the extra input n
         +--------------- twist_relay <-------+  (stamps -> /bumperbot_controller/cmd_vel)
 ```
 
+### SLAM map quality (amendment)
+
+#### Investigation results (read-only, headless `BumperbotSim`)
+
+Encoder dead reckoning with the diff_drive_controller parameters (r = 0.033 m, L = 0.17 m, which
+match the MJCF: wheel contact points at y = +-0.0851 m, sphere radius 0.033 m), 100 Hz, commands
+ramped with the controller limits (0.7 m/s^2, 5 rad/s^2), `empty.xml`:
+
+| Run | heading error now | position error now | with fix below |
+|---|---|---|---|
+| 2 m square, v 0.15, w 0.8 (explorer limits), 4 left turns | 14.3 deg | 0.356 m | 0.68 deg / 0.017 m |
+| 4 x 360 deg in place, w 0.8 | about 58 deg (29 deg per 2 turns), always odom > truth | 0 | 2.7 deg |
+| straight 3 m, v 0.15 | 0.1 deg | 0.156 m (odom 5 % too long) | 0.001 m |
+
+Root cause (high confidence): the casters are meant to be frictionless (`condim="1"` set by
+`tools/generate_robot.py`), but MuJoCo uses the LARGER condim of the two geoms in a contact unless
+one geom has a higher `priority`. The floor plane has condim 3, so each caster contact has condim 3
+and friction 1.0 (checked: `data.contact[i].dim == 3`, friction [1, 1, ...]). The casters carry
+about 1.8 N of the 9.9 N robot weight, drag sideways during every turn, and the wheels slip
+(odometry over-reports rotation by about 3.5-4 %, and distance by 5 %). The explorer rotates in
+place a lot (`rotate_in_place_angle` 0.8, initial spin), so the odometry heading drifts by about
+7 deg per 180 deg turned. slam_toolbox only adds a scan every 0.5 m / 0.5 rad and weighs the odometry
+prior (`angle_variance_penalty`, `minimum_angle_penalty`), so it does not fully correct the drift.
+The result is the fanned map with a seam where a loop closure or scan match snapped.
+A second, smaller error remains with the caster fix alone (about 1 % heading scale, 3.4 deg per turn):
+the soft default wheel contact (`solref 0.02 1`, 0.55 mm penetration) shrinks the effective wheel
+radius. A stiffer wheel contact (`solref="0.004 1"`, still >= 2 x timestep 0.002) removes it.
+
+Fix (sim-only, `bumperbot_mujoco/mjcf/robot.xml` + its generator):
+- caster collision geoms: add `priority="1"` so their `condim="1"` (frictionless) wins;
+- wheel collision geoms: add `priority="1" solref="0.004 1"` (their own friction 1.5 is kept).
+Gazebo, the URDF, ros2_control params and the real robot are not touched.
+
+Other candidates checked:
+- Stale second MuJoCo stack on the same `ROS_DOMAIN_ID` (two `/clock`, `/scan`, odom TF publishers
+  and two twist_mux nodes that both forward `explore_vel`): a real hazard that cannot be confirmed
+  after the fact. It would rather give ghost walls, doubled geometry and TF time jumps than a smooth
+  fan. AC9 runs on a dedicated `ROS_DOMAIN_ID` with `ROS_LOCALHOST_ONLY=1`, and asserts exactly one
+  `/clock` and one `/scan` publisher. doc/12 gets a troubleshooting entry.
+- use_sim_time: `simulated_robot.launch.py` passes `use_sim_time: True` to slam, the controller,
+  RSP and the explorer. No mismatch found.
+- Lidar mount: MJCF `laser_link` quat (yaw pi) and position match the URDF `laser_joint`
+  (yaw 3.14, 0.0016 rad apart, negligible). `/scan` angle_increment 6.28/359 is used for both the
+  ray-cast and the message, so it is consistent.
+- Wheel radius and separation: they match the MJCF (see above).
+- slam_toolbox config (`map_update_interval 5.0`, `minimum_travel_heading 0.5`): it amplifies the
+  odometry error but does not cause it. It is unchanged (shared with manual SLAM). It is a fallback
+  only if AC9 still fails after AC10 passes (see Risks).
+
+#### Map comparison helper `bumperbot_mapping/map_compare.py` (pure Python, numpy + scipy, no rclpy, no cv2)
+
+cv2 is not usable here (built against numpy 1.x, numpy is 2.2.6), so do not import it.
+- `load_map(yaml_path) -> MapImage(grid, resolution, origin_x, origin_y)`: reads the map_server YAML
+  and the P5 PGM (own reader, flipped so row 0 = min y), occupied = pixel < 50 (trinary 0),
+  free = 254, unknown = 205.
+- `occupied_points(map) -> (N, 2)` world coordinates of the occupied cell centres.
+- `reference_distance_field(ref_map) -> callable(points) -> distances` (EDT on the reference occupied
+  cells, 5.0 m outside the grid).
+- `rigid_align(points, dist_fn, max_angle_deg=20, max_shift=1.5) -> (theta, tx, ty, cost)`:
+  minimises the truncated chamfer `mean(min(d, 0.5))` over rotation about the point centroid and
+  translation. Coarse-to-fine: 1 deg / 0.2 m, then 0.1 deg / 0.02 m around the best, global search
+  on at most 2000 subsampled points. Budget: <= 30 s for a 3000-point map.
+- `dominant_direction_deg(points) -> float` in [-45, 45): the angle that maximises the sharpness
+  (sum of squared 0.05 m bin counts) of the projections on that axis and its normal.
+- `tile_residuals(aligned_points, dist_fn, tile=4.0, stride=2.0, min_points=150)`: for each tile
+  with >= `min_points` cells, a local rigid search (+-15 deg at 0.25 deg, +-0.4 m at 0.05 m) gives
+  the residual rotation, the residual shift and the inlier fraction (d <= 0.15 m) of that tile.
+- `compare_maps(explored, reference) -> MapQuality` dataclass: `n_occupied`, `extent_m`,
+  `global_rotation_deg`, `inlier_fraction` (d <= 0.15 m after alignment), `median_distance`,
+  `dominant_residual_deg` (aligned explored vs reference), `max_tile_rotation_deg`,
+  `max_tile_shift_m`, `min_tile_inlier_fraction`, `n_tiles`; plus `passes(thresholds) -> (bool, reasons)`.
+
+Thresholds (`DEFAULT_THRESHOLDS`), measured with a prototype of this algorithm on real data:
+
+| Metric | Threshold | user's warped map | reference, rotated 7 deg + shifted + 30 % dropout + 3 cm noise |
+|---|---|---|---|
+| `inlier_fraction` (d <= 0.15 m = 3 cells) | >= 0.80 | 0.62 | 1.00 |
+| `dominant_residual_deg` | <= 2.0 | 0.0 (not discriminative alone for a fan) | 0.25 |
+| `max_tile_rotation_deg` (residual wall rotation) | <= 2.0 | 15 (many tiles 6-15) | 1.25 |
+| `max_tile_shift_m` (seam) | <= 0.20 | 0.53 | 0.00 |
+| `min_tile_inlier_fraction` (seam) | >= 0.50 | 0.07 | 1.00 |
+| `n_occupied` / extent | >= 2000 cells, >= 15 x 9 m | 3214, 18.6 x 11 m | - |
+
+0.80 leaves room for real differences between the reference (made with slam_toolbox in Gazebo:
+furniture outlines, glass, wall thickness) and a correct MuJoCo SLAM map. 0.15 m is 3 cells, which
+covers 1-cell rasterisation and wall-thickness offsets. 2 deg is the requested rotation bound, and
+it is above the 1.25 deg noise floor of the tile estimator. The per-tile rotation, shift and inlier
+checks are the "no seam" checks: a seam always gives at least one tile with a large local rotation
+or shift, or with a low inlier fraction.
+
+#### AC9 test flow
+
+```
+ ROS_DOMAIN_ID=87, ROS_LOCALHOST_ONLY=1 (dedicated, isolated)
+ launch_testing: auto_explore.launch.py simulator:=mujoco viewer:=false use_rviz:=false
+                 map_save_path:=<tmp>/explored explorer_config:=<tmp override yaml>
+   mujoco_sim_node -> /clock,/scan -> slam_toolbox -> /map -> frontier_explorer
+        ^                                                      | explore_vel
+        +-- ros2_control <- twist_mux <------------------------+
+   frontier_explorer: COMPLETE or max_exploration_time -> /map_saver/save_map -> <tmp>/explored.{pgm,yaml}
+ test process: wait for /explore/status == MAP_SAVED
+   -> map_compare.compare_maps(<tmp>/explored.yaml, small_house/map.yaml) -> assert thresholds
+```
+
 ## Files
 
 | Path | create/modify | Purpose |
@@ -211,9 +324,23 @@ wins. On the real robot nothing publishes on `explore_vel`, so the extra input n
 | `doc/10_navigation.md` | modify | Implementation status: built-in grid A* + pure pursuit used for exploration; correct the claim that Nav2 is not installed (the Nav2 packages are installed now, but this feature does not use them) |
 | `doc/11_build_run_and_command_reference.md` | modify | Run and test commands for auto exploration |
 | `doc/01_repository_structure.md` | modify | List the new files |
+| `src/bumperbot_mapping/bumperbot_mapping/map_compare.py` | create | AC9 helper: PGM/YAML loader, rigid 2D alignment, dominant wall direction, tile residuals, `compare_maps`, `DEFAULT_THRESHOLDS` (pure Python) |
+| `src/bumperbot_mapping/test/test_map_compare.py` | create | AC9 helper unit tests: perturbed reference passes, synthetic seam fails, the user's warped map fails |
+| `src/bumperbot_mapping/test/data/warped_small_house.pgm`, `.yaml` | create | Regression fixture: copy of `.claude/features/auto-explore-slam/explored_map.{pgm,yaml}` (image name inside the YAML updated) |
+| `src/bumperbot_mapping/CMakeLists.txt` | modify | Register `test_map_compare.py` (`ament_add_pytest_test`, TIMEOUT 300) |
+| `src/bumperbot_bringup/test/test_slam_map_quality_mujoco.launch.py` | create | AC9 full-stack SLAM map quality test (opt-in with `BUMPERBOT_SLAM_E2E=1`) |
+| `src/bumperbot_bringup/CMakeLists.txt` | modify | Register the AC9 launch test (TIMEOUT 2100); it skips itself unless `BUMPERBOT_SLAM_E2E=1` |
+| `src/bumperbot_bringup/package.xml` | modify | test_depend `python3-scipy`, `python3-yaml` (if not already present) |
+| `src/bumperbot_mujoco/mjcf/robot.xml` | modify | Root-cause fix: caster geoms `priority="1"`; wheel collision geoms `priority="1" solref="0.004 1"` (English XML comment) |
+| `src/bumperbot_mujoco/tools/generate_robot.py` | modify | Emit the same caster priority and wheel solref/priority, so regenerating keeps the fix |
+| `src/bumperbot_mujoco/test/test_odometry_drift.py` | create | AC10: encoder odometry drift and caster contact checks in `BumperbotSim` |
+| `doc/05_robot_description_and_simulation.md` | modify | MuJoCo contact model: condim/priority rule, caster and wheel contact params, measured odometry accuracy |
+| `doc/12_troubleshooting.md` | modify | New entry "Warped / fanned SLAM map": duplicate stacks on the same ROS_DOMAIN_ID (`ros2 topic info /clock` publisher count), MuJoCo odometry slip, how to run AC9 |
+| `doc/08_mapping_and_slam.md`, `doc/11_build_run_and_command_reference.md`, `README.md` | modify | Map quality test command and what it checks; advise a dedicated `ROS_DOMAIN_ID` for sim runs |
 
 Not touched: `real_robot.launch.py`, `bumperbot_firmware/*`, `hardware_interface.launch.py`,
-`slam_toolbox.yaml`, `sim_core.py`, `mujoco_sim_node.py`.
+`slam_toolbox.yaml`, `sim_core.py`, `mujoco_sim_node.py`, the URDF/xacro, `bumperbot_gazebo.xacro`,
+`bumperbot_controllers.yaml`. The amendment only changes the MuJoCo robot model (sim-only path).
 
 ## Acceptance criteria
 
@@ -274,6 +401,35 @@ Not touched: `real_robot.launch.py`, `bumperbot_firmware/*`, `hardware_interface
   has moved >= 0.3 m from its first value. (This is the closest automated check of the ROS wiring
   with slam_toolbox. Gazebo shares the same launch path and is covered by AC7.)
 
+- AC9: SLAM map quality, end to end, headless MuJoCo, isolated. With `ROS_DOMAIN_ID=87` and
+  `ROS_LOCALHOST_ONLY=1`, `auto_explore.launch.py simulator:=mujoco world_name:=small_house
+  viewer:=false use_rviz:=false` runs sim + controller + slam_toolbox + explorer (with
+  `max_exploration_time: 1500.0` from a test override YAML). Exactly one node publishes `/clock`
+  and exactly one publishes `/scan` (checked 20 s after start). `/explore/status` reaches
+  `MAP_SAVED` within 1800 s of wall time, and the saved map is compared by
+  `map_compare.compare_maps` with `src/bumperbot_mapping/maps/small_house/map.pgm` after a rigid
+  2D alignment. It must have: `n_occupied >= 2000` and an extent >= 15 m x 9 m;
+  `inlier_fraction >= 0.80` (occupied cells within 0.15 m of a reference wall);
+  `dominant_residual_deg <= 2.0` and `max_tile_rotation_deg <= 2.0` (residual wall rotation);
+  no seam: `max_tile_shift_m <= 0.20` and `min_tile_inlier_fraction >= 0.50`.
+  The helper itself is unit-tested: the reference map under a random rigid transform
+  (+-10 deg, +-1 m), 30 % dropout and 3 cm noise passes and the recovered rotation is within 0.3 deg
+  of the applied one; a synthetic seam (reference cells with x > -2.3 m rotated by 8 deg about
+  (-2.3, 0)) fails with `max_tile_rotation_deg > 4`; the fixture `warped_small_house` (the user's
+  map) fails on `inlier_fraction`, `max_tile_rotation_deg` and the seam checks; one
+  `compare_maps` call takes <= 30 s.
+- AC10: MuJoCo wheel odometry is consistent with the ground truth (root-cause pin). In
+  `BumperbotSim(empty.xml)`, encoder dead reckoning with r = 0.033 m, L = 0.17 m at 100 Hz, and
+  commands ramped with the controller limits (0.7 m/s^2, 5 rad/s^2):
+  - 2 m square, v = 0.15 m/s, w = 0.8 rad/s, four 90 deg left turns, 1 s pauses: final
+    |odom yaw - true yaw| <= 1.5 deg and position error <= 0.05 m (today: 14.3 deg, 0.36 m);
+  - 4 full turns in place at +0.8 rad/s and at -0.8 rad/s: |heading error| <= 5 deg each
+    (today: about 58 deg);
+  - 3 m straight at 0.15 m/s: position error <= 0.03 m (today: 0.156 m);
+  - after settling, every active contact that involves `caster_front_link_collision` or
+    `caster_rear_link_collision` has `contact.dim == 1` (frictionless; today: 3).
+  `test_sim_core.py` and AC5 still pass with the modified model.
+
 ## Test plan
 
 All commands run from the workspace root
@@ -324,6 +480,31 @@ All commands run from the workspace root
   - Command: `colcon build && source install/setup.bash && timeout 180 launch_test src/bumperbot_bringup/test/test_auto_explore_mujoco.launch.py`
   - Pass: exit code 0 within 180 s.
 
+- AC9: helper unit tests plus the opt-in full-stack launch test.
+  - Helper: `src/bumperbot_mapping/test/test_map_compare.py` (uses
+    `src/bumperbot_mapping/maps/small_house/map.{pgm,yaml}` and `test/data/warped_small_house.*`).
+    - Command: `PYTHONPATH=src/bumperbot_mapping:$PYTHONPATH python3 -m pytest src/bumperbot_mapping/test/test_map_compare.py -q -s`
+    - Pass: all tests pass; the printed `MapQuality` of the warped fixture shows the failing checks.
+  - E2E: `src/bumperbot_bringup/test/test_slam_map_quality_mujoco.launch.py` (launch_testing). In
+    `generate_test_description` it writes a tmp override YAML (installed `frontier_explorer.yaml`
+    with `max_exploration_time: 1500.0`), and passes `map_save_path:=<tmp>/explored`. It skips if
+    `BUMPERBOT_SLAM_E2E != 1` or `import mujoco` fails. It fails at once if `ROS_DOMAIN_ID` is unset
+    or `0`. Active tests: the publisher counts of `/clock` and `/scan` are 1 after 20 s; wait for
+    `MAP_SAVED` (timeout 1800 s, print the status history and whether COMPLETE or the time limit
+    ended the run); load `<tmp>/explored.yaml`, run `compare_maps` and assert every threshold. Print
+    the full `MapQuality`, and copy the map to `$BUMPERBOT_TEST_ARTIFACTS` if it is set.
+  - Command: `colcon build --packages-select bumperbot_mujoco bumperbot_mapping bumperbot_bringup && source install/setup.bash && BUMPERBOT_SLAM_E2E=1 ROS_DOMAIN_ID=87 ROS_LOCALHOST_ONLY=1 timeout 2100 launch_test src/bumperbot_bringup/test/test_slam_map_quality_mujoco.launch.py`
+  - Before running: `pgrep -af "mujoco_sim_node|ros2_control_node|slam_toolbox"` must print nothing
+    (kill stale stacks; see doc/12).
+  - Pass: exit code 0. Runtime is about 15-30 min, because `mujoco_sim_node` steps on a wall-clock
+    timer (at most 1x real time).
+- AC10: headless MuJoCo sim test.
+  - File: `src/bumperbot_mujoco/test/test_odometry_drift.py` (`pytest.importorskip("mujoco")`).
+  - Command: `PYTHONPATH=src/bumperbot_mujoco:$PYTHONPATH python3 -m pytest src/bumperbot_mujoco/test/test_odometry_drift.py src/bumperbot_mujoco/test/test_sim_core.py -q -s`
+  - Pass: all pass, and the measured errors are printed. Before the robot.xml fix the drift tests
+    and the caster contact test must FAIL (the coder checks this once, by running the test first).
+  - Regression: rerun AC5 (`test_auto_explore_sim.py`) and AC8; both still pass.
+
 ## Implementation steps
 
 1. Add the `explore` input to `twist_mux_topics.yaml` (priority 10, timeout 0.5, English comment).
@@ -371,6 +552,37 @@ All commands run from the workspace root
 14. Run every Test plan command, and `colcon build` of the full workspace, to confirm nothing else
     broke.
 
+15. (AC10, test first) Write `src/bumperbot_mujoco/test/test_odometry_drift.py`: a helper that
+    drives `BumperbotSim` with ramped (v, w) segments at 100 Hz, integrates encoder odometry
+    (midpoint, r 0.033, L 0.17) and compares it with `sim.base_pose()`; the three motion cases and
+    the caster `contact.dim` check. Run it and confirm it fails on the current model.
+16. Fix `src/bumperbot_mujoco/mjcf/robot.xml`: add `priority="1"` to `caster_front_link_collision`
+    and `caster_rear_link_collision`; add `priority="1" solref="0.004 1"` to
+    `wheel_left_link_collision` and `wheel_right_link_collision`. Add an English XML comment that
+    explains the MuJoCo condim/priority rule. Do not touch the URDF or Gazebo files.
+17. Make the same change in `tools/generate_robot.py` (a `WHEEL_SOLREF = "0.004 1"` constant, set
+    `priority` on caster and wheel collision geoms, and fix the caster comment). If xacro + mujoco
+    are available, regenerate into the scratch dir and diff it with the edited `robot.xml`
+    (only the expected attributes may differ). Do not overwrite meshes.
+18. Run AC10, `test_sim_core.py` and AC5. If a `test_sim_core.py` bound fails only because the
+    robot no longer slips (for example `test_drives_straight_forward` x range), report the measured
+    value to the architect instead of widening the bound on your own.
+19. (AC9 helper) Create `bumperbot_mapping/map_compare.py` as in Architecture (no rclpy, no cv2), and
+    copy the fixture to `src/bumperbot_mapping/test/data/` (set `image: warped_small_house.pgm`).
+    Write `test_map_compare.py`. Use fixed RNG seeds, and keep each `compare_maps` call <= 30 s
+    (vectorised distance lookups, coarse-to-fine search, subsampling). Register it in CMake.
+20. (AC9 E2E) Write `test_slam_map_quality_mujoco.launch.py`, reusing the structure of
+    `test_auto_explore_mujoco.launch.py` (include `auto_explore.launch.py` with launch args, no
+    absolute paths: locate files with `get_package_share_directory`, and use `tempfile` for the
+    output). Register it in the bringup CMake with TIMEOUT 2100.
+21. Run AC9 once on an isolated domain. Report the full `MapQuality`, the end reason (COMPLETE or
+    time limit) and the sim/wall durations. If AC9 fails while AC10 passes, stop and report the
+    numbers (see the slam_toolbox fallback in Risks); do not loosen thresholds.
+22. Docs: `doc/05` (MuJoCo contact parameters and why), `doc/12` (warped map: duplicate stacks /
+    `ROS_DOMAIN_ID`, MuJoCo slip), `doc/08` + `doc/11` + `README.md` (the map quality test, its
+    command and opt-in env var, and the advice to use a dedicated `ROS_DOMAIN_ID`).
+23. Rerun the whole Test plan (AC1-AC10).
+
 ## Risks and open questions
 
 - **Safety-stop deadlock.** `safety_stop_node` locks twist_mux (priority 255) whenever ANY beam is
@@ -415,3 +627,32 @@ All commands run from the workspace root
   committed small_house map.
 - **Open question:** after `COMPLETE`, should the explorer restart on a service call (for example
   `/explore/restart`, `std_srvs/Trigger`)? It is not in scope now and is easy to add later.
+- **AC9 runtime (amendment).** `mujoco_sim_node` advances 0.01 s of sim time per 100 Hz wall-clock
+  timer tick, so the stack runs at most 1x real time, headless or not (`BumperbotSim` alone runs
+  about 15x faster, but the ROS stack cannot). AC5 needed 736 s of sim time with a perfect map, and
+  with SLAM (5 s map updates) 900-1500 s is expected. So AC9 is bounded by
+  `max_exploration_time: 1500` (the explorer then saves the map anyway) and a 1800 s wait, and it is
+  opt-in (`BUMPERBOT_SLAM_E2E=1`), so the default `colcon test` stays fast. A follow-up could add a
+  `real_time_factor` parameter to `mujoco_sim_node` (several physics ticks per timer tick, default
+  1.0). It is left out because the controller_manager loop is wall-clock paced, and running faster
+  than real time would change the control rate in sim time.
+- **AC9 thresholds vs the reference map.** The reference is a Gazebo slam_toolbox map, not ground
+  truth. If a visually correct MuJoCo map gets an inlier fraction between 0.70 and 0.80 (for
+  example, furniture outlines differ), the coder reports the numbers and the per-tile table; the
+  architect then decides whether to change the threshold or to build a ground-truth reference by
+  ray-casting the MJCF (AC5 mapper with the true pose). Tiles with < 150 occupied cells are ignored,
+  because their rotation estimate is noisy (up to about 4 deg on the perfect map with 80 cells).
+- **Fix does not fully remove the SLAM warp.** About 0.7 deg of heading error per square remains
+  (the real robot is worse). If AC9 still fails with AC10 green, the next lever is an
+  exploration-specific slam_toolbox config passed through the existing `slam_config` path:
+  `minimum_travel_heading` 0.2, `minimum_travel_distance` 0.2, `map_update_interval` 2.0,
+  `angle_variance_penalty` 0.5. Alternatively, lower `max_angular_speed` in the explorer to 0.5.
+  The shared `slam_toolbox.yaml` stays unchanged.
+- **Stale stacks.** Any process from an earlier launch on the same domain corrupts `/clock`, `/scan`
+  and TF, and its twist_mux also forwards `explore_vel`. AC9 enforces isolation and checks the
+  publisher counts. The docs tell users to kill old stacks (`pkill -f mujoco_sim_node`, see
+  doc/12 section 4) or to use a dedicated `ROS_DOMAIN_ID`. The user's run cannot be replayed, so
+  its contribution stays unknown. The measured odometry bug is enough to explain the fan shape.
+- **Model change side effects.** Stiffer wheel contact and frictionless casters change the
+  dynamics slightly (faster turning response, less slip). `test_sim_core.py`, AC5 and AC8 must be
+  rerun. `small_house.xml` and `small_warehouse.xml` include `robot.xml`, so all worlds get the fix.
