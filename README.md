@@ -24,6 +24,7 @@ BumperBot is an end-to-end Autonomous Mobile Robot (AMR) system developed in **R
 - [9. ROS 2 Command Reference](#9-ros-2-command-reference)
 - [10. Troubleshooting](#10-troubleshooting)
 - [11. Technical Documentation Index](#11-technical-documentation-index)
+- [12. AI Development Workflow](#12-ai-development-workflow)
 
 ---
 
@@ -423,3 +424,21 @@ Detailed architectural and theoretical guides are available in the [doc/](doc/) 
 11. [**10. Navigation & Path Planning (Nav2)**](doc/10_navigation.md) — Nav2 gap analysis and step-by-step production implementation blueprint.
 12. [**11. Build, Run & Command Reference**](doc/11_build_run_and_command_reference.md) — Complete handbook of verified commands.
 13. [**12. Troubleshooting & Diagnostics**](doc/12_troubleshooting.md) — Master failure diagnostic matrix and resolution procedures.
+14. [**13. AI Development Workflow**](doc/13_ai_development_workflow.md) — Claude Code feature pipeline: subagents, skills, hooks and the implement/test loop.
+
+---
+
+## 12. AI Development Workflow
+
+New features can be built with an automated Claude Code pipeline configured in `.claude/`:
+the `architect` subagent (Opus) writes a plan with numbered acceptance criteria, then
+`coder` and `tester` (Sonnet) loop until every criterion passes. Each stage is committed.
+Hooks enforce the workspace rules (no edits in `build/`/`install/`/`log/`, no absolute
+launch paths, no push or merge to `main`, lint after each edit).
+
+```bash
+/feature-pipeline <feature description> [--auto]   # full loop
+/feature-plan | /feature-implement | /feature-test  # single stages
+```
+
+See [doc/13_ai_development_workflow.md](doc/13_ai_development_workflow.md).

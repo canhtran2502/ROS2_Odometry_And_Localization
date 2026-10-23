@@ -12,6 +12,7 @@ Detailed docs live in `doc/` (the folder is named `doc`, not `docs`). Read only 
 - `doc/05_robot_description_and_simulation.md`: robot model and simulation setup
 - `doc/11_build_run_and_command_reference.md`: build, run and ROS 2 commands
 - `doc/12_troubleshooting.md`: known issues
+- `doc/13_ai_development_workflow.md`: feature pipeline (`/feature-pipeline`), subagents, skills, hooks
 
 ## Rules
 
