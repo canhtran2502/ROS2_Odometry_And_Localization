@@ -20,8 +20,9 @@ Feature request: $ARGUMENTS
    - every AC has a matching entry in the Test plan;
    - no rule in `CLAUDE.md` is violated.
    If either check fails, send the architect back once with the specific gaps.
-5. Show the user the AC list and the Files table (short). Unless running inside
-   `/feature-pipeline` in autonomous mode, wait for approval or edits.
+5. Show the user the AC list and the Files table (short). When invoked standalone or with
+   `/feature-pipeline --review`, wait for approval or edits; inside `/feature-pipeline`
+   (autonomous by default) continue without waiting.
 6. Set the stage, then commit:
    `state.sh stage <slug> implement`, then
    `git add .claude/features/<slug> && git commit -m "feat(<slug>): plan architecture"`.

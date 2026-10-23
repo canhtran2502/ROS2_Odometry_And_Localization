@@ -68,7 +68,7 @@ keeps the evaluation honest.
 | `/feature-plan <description>` | 1. architecture | `feat(<slug>): plan architecture` |
 | `/feature-implement <slug>` | 2. implement iteration N | `feat(<slug>): implement iteration N` |
 | `/feature-test <slug>` | 3. test iteration N | `test(<slug>): iteration N - PASS/FAIL (x/y AC)` |
-| `/feature-pipeline <description or slug> [--auto]` | all, with the loop | per stage plus `chore(<slug>): pipeline done` |
+| `/feature-pipeline <description or slug> [--review]` | all, with the loop | per stage plus `chore(<slug>): pipeline done` |
 
 The loop stops on PASS, when it reaches `max_iterations` (default 5), or when the same AC
 fails with the same root cause twice. The last two cases set the state to `blocked` and
@@ -101,11 +101,11 @@ Exit code 2 from a hook blocks the action, and its stderr is shown to the model.
 # Start Claude Code in the workspace on the feature branch
 cd bumperbot_ws && git switch auto-explore-slam && claude
 
-# Full pipeline (pauses once for plan approval)
+# Full pipeline, fully autonomous (default): plan, then loop until PASS or blocked
 /feature-pipeline Autonomous frontier exploration that builds a map with slam_toolbox
 
-# Fully autonomous run
-/feature-pipeline <description> --auto
+# Pause once after the plan for approval
+/feature-pipeline <description> --review
 
 # Single stages, or resume after a pause
 /feature-plan <description>

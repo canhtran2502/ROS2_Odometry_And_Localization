@@ -1,7 +1,7 @@
 ---
 name: feature-pipeline
 description: Orchestrates the full automated feature workflow for BumperBot - plan with the architect (Opus), then loop implement (coder, Sonnet) and test (tester, Sonnet) until every acceptance criterion passes or the iteration limit is hit. Commits each stage. Use when the user wants a feature built end to end, or to resume an in-progress feature by slug.
-argument-hint: "<feature description | slug> [--auto]"
+argument-hint: "<feature description | slug> [--review]"
 ---
 
 # Feature pipeline (orchestrator)
@@ -14,8 +14,9 @@ State helper: `.claude/skills/feature-pipeline/scripts/state.sh`.
 
 ## 0. Resume or start
 - If the input matches an existing `.claude/features/<slug>/state.json`, resume from its `stage`.
-- Otherwise run the **feature-plan** skill with the description. With `--auto`, skip the
-  user-approval pause after the plan; otherwise pause once for approval of the plan.
+- Otherwise run the **feature-plan** skill with the description in autonomous mode: post a
+  short AC summary and continue straight into the loop without waiting for approval.
+  Only with `--review` pause once for the user to approve the plan.
 
 ## 1. Loop (evaluator-optimizer)
 ```

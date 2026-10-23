@@ -437,7 +437,7 @@ Hooks enforce the workspace rules (no edits in `build/`/`install/`/`log/`, no ab
 launch paths, no push or merge to `main`, lint after each edit).
 
 ```bash
-/feature-pipeline <feature description> [--auto]   # full loop
+/feature-pipeline <feature description> [--review] # full loop (autonomous by default)
 /feature-plan | /feature-implement | /feature-test  # single stages
 ```
 
