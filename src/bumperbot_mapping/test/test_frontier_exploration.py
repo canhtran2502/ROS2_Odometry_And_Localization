@@ -416,3 +416,58 @@ def test_core_none_scan_and_no_map_give_zero():
     core.update_map(g, fe.GridInfo(0.05, 0, 0, 20, 20), 0.0)
     cmd = core.step((0.5, 0.5, 0), None, 1.0)
     assert cmd.v == 0.0 and cmd.w == 0.0
+
+
+# ---------------------------------------------------------------------------
+# AC3: side_repulsion (lateral avoidance outside the front sector)
+# ---------------------------------------------------------------------------
+
+def _side_scan(base_angle, rng, offset, n=360, default=5.0):
+    """Scan with one beam at the given base-frame angle; laser angle = base - offset."""
+    inc = 2 * math.pi / n
+    r = np.full(n, default)
+    la = (base_angle - offset) % (2 * math.pi)
+    r[int(round(la / inc)) % n] = rng
+    return r, 0.0, inc
+
+
+@pytest.mark.parametrize("offset", [0.0, math.pi])
+def test_ac3_side_repulsion_steers_away(offset):
+    # obstacle on the left side (+1.2 rad) at 0.22 m: steer right (negative), slow down
+    r, a0, inc = _side_scan(1.2, 0.22, offset)
+    turn, scale = fe.side_repulsion(r, a0, inc, offset, 0.30, 0.20, 0.6)
+    assert turn < 0.0 and -1.0 <= turn
+    assert 0.3 <= scale < 1.0
+    # mirrored obstacle on the right: steer left
+    r, a0, inc = _side_scan(-1.2, 0.22, offset)
+    turn, scale = fe.side_repulsion(r, a0, inc, offset, 0.30, 0.20, 0.6)
+    assert turn > 0.0 and scale < 1.0
+
+
+def test_ac3_side_repulsion_inactive_when_clear_or_front():
+    offset = math.pi
+    # side obstacle beyond side_clearance: no effect
+    r, a0, inc = _side_scan(1.2, 0.35, offset)
+    assert fe.side_repulsion(r, a0, inc, offset, 0.30, 0.20, 0.6) == (0.0, 1.0)
+    # obstacle in the front sector is scan_safety's job, not side_repulsion's
+    r, a0, inc = _side_scan(0.0, 0.1, offset)
+    assert fe.side_repulsion(r, a0, inc, offset, 0.30, 0.20, 0.6) == (0.0, 1.0)
+    # empty scan
+    assert fe.side_repulsion([], 0.0, 0.01, offset) == (0.0, 1.0)
+
+
+def test_ac3_side_repulsion_depth_and_rear():
+    offset = 0.0
+    r, a0, inc = _side_scan(1.2, 0.28, offset)
+    t_far, s_far = fe.side_repulsion(r, a0, inc, offset, 0.30, 0.20, 0.6)
+    r, a0, inc = _side_scan(1.2, 0.20, offset)
+    t_hard, s_hard = fe.side_repulsion(r, a0, inc, offset, 0.30, 0.20, 0.6)
+    assert abs(t_hard) > abs(t_far) and s_hard < s_far
+    assert abs(t_hard) == pytest.approx(1.0) and s_hard == pytest.approx(0.3)
+    # obstacle behind the wheel axis: no steering, but still slows
+    r, a0, inc = _side_scan(math.pi, 0.22, offset)
+    turn, scale = fe.side_repulsion(r, a0, inc, offset, 0.30, 0.20, 0.6)
+    assert turn == 0.0 and scale < 1.0
+    # no-return (inf/nan) beams are ignored
+    r = np.full(360, np.inf)
+    assert fe.side_repulsion(r, 0.0, 2 * math.pi / 360, 0.0) == (0.0, 1.0)
