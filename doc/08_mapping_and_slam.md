@@ -129,6 +129,44 @@ This writes:
 
 ---
 
+## E2. Autonomous Frontier Exploration (`frontier_explorer`)
+
+The robot can explore an unknown, closed environment by itself while `slam_toolbox` builds the map. No Nav2 planner, controller or behavior tree is used.
+
+```bash
+ros2 launch bumperbot_bringup auto_explore.launch.py simulator:=mujoco world_name:=small_house
+# args: simulator (gazebo|mujoco), world_name, use_rviz, viewer, map_save_path, explorer_config
+```
+
+`auto_explore.launch.py` includes `simulated_robot.launch.py` with `use_slam:=True` and starts `frontier_explorer` with `config/frontier_explorer.yaml`.
+
+### Algorithm
+1. **Inputs**: `/map` (slam_toolbox), the pose from TF `map -> base_footprint`, and `/scan`. The laser yaw offset is read from TF (`base_footprint -> laser_link`); the lidar is mounted backwards (yaw ~ pi), so it is never hard-coded.
+2. **Frontiers**: free cells with an unknown 4-neighbour, clustered 8-connected; clusters smaller than `min_frontier_size` cells are dropped.
+3. **Costmap**: cells closer than `inflation_radius` (0.30 m) to an occupied cell, and unknown cells, are not traversable.
+4. **Goal selection**: for each cluster, the reachable traversable cell closest to the centroid; clusters are ranked by `distance - size_weight * size`; grid A* (8-connected, no corner cutting) runs on the best 5 until one gives a path. Reached or failed goals are blacklisted (`goal_blacklist_radius`).
+5. **Following**: pure pursuit (`lookahead_distance`), rotate in place above `rotate_in_place_angle`.
+6. **Safety layer**: on `/scan`, stricter than `safety_stop_node` (front stop at 0.25 m vs. its 0.2 m danger zone, speed scaled down below 0.45 m, recovery by reversing or turning to the freer side). The `safety_stop` lock (priority 255) still overrides everything.
+7. **Start**: one 360 degree turn (`initial_spin`) seeds the map.
+
+### Termination and map saving
+Exploration is complete when no reachable frontier of meaningful size remains for `completion_hysteresis` consecutive replans AND `completion_timeout` seconds (or `max_exploration_time` is reached). The node then publishes zero velocity for 1 s, calls `/map_saver/save_map` (`nav2_map_server`, already started by `slam.launch.py`) with `map_save_path` (default `~/bumperbot_maps/explored_map`, directory created), falls back to `/slam_toolbox/save_map`, and reports the result.
+
+| Topic | Type | Meaning |
+|---|---|---|
+| `explore_vel` | `geometry_msgs/Twist` | Velocity command for `twist_mux` (priority 10, timeout 0.5 s) |
+| `/explore/status` | `std_msgs/String` (latched) | `WAITING_FOR_MAP`, `EXPLORING`, `COMPLETE`, `MAP_SAVED`, `MAP_SAVE_FAILED` |
+| `/explore/path` | `nav_msgs/Path` | Current A* path (RViz) |
+| `/explore/frontiers` | `visualization_msgs/MarkerArray` | Frontier centroids and the selected goal |
+
+### Taking over manually
+The joystick (`joy_vel`, 99) and the keyboard (`key_vel`, 90) have a higher `twist_mux` priority than the explorer, so moving the stick or pressing a key takes over immediately; the explorer resumes after the 0.5 s timeout once the manual input stops.
+
+### Implementation notes
+The algorithms are in `bumperbot_mapping/frontier_exploration.py` (numpy + scipy, no rclpy), and `frontier_explorer.py` is a thin ROS wrapper. The node is Python-only: it is new, and the pure module is shared with the headless pytest and MuJoCo tests, which a C++ port could not run. A C++ port would be a separate feature. `slam_toolbox.yaml` is unchanged (`map_update_interval: 5.0` makes frontier updates slow, so the explorer keeps following its path between map updates).
+
+---
+
 ## F. Pre-Built Map Verification
 
 The workspace includes a pre-mapped small house asset in `src/bumperbot_mapping/maps/small_house/`:

@@ -34,11 +34,12 @@ install(TARGETS
 
 install(PROGRAMS
   ${PROJECT_NAME}/mapping_with_known_poses.py
+  ${PROJECT_NAME}/frontier_explorer.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
 install(
-  DIRECTORY config launch maps
+  DIRECTORY config launch maps rviz
   DESTINATION share/${PROJECT_NAME}
 )
 
@@ -47,6 +48,23 @@ if(BUILD_TESTING)
   set(ament_cmake_copyright_FOUND TRUE)
   set(ament_cmake_cpplint_FOUND TRUE)
   ament_lint_auto_find_test_dependencies()
+
+  # Exploration tests (registered only when the files are present)
+  find_package(ament_cmake_pytest REQUIRED)
+  find_package(launch_testing_ament_cmake REQUIRED)
+  set(_pythonpath "${CMAKE_CURRENT_SOURCE_DIR}")
+  if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test/test_frontier_exploration.py)
+    ament_add_pytest_test(test_frontier_exploration test/test_frontier_exploration.py
+      APPEND_ENV PYTHONPATH=${_pythonpath} TIMEOUT 120)
+  endif()
+  if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test/test_exploration_synthetic.py)
+    ament_add_pytest_test(test_exploration_synthetic test/test_exploration_synthetic.py
+      APPEND_ENV PYTHONPATH=${_pythonpath} TIMEOUT 600)
+  endif()
+  if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test/test_frontier_explorer_node.launch.py)
+    add_launch_test(test/test_frontier_explorer_node.launch.py
+      TARGET test_frontier_explorer_node TIMEOUT 90)
+  endif()
 endif()
 
 ament_package()

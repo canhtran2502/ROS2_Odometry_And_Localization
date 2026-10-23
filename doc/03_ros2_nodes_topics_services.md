@@ -120,6 +120,18 @@ This document provides a comprehensive, verified catalog of every ROS 2 node, to
 
 ---
 
+#### `frontier_explorer` (`frontier_explorer.py`)
+- **Package**: `bumperbot_mapping`
+- **Purpose**: Autonomous frontier exploration on top of `slam_toolbox`: frontier detection, grid A*, pure pursuit, reactive safety layer, map saving on completion. Algorithms live in `bumperbot_mapping/frontier_exploration.py` (no rclpy).
+- **Python-only**: this is a new node (the C++/Python parity rule covers nodes that already exist in both languages). Its logic is shared with the headless pytest and MuJoCo tests, which a C++ port could not run; a C++ port would be a separate feature.
+- **Subscriptions**: `map` (`nav_msgs/msg/OccupancyGrid`, reliable + transient_local), `scan` (`sensor_msgs/msg/LaserScan`, sensor-data QoS)
+- **Publications**: `explore_vel` (`geometry_msgs/msg/Twist`, 10 Hz), `/explore/status` (`std_msgs/msg/String`, transient_local), `/explore/path` (`nav_msgs/msg/Path`), `/explore/frontiers` (`visualization_msgs/msg/MarkerArray`)
+- **Service clients**: `/map_saver/save_map` (`nav2_msgs/srv/SaveMap`), fallback `/slam_toolbox/save_map` (`slam_toolbox/srv/SaveMap`)
+- **TF Lookups**: `map` -> `base_footprint` (every tick), `base_footprint` -> `laser_link` (laser yaw offset)
+- **Parameters**: see `bumperbot_mapping/config/frontier_explorer.yaml` (e.g. `inflation_radius`, `min_frontier_size`, `max_linear_speed`, `stop_distance`, `completion_hysteresis`, `completion_timeout`, `map_save_path`, `shutdown_on_complete`)
+
+---
+
 ### 5. Physical Hardware & Serial Bridge Nodes
 
 #### `mpu6050_driver` (`mpu6050_driver.py`)
@@ -165,6 +177,10 @@ This document provides a comprehensive, verified catalog of every ROS 2 node, to
 | `/imu/out` | `sensor_msgs/msg/Imu` | `ros_gz_bridge` / `mpu6050_driver` | `imu_republisher_node` | Raw 6-DoF inertial measurements |
 | `/imu_ekf` | `sensor_msgs/msg/Imu` | `imu_republisher_node` | `robot_localization` (EKF) | Axis-corrected IMU data for fusion |
 | `/scan` | `sensor_msgs/msg/LaserScan` | `ros_gz_bridge` (LiDAR) | `safety_stop`, `nav2_amcl`, `slam_toolbox` | 2D planar laser range scan |
+| `explore_vel` | `geometry_msgs/msg/Twist` | `frontier_explorer` | `twist_mux` (input `explore`, priority 10) | Autonomous exploration velocity demand (lowest priority; joystick 99 > keyboard 90 > explore 10; the `safety_stop` lock 255 wins) |
+| `/explore/status` | `std_msgs/msg/String` | `frontier_explorer` | User / tests | `WAITING_FOR_MAP`, `EXPLORING`, `COMPLETE`, `MAP_SAVED`, `MAP_SAVE_FAILED` (latched) |
+| `/explore/path` | `nav_msgs/msg/Path` | `frontier_explorer` | RViz2 | Current A* path |
+| `/explore/frontiers` | `visualization_msgs/msg/MarkerArray` | `frontier_explorer` | RViz2 | Frontier centroids and selected goal |
 | `/safety_stop` | `std_msgs/msg/Bool` | `safety_stop_node` | `twist_mux` (Lock 255) | Emergency obstacle brake inhibitor |
 | `/zones` | `visualization_msgs/msg/MarkerArray` | `safety_stop_node` | RViz2 | Visual warning/danger radius disks |
 | `/map` | `nav_msgs/msg/OccupancyGrid` | `nav2_map_server` / `slam_toolbox` | RViz2, `nav2_amcl` | 2D discrete occupancy grid map |

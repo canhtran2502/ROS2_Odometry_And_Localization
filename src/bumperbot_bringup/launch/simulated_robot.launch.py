@@ -24,7 +24,20 @@ def generate_launch_description():
         description = "World to load (empty, small_house, small_warehouse)"
     )
 
+    use_rviz_arg = DeclareLaunchArgument(
+        "use_rviz",
+        default_value = "true",
+        description = "Start RViz"
+    )
+    viewer_arg = DeclareLaunchArgument(
+        "viewer",
+        default_value = "true",
+        description = "Open the MuJoCo viewer window (simulator:=mujoco only)"
+    )
+
     use_slam = LaunchConfiguration("use_slam")
+    use_rviz = LaunchConfiguration("use_rviz")
+    viewer = LaunchConfiguration("viewer")
     simulator = LaunchConfiguration("simulator")
     world_name = LaunchConfiguration("world_name")
 
@@ -47,7 +60,8 @@ def generate_launch_description():
             "mujoco.launch.py"
         ),
         launch_arguments={
-            "world_name": world_name
+            "world_name": world_name,
+            "viewer": viewer
         }.items(),
         condition=IfCondition(PythonExpression(["'", simulator, "' == 'mujoco'"]))
     )
@@ -109,7 +123,8 @@ def generate_launch_description():
         )],
         output="screen",
         parameters=[{"use_sim_time": True}],
-        condition = UnlessCondition(use_slam)
+        condition = IfCondition(PythonExpression(
+            ["'", use_rviz, "'.lower() == 'true' and '", use_slam, "'.lower() != 'true'"]))
     )
 
     rviz_slam = Node(
@@ -122,11 +137,14 @@ def generate_launch_description():
         )],
         output="screen",
         parameters=[{"use_sim_time": True}],
-        condition = IfCondition(use_slam)
+        condition = IfCondition(PythonExpression(
+            ["'", use_rviz, "'.lower() == 'true' and '", use_slam, "'.lower() == 'true'"]))
     )
     
     return LaunchDescription([
         use_slam_arg,
+        use_rviz_arg,
+        viewer_arg,
         simulator_arg,
         world_name_arg,
         gazebo,
@@ -138,4 +156,4 @@ def generate_launch_description():
         slam,
         rviz_localization,
         rviz_slam
-    ])
+    ])

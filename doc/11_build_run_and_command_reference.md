@@ -90,6 +90,7 @@ colcon build --symlink-install --packages-select bumperbot_firmware bumperbot_br
 |---|---|---|---|
 | `ros2 launch bumperbot_bringup simulated_robot.launch.py` | `world_name:=small_house`<br>`use_slam:=false` | Ignition Gazebo, `diff_drive_controller`, `twist_mux`, `safety_stop`, `nav2_map_server`, `nav2_amcl`, `lifecycle_manager`, RViz2 | Gazebo window opens with small house; RViz shows map and laser scan |
 | `ros2 launch bumperbot_bringup simulated_robot.launch.py use_slam:=true` | `world_name:=small_house`<br>`use_slam:=true` | Gazebo, `diff_drive_controller`, `twist_mux`, `safety_stop`, `slam_toolbox`, `map_saver_server`, RViz2 (SLAM layout) | RViz shows dynamic map generation as robot explores |
+| `ros2 launch bumperbot_bringup auto_explore.launch.py` | `simulator:=gazebo`<br>`world_name:=small_house`<br>`use_rviz:=true`<br>`viewer:=true`<br>`map_save_path:=` (empty = YAML value) | `simulated_robot.launch.py use_slam:=True` + `frontier_explorer` | Robot explores the world, `/explore/status` goes to `MAP_SAVED`, map saved under `~/bumperbot_maps/` |
 | `ros2 launch bumperbot_bringup real_robot.launch.py` | N/A | `ros2_control_node` (`BumperbotInterface`), `diff_drive_controller`, `mpu6050_driver.py`, `twist_mux` | Robot drives via serial commands to Arduino; IMU publishes at 100 Hz |
 | `ros2 launch bumperbot_description display.launch.py` | `model:=bumperbot.urdf.xacro` | `robot_state_publisher`, `joint_state_publisher_gui`, RViz2 | Interactive joint slider GUI and 3D visual robot model |
 | `ros2 launch bumperbot_bringup simulated_robot.launch.py simulator:=mujoco` | `world_name:=small_house`<br>`use_slam:=false` | MuJoCo viewer + `mujoco_sim_node`, `ros2_control_node`, `diff_drive_controller`, `twist_mux`, `safety_stop`, `nav2_amcl`, RViz2 | Same behaviour as the Gazebo launch, physics by MuJoCo |
@@ -230,6 +231,26 @@ ros2 run bumperbot_cpp_examples simple_tf_kinematics
   ```bash
   source install/setup.bash
   ros2 run nav2_map_server map_saver_cli -f ~/my_house_map --ros-args -p use_sim_time:=True
+  ```
+
+---
+
+### Workflow 2b: Autonomous Exploration + Map Saving
+- **Run** (headless MuJoCo example; use `simulator:=gazebo` for Gazebo):
+  ```bash
+  source install/setup.bash
+  ros2 launch bumperbot_bringup auto_explore.launch.py simulator:=mujoco world_name:=small_house viewer:=false use_rviz:=false
+  ```
+- **Watch progress / result**:
+  ```bash
+  ros2 topic echo /explore/status      # EXPLORING -> COMPLETE -> MAP_SAVED
+  ls ~/bumperbot_maps/                 # explored_map.yaml / explored_map.pgm
+  ```
+- **Take over**: any joystick or keyboard command overrides the explorer (`twist_mux` priority 99 / 90 vs. 10).
+- **Tests**:
+  ```bash
+  PYTHONPATH=src/bumperbot_mapping:$PYTHONPATH python3 -m pytest src/bumperbot_mapping/test -q
+  colcon test --packages-select bumperbot_mapping bumperbot_bringup && colcon test-result --verbose
   ```
 
 ---

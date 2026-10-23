@@ -10,3 +10,9 @@ twist_mux:
         topic: key_vel
         timeout: 0.5
         priority: 90
+      # Autonomous exploration (frontier_explorer); lowest priority, so the joystick, the
+      # keyboard and the safety_stop lock always override it.
+      explore:
+        topic: explore_vel
+        timeout: 0.5
+        priority: 10

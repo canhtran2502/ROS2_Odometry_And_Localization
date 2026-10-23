@@ -56,6 +56,7 @@ BumperBot is designed for roboticists and embedded software engineers mastering 
 | **2D Graph SLAM** | Verified | `slam_toolbox` asynchronous cartographic mapping |
 | **AMCL Localization** | Verified | `nav2_amcl` particle filter with map server lifecycle |
 | **Hardware Interface** | Verified | C++ `hardware_interface` over `/dev/ttyUSB0` + Arduino PID |
+| **Autonomous Exploration** | Verified | `frontier_explorer`: frontier detection, grid A*, pure pursuit on top of `slam_toolbox`, saves the map when done (`auto_explore.launch.py`) |
 | **Autonomous Navigation (Nav2)** | Planned | Architectural blueprint provided in [doc/10_navigation.md](doc/10_navigation.md) |
 
 ---
@@ -171,13 +172,13 @@ bumperbot_ws/
 
 | Package | Type | Primary Responsibilities | Key Nodes & Entry Points | Documentation |
 | :--- | :--- | :--- | :--- | :--- |
-| **`bumperbot_bringup`** | `ament_cmake` | Master system integration & unified launch orchestration | `simulated_robot.launch.py`, `real_robot.launch.py` | [doc/01_repository_structure.md](doc/01_repository_structure.md) |
+| **`bumperbot_bringup`** | `ament_cmake` | Master system integration & unified launch orchestration | `simulated_robot.launch.py`, `real_robot.launch.py`, `auto_explore.launch.py` | [doc/01_repository_structure.md](doc/01_repository_structure.md) |
 | **`bumperbot_controller`** | `ament_cmake` + Python | Analytical kinematics, noisy odometry, and teleop arbitration | `simple_controller`, `noisy_controller`, `twist_relay` | [doc/06_odometry_and_motion_control.md](doc/06_odometry_and_motion_control.md) |
 | **`bumperbot_description`** | `ament_cmake` | URDF/Xacro modeling, visual/collision meshes, Gazebo worlds | `display.launch.py`, `gazebo.launch.py` | [doc/05_robot_description_and_simulation.md](doc/05_robot_description_and_simulation.md) |
 | **`bumperbot_mujoco`** | `ament_python` | MuJoCo simulation: robot and world MJCF models, ROS 2 bridge (`/clock`, `/scan`, `/imu/out`, wheel commands) | `mujoco_sim_node`, `mujoco.launch.py` | [doc/05_robot_description_and_simulation.md](doc/05_robot_description_and_simulation.md) |
 | **`bumperbot_firmware`** | `ament_cmake` + Python | Hardware interface plugin, serial transceiver, Arduino PID | `bumperbot_interface` (plugin), `mpu6050_driver` | [doc/06_odometry_and_motion_control.md](doc/06_odometry_and_motion_control.md) |
 | **`bumperbot_localization`** | `ament_cmake` + Python | 1D Kalman filter, particle sampling, EKF & AMCL configs | `kalman_filter`, `odometry_motion_model`, `imu_republisher` | [doc/09_localization.md](doc/09_localization.md) |
-| **`bumperbot_mapping`** | `ament_cmake` + Python | Known-pose occupancy grid generation & Graph SLAM | `mapping_with_known_poses`, `slam.launch.py` | [doc/08_mapping_and_slam.md](doc/08_mapping_and_slam.md) |
+| **`bumperbot_mapping`** | `ament_cmake` + Python | Known-pose occupancy grid generation & Graph SLAM | `mapping_with_known_poses`, `frontier_explorer`, `slam.launch.py` | [doc/08_mapping_and_slam.md](doc/08_mapping_and_slam.md) |
 | **`bumperbot_utils`** | `ament_cmake` + Python | 2-tier reactive LiDAR safety supervisor with RViz markers | `safety_stop` (.cpp/.py) | [doc/07_lidar_and_sensor_processing.md](doc/07_lidar_and_sensor_processing.md) |
 | **`bumperbot_msgs`** | `ament_cmake` | Custom IDL definitions (`AddTwoInts`, `GetTransform`, `Fibonacci`) | Interfaces generation | [doc/03_ros2_nodes_topics_services.md](doc/03_ros2_nodes_topics_services.md) |
 | **`bumperbot_cpp_examples`** | `ament_cmake` | C++ (`rclcpp`) reference implementations | 12 tutorial nodes (Pub/Sub, Service, Action, TF2, QoS) | [doc/03_ros2_nodes_topics_services.md](doc/03_ros2_nodes_topics_services.md) |
@@ -333,6 +334,22 @@ ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -r cmd_vel:=/key
 # Terminal 3: Save the completed map
 ros2 run nav2_map_server map_saver_cli -f ~/my_new_map --ros-args -p use_sim_time:=True
 ```
+
+### 3b. Autonomous Exploration (SLAM + frontier_explorer)
+
+The robot maps an unknown closed environment on its own (no Nav2 needed):
+
+```bash
+# Gazebo (default) or MuJoCo; viewer:=false and use_rviz:=false run it headless
+ros2 launch bumperbot_bringup auto_explore.launch.py simulator:=mujoco world_name:=small_house
+# Optional: choose where the map is saved (default ~/bumperbot_maps/explored_map)
+#   map_save_path:=/path/to/my_map
+
+# Progress: EXPLORING -> COMPLETE -> MAP_SAVED (or MAP_SAVE_FAILED)
+ros2 topic echo /explore/status
+```
+
+`frontier_explorer` publishes on `explore_vel`, a new `twist_mux` input with priority 10, so the joystick (99), the keyboard (90) and the `safety_stop` lock (255) always take over. When no reachable frontier is left it stops, saves `<map_save_path>.yaml/.pgm` through `nav2_map_server` (fallback: `slam_toolbox/save_map`) and reports `MAP_SAVED`. See [doc/08_mapping_and_slam.md](doc/08_mapping_and_slam.md). The node is Python-only (new node; its logic is a pure Python module shared with the headless tests).
 
 ### 4. Sensor Fusion with Extended Kalman Filter (EKF)
 
