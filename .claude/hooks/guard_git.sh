@@ -41,8 +41,11 @@ if grep -Eq 'git[[:space:]]+commit' <<<"$cmd"; then
   fi
 fi
 
-# Never stage colcon output.
-if grep -Eq 'git[[:space:]]+add.*(^|[[:space:]])(\./)?(build|install|log)(/|[[:space:]]|$)' <<<"$cmd"; then
-  block "build/, install/ and log/ must never be committed."
-fi
+# Never stage colcon output. Check each sub-command separately so that a later
+# `git log` in a `git add ... && git log` chain is not mistaken for the log/ dir.
+while IFS= read -r seg; do
+  if grep -Eq '^[[:space:]]*git[[:space:]]+add.*[[:space:]](\./)?(build|install|log)(/|[[:space:]]|$)' <<<"$seg"; then
+    block "build/, install/ and log/ must never be committed."
+  fi
+done < <(sed -E 's/(&&|\|\||;|\|)/\n/g' <<<"$cmd")
 exit 0
