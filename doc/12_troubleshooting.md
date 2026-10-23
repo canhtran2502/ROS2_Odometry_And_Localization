@@ -84,6 +84,14 @@ This document provides a systematic debugging guide and root-cause analysis for 
 
 ---
 
+### 3b. MuJoCo: robot never moves although `cmd_vel` is non-zero
+
+Symptom: `/explore_vel` and `/bumperbot_controller/cmd_vel` carry non-zero twists, but nothing is published on `/mujoco/joint_commands`, wheel joint positions stay near 1e-8 and `/odom` stays at 0.
+
+Cause: `topic_based_ros2_control/TopicBasedSystem::write()` only publishes when the summed absolute wheel *position* exceeds `trigger_joint_command_threshold` (default 1e-5). With a velocity-only command interface on wheels that settle without creeping, this never happens (deadlock). `bumperbot_ros2_control.xacro` sets `trigger_joint_command_threshold` to `-1.0` for the MuJoCo hardware so a command is published on every write. Gazebo and real-robot hardware are unaffected.
+
+---
+
 ### 4. Cleaning Zombie Background Processes
 (MuJoCo: an old `mujoco_sim_node`, `ros2_control_node` or `twist_mux` from an earlier launch keeps publishing `/clock`, `/scan` and TF on the same domain and corrupts a new run. Check with `ros2 topic info /clock`; clean up with `pkill -f mujoco_sim_node`, `pkill -f ros2_control_node`, `pkill -f twist_mux`.)
 

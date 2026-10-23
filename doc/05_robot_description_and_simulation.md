@@ -144,7 +144,7 @@ robot xacro --(simulator:=mujoco)--> topic_based_ros2_control/TopicBasedSystem
                                           |--> /clock, /scan (5 Hz), /imu/out (100 Hz)
 ```
 
-- `ros2_control_node` hosts `diff_drive_controller` (there is no simulator plugin to host it); the hardware plugin exchanges wheel velocity commands and joint states with `mujoco_sim_node`.
+- `ros2_control_node` hosts `diff_drive_controller` (there is no simulator plugin to host it); the hardware plugin exchanges wheel velocity commands and joint states with `mujoco_sim_node`. The xacro sets `trigger_joint_command_threshold=-1` for this plugin, otherwise it publishes commands only once the wheel positions have drifted past 1e-5 (see doc/12, 3b).
 - `mujoco_sim_node` wraps `bumperbot_mujoco/sim_core.py` (pure Python, no ROS). Wheels use velocity servos, the IMU uses MuJoCo `gyro`/`accelerometer`/`framequat` sensors with the Gazebo noise values, and the lidar casts 360 rays with `mj_multiRay` against the world collision geoms only.
 - Geom groups: 1 robot visual, 2 world visual, 3 robot collision, 4 world collision (hidden in the viewer, hit by the lidar).
 
