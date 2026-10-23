@@ -23,6 +23,7 @@ This document provides a systematic debugging guide and root-cause analysis for 
 | `Permission denied: /dev/ttyUSB0` | Linux user lacks permissions for serial communication devices | `sudo usermod -aG dialout $USER` (log out and back in) |
 | `Permission denied: /dev/i2c-1` | Linux user lacks permissions for I2C devices | `sudo usermod -aG i2c $USER` |
 | Robot not moving despite `/cmd_vel` being published | Emergency brake active via `/safety_stop` (Lock 255 on `twist_mux`), or deadman button not held | Echo `/safety_stop` to check if obstacle is within 0.20m; verify `twist_mux` locks |
+| Diagonal or slanted "walls" in the MuJoCo lidar scan and in every SLAM map (`small_house`), tiles rotated by ~16 deg against `maps/small_house/map.pgm` | The collision geometry of the outer house wall was decomposed into only 8 convex hulls, so some hulls filled whole strips of the house | Regenerate the world with the current `tools/sdf_to_mjcf.py` (large thin concave models use box footprints instead of CoACD hulls), see doc/05. Check with a ground-truth raycast that no wall geom is a wide slab |
 
 ---
 
