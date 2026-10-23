@@ -39,6 +39,9 @@ frontier_explorer:
     stop_distance: 0.25
     slow_distance: 0.45
     front_sector_half_angle: 0.6
+    # Side/rear clearance (m): closer obstacles at any beam angle steer the robot away and
+    # slow it, so it stays above the safety_stop_node 0.2 m lock threshold
+    side_clearance: 0.30
 
     # One 360 degree turn at start to seed the map
     initial_spin: true

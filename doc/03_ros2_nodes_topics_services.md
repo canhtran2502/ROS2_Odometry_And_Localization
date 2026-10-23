@@ -128,7 +128,8 @@ This document provides a comprehensive, verified catalog of every ROS 2 node, to
 - **Publications**: `explore_vel` (`geometry_msgs/msg/Twist`, 10 Hz), `/explore/status` (`std_msgs/msg/String`, transient_local), `/explore/path` (`nav_msgs/msg/Path`), `/explore/frontiers` (`visualization_msgs/msg/MarkerArray`)
 - **Service clients**: `/map_saver/save_map` (`nav2_msgs/srv/SaveMap`), fallback `/slam_toolbox/save_map` (`slam_toolbox/srv/SaveMap`)
 - **TF Lookups**: `map` -> `base_footprint` (every tick), `base_footprint` -> `laser_link` (laser yaw offset)
-- **Parameters**: see `bumperbot_mapping/config/frontier_explorer.yaml` (e.g. `inflation_radius`, `min_frontier_size`, `max_linear_speed`, `stop_distance`, `completion_hysteresis`, `completion_timeout`, `map_save_path`, `shutdown_on_complete`)
+- **Parameters**: see `bumperbot_mapping/config/frontier_explorer.yaml` (e.g. `inflation_radius`, `min_frontier_size`, `max_linear_speed`, `stop_distance`, `side_clearance`, `completion_hysteresis`, `completion_timeout`, `map_save_path`, `shutdown_on_complete`)
+- **Launch**: `bumperbot_bringup/launch/auto_explore.launch.py` includes `simulated_robot.launch.py` (`use_slam:=True`) and starts this node with `frontier_explorer.yaml` (arguments `simulator`, `world_name`, `use_rviz`, `viewer`, `map_save_path`, `explorer_config`; see doc/08 section E2).
 
 ---
 

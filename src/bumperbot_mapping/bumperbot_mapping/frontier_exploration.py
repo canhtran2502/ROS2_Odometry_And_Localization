@@ -425,6 +425,38 @@ def scan_safety(ranges, angle_min, angle_increment, laser_yaw_offset,
     return scale, bool(blocked), min_all, escape
 
 
+def side_repulsion(ranges, angle_min, angle_increment, laser_yaw_offset,
+                   side_clearance=0.30, hard_distance=0.20, front_half_angle=0.6):
+    """
+    Lateral avoidance for obstacles outside the front sector (any beam, any direction).
+
+    Returns ``(turn, speed_scale)``: ``turn`` in [-1, 1] is the steering bias (+1 = turn
+    left) pointing away from the closest side obstacle closer than ``side_clearance``;
+    ``speed_scale`` in [0.3, 1] slows the robot as the obstacle approaches ``hard_distance``.
+    Obstacles behind the wheel axis are ignored for steering (driving forward already
+    moves away from them) but still count for the speed scale.
+    """
+    r = np.asarray(ranges, dtype=float)
+    if r.size == 0:
+        return 0.0, 1.0
+    angles = wrap_angle(angle_min + np.arange(r.size) * angle_increment + laser_yaw_offset)
+    valid = np.isfinite(r) & (r > 0.02)
+    vr = np.where(valid, r, np.inf)
+    side = np.abs(angles) > front_half_angle
+    if not side.any():
+        return 0.0, 1.0
+    idx = np.where(side)[0]
+    k = idx[int(np.argmin(vr[idx]))]
+    d = float(vr[k])
+    if d >= side_clearance:
+        return 0.0, 1.0
+    depth = min(1.0, (side_clearance - d) / max(side_clearance - hard_distance, 1e-3))
+    turn = 0.0
+    if abs(angles[k]) < 0.5 * math.pi + 0.4:
+        turn = -math.copysign(depth, angles[k])
+    return float(turn), float(max(0.3, 1.0 - 0.7 * depth))
+
+
 class CompletionMonitor:
     """True only after N consecutive empty updates AND a minimum time without frontiers."""
 
@@ -466,6 +498,7 @@ DEFAULT_PARAMS = {
     "stop_distance": 0.25,
     "slow_distance": 0.45,
     "front_sector_half_angle": 0.6,
+    "side_clearance": 0.30,
     "initial_spin": True,
     "completion_hysteresis": 3,
     "completion_timeout": 10.0,
@@ -629,6 +662,10 @@ class ExplorerCore:
             scan.ranges, scan.angle_min, scan.angle_increment, self.laser_yaw_offset,
             self.p["stop_distance"], self.p["slow_distance"], self.p["front_sector_half_angle"])
 
+        side_turn, side_scale = side_repulsion(
+            scan.ranges, scan.angle_min, scan.angle_increment, self.laser_yaw_offset,
+            self.p["side_clearance"], 0.20, self.p["front_sector_half_angle"])
+
         if self.state == WAITING_FOR_MAP:
             if self.p["initial_spin"]:
                 self.state = INITIAL_SPIN
@@ -691,5 +728,8 @@ class ExplorerCore:
             v_out = self.RECOVERY_REVERSE if escape[0] < 0 else 0.0
             return self._command(v_out, self.RECOVERY_W * escape[1])
         self.blocked_since = None
-        v = v * scale
+        v = v * scale * side_scale
+        if side_turn != 0.0:
+            # Steer away from side obstacles before the safety_stop lock threshold
+            w = float(np.clip(w + side_turn * self.p["max_angular_speed"], -self.p["max_angular_speed"], self.p["max_angular_speed"]))
         return self._command(v, w)

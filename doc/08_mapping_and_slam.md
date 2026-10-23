@@ -146,7 +146,7 @@ ros2 launch bumperbot_bringup auto_explore.launch.py simulator:=mujoco world_nam
 3. **Costmap**: cells closer than `inflation_radius` (0.30 m) to an occupied cell, and unknown cells, are not traversable.
 4. **Goal selection**: for each cluster, the reachable traversable cell closest to the centroid; clusters are ranked by `distance - size_weight * size`; grid A* (8-connected, no corner cutting) runs on the best 5 until one gives a path. Reached or failed goals are blacklisted (`goal_blacklist_radius`).
 5. **Following**: pure pursuit (`lookahead_distance`), rotate in place above `rotate_in_place_angle`.
-6. **Safety layer**: on `/scan`, stricter than `safety_stop_node` (front stop at 0.25 m vs. its 0.2 m danger zone, speed scaled down below 0.45 m, recovery by reversing or turning to the freer side). The `safety_stop` lock (priority 255) still overrides everything.
+6. **Safety layer**: on `/scan`, stricter than `safety_stop_node` (front stop at 0.25 m vs. its 0.2 m danger zone, speed scaled down below 0.45 m, recovery by reversing or turning to the freer side). Obstacles at any other beam angle closer than `side_clearance` (0.30 m) steer the robot away and slow it, so it stays above the 0.2 m `safety_stop` lock threshold. The `safety_stop` lock (priority 255) still overrides everything.
 7. **Start**: one 360 degree turn (`initial_spin`) seeds the map.
 
 ### Termination and map saving
