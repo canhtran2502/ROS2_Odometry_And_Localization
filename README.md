@@ -264,6 +264,30 @@ ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -r cmd_vel:=/key
 2. **RViz2**: Visualizes the robot 3D model, laser scan (`/scan`), occupancy grid map, and the green AMCL particle cloud converging around the robot.
 3. **Teleop & Safety**: Control the robot using keys `i`, `j`, `k`, `l`, `,`. If you drive towards a wall, the robot automatically slows down within 0.40m (warning zone) and comes to an emergency halt within 0.20m (danger zone).
 
+### Simulation on MuJoCo (Alternative to Gazebo)
+
+The same stack runs on MuJoCo by passing `simulator:=mujoco`. Gazebo stays the default.
+
+```bash
+# Terminal 1: Full bringup on MuJoCo (AMCL localization; add use_slam:=True for SLAM instead)
+source install/setup.bash
+ros2 launch bumperbot_bringup simulated_robot.launch.py simulator:=mujoco world_name:=small_house
+```
+
+```bash
+# Terminal 2: Keyboard teleoperation (same command as with Gazebo)
+source install/setup.bash
+ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -r cmd_vel:=/key_vel
+```
+
+**Keyboard control:**
+- `twist_mux` listens to `/key_vel` (priority 90). The gamepad on `joy_vel` (priority 99) overrides the keyboard while it is in use.
+- Keys: `i` forward, `,` backward, `j`/`l` rotate left/right, `k` stop, `q`/`z` increase/decrease speed.
+- Keep the terminal focused and hold the key: commands time out after 0.5 s and the robot stops.
+- Without a TTY, publish to the same topic instead: `ros2 topic pub -r 10 /key_vel geometry_msgs/msg/Twist "{linear: {x: 0.3}}"`.
+
+**Verified on MuJoCo (headless-safe topics):** `/clock` and `/imu/out` at 100 Hz, `/scan` at 5 Hz, odometry at 50 Hz, AMCL publishes `map -> odom`, and `slam_toolbox` builds `/map` while driving. SLAM and map saving use the same commands as in Section 8.3.
+
 ---
 
 ## 8. Feature Verification Guides
