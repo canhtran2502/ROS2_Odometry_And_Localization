@@ -4,7 +4,7 @@
     <ros2_control name="RobotSystem" type="system">
 
         <!-- ros2_control Gazebo -->
-        <xacro:if value="$(arg is_sim)">
+        <xacro:if value="${'$(arg is_sim)'.lower() == 'true' and '$(arg simulator)' == 'gazebo'}">
             <!-- ROS 2 Humble -->
             <xacro:if value="$(arg is_ignition)">
                 <hardware>
@@ -18,6 +18,15 @@
                     <plugin>gz_ros2_control/GazeboSimSystem</plugin>
                 </hardware>
             </xacro:unless>
+        </xacro:if>
+
+        <!-- ros2_control MuJoCo: wheel commands and states are exchanged with the simulator node over JointState topics -->
+        <xacro:if value="${'$(arg is_sim)'.lower() == 'true' and '$(arg simulator)' == 'mujoco'}">
+            <hardware>
+                <plugin>topic_based_ros2_control/TopicBasedSystem</plugin>
+                <param name="joint_commands_topic">/mujoco/joint_commands</param>
+                <param name="joint_states_topic">/mujoco/joint_states</param>
+            </hardware>
         </xacro:if>
 
         <!-- ros2_control Real Robot -->

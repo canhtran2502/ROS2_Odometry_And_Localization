@@ -24,7 +24,6 @@ BumperBot is an end-to-end Autonomous Mobile Robot (AMR) system developed in **R
 - [9. ROS 2 Command Reference](#9-ros-2-command-reference)
 - [10. Troubleshooting](#10-troubleshooting)
 - [11. Technical Documentation Index](#11-technical-documentation-index)
-- [12. Suggested Learning Path](#12-suggested-learning-path)
 
 ---
 
@@ -35,7 +34,7 @@ BumperBot is designed for roboticists and embedded software engineers mastering 
 ### Key Capabilities
 
 - **Kinematics & Control**: Differential-drive kinematics implemented in both C++ (`rclcpp`) and Python (`rclpy`), alongside standard `ros2_control` (`diff_drive_controller`).
-- **Physics Simulation**: Ignition Gazebo Fortress 6 integration with realistic physics, friction, LiDAR, and IMU sensor plugins using `ros_gz_bridge`.
+- **Physics Simulation**: Ignition Gazebo Fortress 6 integration with realistic physics, friction, LiDAR, and IMU sensor plugins using `ros_gz_bridge`, or MuJoCo (`simulator:=mujoco`) with the same worlds and sensor topics.
 - **Velocity Multiplexing & Safety**: Priority-based command arbitration via `twist_mux` and a 2-tier reactive LiDAR safety supervisor with dynamic slowdown and emergency braking.
 - **State Estimation & Fusion**: 1D linear Kalman filter, Thrun's probabilistic sample odometry motion model, and 15-state Extended Kalman Filter (`robot_localization`).
 - **Mapping & SLAM**: Known-pose ray-projection occupancy grid mapper and full Graph SLAM using `slam_toolbox`.
@@ -102,27 +101,29 @@ graph TD
 
     subgraph Tier1["Tier 1: Hardware Abstraction & Simulation"]
         GZ["Ignition Gazebo Fortress 6"]
+        MJ["MuJoCo (simulator:=mujoco)"]
         HW["BumperbotInterface (libserial C++)"]
         IMU["mpu6050_driver (I2C Python)"]
     end
 
-    KEY -->|/key_vel (Pri: 90)| TMUX
-    JOY -->|/joy_vel (Pri: 99)| TMUX
-    SAFETY -->|/safety_stop lock (Pri: 255)| TMUX
-    TMUX --> TREL -->|/bumperbot_controller/cmd_vel| DIFF
+    KEY -->|"/key_vel (Pri: 90)"| TMUX
+    JOY -->|"/joy_vel (Pri: 99)"| TMUX
+    SAFETY -->|"/safety_stop lock (Pri: 255)"| TMUX
+    TMUX --> TREL -->|"/bumperbot_controller/cmd_vel"| DIFF
     DIFF --> CM
-    CM <-->|ros2_control| GZ
-    CM <-->|Hardware Plugin| HW
+    CM <-->|"ros2_control"| GZ
+    CM <-->|"topic_based_ros2_control"| MJ
+    CM <-->|"Hardware Plugin"| HW
 
-    GZ -->|/scan| SAFETY
-    GZ -->|/scan| SLAM
-    GZ -->|/scan| AMCL
-    GZ -->|/imu/out| EKF
-    DIFF -->|/bumperbot_controller/odom| EKF
-    EKF -->|/odometry/filtered & TF: odom -> base_footprint| RVIZ
-    AMCL -->|TF: map -> odom| RVIZ
-    SLAM -->|TF: map -> odom| RVIZ
-    MAPS -->|/map| AMCL
+    GZ -->|"/scan"| SAFETY
+    GZ -->|"/scan"| SLAM
+    GZ -->|"/scan"| AMCL
+    GZ -->|"/imu/out"| EKF
+    DIFF -->|"/bumperbot_controller/odom"| EKF
+    EKF -->|"/odometry/filtered & TF: odom -> base_footprint"| RVIZ
+    AMCL -->|"TF: map -> odom"| RVIZ
+    SLAM -->|"TF: map -> odom"| RVIZ
+    MAPS -->|"/map"| AMCL
 ```
 
 For complete architectural details, concurrency models, and sequence diagrams, see [doc/02_system_architecture.md](doc/02_system_architecture.md).
@@ -155,10 +156,12 @@ bumperbot_ws/
 │   ├── bumperbot_localization/         # Kalman filter, EKF configs & AMCL launch
 │   ├── bumperbot_mapping/              # Known-pose occupancy mapper & SLAM Toolbox
 │   ├── bumperbot_msgs/                 # Custom ROS 2 IDL messages, services, actions
+│   ├── bumperbot_mujoco/               # MuJoCo robot/world models, ROS 2 bridge node, converters
 │   ├── bumperbot_utils/                # Reactive LiDAR safety supervisor
 │   ├── bumperbot_cpp_examples/         # C++ (rclcpp) tutorials & API patterns
 │   └── bumperbot_py_examples/          # Python (rclpy) tutorials & API patterns
-├── README.md                           # Master repository guide (this file)
+├── CLAUDE.md                           # Project guidance for Claude Code
+└── README.md                           # Master repository guide (this file)
 ```
 
 ---
@@ -170,6 +173,7 @@ bumperbot_ws/
 | **`bumperbot_bringup`** | `ament_cmake` | Master system integration & unified launch orchestration | `simulated_robot.launch.py`, `real_robot.launch.py` | [doc/01_repository_structure.md](doc/01_repository_structure.md) |
 | **`bumperbot_controller`** | `ament_cmake` + Python | Analytical kinematics, noisy odometry, and teleop arbitration | `simple_controller`, `noisy_controller`, `twist_relay` | [doc/06_odometry_and_motion_control.md](doc/06_odometry_and_motion_control.md) |
 | **`bumperbot_description`** | `ament_cmake` | URDF/Xacro modeling, visual/collision meshes, Gazebo worlds | `display.launch.py`, `gazebo.launch.py` | [doc/05_robot_description_and_simulation.md](doc/05_robot_description_and_simulation.md) |
+| **`bumperbot_mujoco`** | `ament_python` | MuJoCo simulation: robot and world MJCF models, ROS 2 bridge (`/clock`, `/scan`, `/imu/out`, wheel commands) | `mujoco_sim_node`, `mujoco.launch.py` | [doc/05_robot_description_and_simulation.md](doc/05_robot_description_and_simulation.md) |
 | **`bumperbot_firmware`** | `ament_cmake` + Python | Hardware interface plugin, serial transceiver, Arduino PID | `bumperbot_interface` (plugin), `mpu6050_driver` | [doc/06_odometry_and_motion_control.md](doc/06_odometry_and_motion_control.md) |
 | **`bumperbot_localization`** | `ament_cmake` + Python | 1D Kalman filter, particle sampling, EKF & AMCL configs | `kalman_filter`, `odometry_motion_model`, `imu_republisher` | [doc/09_localization.md](doc/09_localization.md) |
 | **`bumperbot_mapping`** | `ament_cmake` + Python | Known-pose occupancy grid generation & Graph SLAM | `mapping_with_known_poses`, `slam.launch.py` | [doc/08_mapping_and_slam.md](doc/08_mapping_and_slam.md) |
@@ -262,6 +266,30 @@ ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -r cmd_vel:=/key
 2. **RViz2**: Visualizes the robot 3D model, laser scan (`/scan`), occupancy grid map, and the green AMCL particle cloud converging around the robot.
 3. **Teleop & Safety**: Control the robot using keys `i`, `j`, `k`, `l`, `,`. If you drive towards a wall, the robot automatically slows down within 0.40m (warning zone) and comes to an emergency halt within 0.20m (danger zone).
 
+### Simulation on MuJoCo (Alternative to Gazebo)
+
+The same stack runs on MuJoCo by passing `simulator:=mujoco`. Gazebo stays the default.
+
+```bash
+# Terminal 1: Full bringup on MuJoCo (AMCL localization; add use_slam:=True for SLAM instead)
+source install/setup.bash
+ros2 launch bumperbot_bringup simulated_robot.launch.py simulator:=mujoco world_name:=small_house
+```
+
+```bash
+# Terminal 2: Keyboard teleoperation (same command as with Gazebo)
+source install/setup.bash
+ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -r cmd_vel:=/key_vel
+```
+
+**Keyboard control:**
+- `twist_mux` listens to `/key_vel` (priority 90). The gamepad on `joy_vel` (priority 99) overrides the keyboard while it is in use.
+- Keys: `i` forward, `,` backward, `j`/`l` rotate left/right, `k` stop, `q`/`z` increase/decrease speed.
+- Keep the terminal focused and hold the key: commands time out after 0.5 s and the robot stops.
+- Without a TTY, publish to the same topic instead: `ros2 topic pub -r 10 /key_vel geometry_msgs/msg/Twist "{linear: {x: 0.3}}"`.
+
+**Verified on MuJoCo (headless-safe topics):** `/clock` and `/imu/out` at 100 Hz, `/scan` at 5 Hz, odometry at 50 Hz, AMCL publishes `map -> odom`, and `slam_toolbox` builds `/map` while driving. SLAM and map saving use the same commands as in Section 8.3.
+
 ---
 
 ## 8. Feature Verification Guides
@@ -280,6 +308,14 @@ Launch Ignition Gazebo Fortress with simulated sensors without the full bringup 
 
 ```bash
 ros2 launch bumperbot_description gazebo.launch.py world_name:=small_house
+```
+
+The same worlds run in MuJoCo (requires `pip install mujoco` and `ros-humble-topic-based-ros2-control`):
+
+```bash
+ros2 launch bumperbot_mujoco mujoco.launch.py world_name:=small_house
+# or the full stack on top of MuJoCo
+ros2 launch bumperbot_bringup simulated_robot.launch.py simulator:=mujoco world_name:=small_house
 ```
 
 ### 3. Real-Time SLAM (Mapping an Unknown Environment)
@@ -306,6 +342,7 @@ ros2 launch bumperbot_localization local_localization.launch.py
 ```
 
 Inspect the filtered odometry output:
+
 ```bash
 ros2 topic echo /odometry/filtered --field pose.pose.position
 ```

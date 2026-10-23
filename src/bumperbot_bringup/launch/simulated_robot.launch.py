@@ -2,7 +2,7 @@ import os
 from launch import LaunchDescription
 from launch.actions import IncludeLaunchDescription, DeclareLaunchArgument
 from launch.conditions import UnlessCondition, IfCondition
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch_ros.actions import Node
 from ament_index_python.packages import get_package_share_directory
 
@@ -13,7 +13,20 @@ def generate_launch_description():
         default_value = "false"
     )
 
+    simulator_arg = DeclareLaunchArgument(
+        "simulator",
+        default_value = "gazebo",
+        description = "Physics simulator: gazebo or mujoco"
+    )
+    world_name_arg = DeclareLaunchArgument(
+        "world_name",
+        default_value = "empty",
+        description = "World to load (empty, small_house, small_warehouse)"
+    )
+
     use_slam = LaunchConfiguration("use_slam")
+    simulator = LaunchConfiguration("simulator")
+    world_name = LaunchConfiguration("world_name")
 
     gazebo = IncludeLaunchDescription(
         os.path.join(
@@ -21,6 +34,22 @@ def generate_launch_description():
             "launch",
             "gazebo.launch.py"
         ),
+        launch_arguments={
+            "world_name": world_name
+        }.items(),
+        condition=IfCondition(PythonExpression(["'", simulator, "' == 'gazebo'"]))
+    )
+
+    mujoco = IncludeLaunchDescription(
+        os.path.join(
+            get_package_share_directory("bumperbot_mujoco"),
+            "launch",
+            "mujoco.launch.py"
+        ),
+        launch_arguments={
+            "world_name": world_name
+        }.items(),
+        condition=IfCondition(PythonExpression(["'", simulator, "' == 'mujoco'"]))
     )
     
     controller = IncludeLaunchDescription(
@@ -98,7 +127,10 @@ def generate_launch_description():
     
     return LaunchDescription([
         use_slam_arg,
+        simulator_arg,
+        world_name_arg,
         gazebo,
+        mujoco,
         controller,
         joystick,
         safety_stop,
