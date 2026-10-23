@@ -16,6 +16,8 @@ This document provides a systematic debugging guide and root-cause analysis for 
 | `Found additional publishers on /stats /clock` | Two Gazebo physics engines running concurrently, causing transport collisions | Run `killall -9 ign ruby gz 2>/dev/null` before launching |
 | `Lookup would require extrapolation into the future` | Sensor message timestamp is slightly ahead of buffered TF; or `lookup_transform` called without timeout | Use `lookup_transform(..., scan_time, timeout=Duration(seconds=0.05))` with `MultiThreadedExecutor` |
 | Walls blurred / curved like a fan when robot rotates | Transform looked up at `TimePointZero` instead of historical `scan.header.stamp` | Pass exact `Time.from_msg(scan.header.stamp)` to `lookup_transform` |
+| SLAM map warped / fanned, doubled walls, or a seam, with MuJoCo | (a) A second (stale) simulator stack on the same `ROS_DOMAIN_ID`: two `/clock`, `/scan`, odom TF publishers and two `twist_mux` nodes. (b) Odometry slip in the MuJoCo model (see the caster `condim` row below) | `ros2 topic info /clock` and `/scan` must each show 1 publisher; kill old stacks (`pkill -f mujoco_sim_node`, section C.4) or use a dedicated `ROS_DOMAIN_ID` plus `ROS_LOCALHOST_ONLY=1`. Make sure `mjcf/robot.xml` has the caster/wheel `priority="1"` fix (doc/05) |
+| MuJoCo wheel odometry over-reports rotation (about 4 % heading scale error, 14 deg after a 2 m square) | MuJoCo contact mixing: the ground has `condim 3`, so a caster geom with only `condim="1"` still gets a frictional (`dim 3`) contact and drags the robot; the soft default wheel contact (`solref 0.02 1`) also shrinks the wheel radius | Caster collision geoms need `condim="1" priority="1"`, wheel geoms `priority="1" solref="0.004 1"` (`tools/generate_robot.py`). Verify: every contact with `caster_*_link_collision` has `contact.dim == 1` |
 | Parameters silently ignored in YAML files | Typo: single underscore `ros_parameters:` instead of `ros__parameters:` | Ensure every ROS 2 YAML configuration uses double underscores: `ros__parameters:` |
 | `rclcpp::exceptions::ParameterNotDeclaredException` | Parameter name mismatch between `declare_parameter()` and `get_parameter()` | Ensure identical spelling in both declaration and getter |
 | `Permission denied: /dev/ttyUSB0` | Linux user lacks permissions for serial communication devices | `sudo usermod -aG dialout $USER` (log out and back in) |
@@ -83,6 +85,8 @@ This document provides a systematic debugging guide and root-cause analysis for 
 ---
 
 ### 4. Cleaning Zombie Background Processes
+(MuJoCo: an old `mujoco_sim_node`, `ros2_control_node` or `twist_mux` from an earlier launch keeps publishing `/clock`, `/scan` and TF on the same domain and corrupts a new run. Check with `ros2 topic info /clock`; clean up with `pkill -f mujoco_sim_node`, `pkill -f ros2_control_node`, `pkill -f twist_mux`.)
+
 When terminating ROS 2 launch files with `Ctrl+C`, subsidiary processes (especially Ignition Gazebo GUI, Ruby daemon, or controllers) may remain active as orphaned processes holding socket ports.
 
 Always execute this cleanup command when encountering unexpected communication collisions:

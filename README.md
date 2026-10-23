@@ -351,6 +351,8 @@ ros2 topic echo /explore/status
 
 `frontier_explorer` publishes on `explore_vel`, a new `twist_mux` input with priority 10, so the joystick (99), the keyboard (90) and the `safety_stop` lock (255) always take over. When no reachable frontier is left it stops, saves `<map_save_path>.yaml/.pgm` through `nav2_map_server` (fallback: `slam_toolbox/save_map`) and reports `MAP_SAVED`. See [doc/08_mapping_and_slam.md](doc/08_mapping_and_slam.md). The node is Python-only (new node; its logic is a pure Python module shared with the headless tests).
 
+SLAM map quality: `bumperbot_mapping/map_compare.py` compares a saved map with the reference after a rigid alignment and checks for fans and seams (see doc/08). The opt-in full-stack test runs with `BUMPERBOT_SLAM_E2E=1 colcon test --packages-select bumperbot_bringup --ctest-args -R test_slam_map_quality_mujoco` on its own `ROS_DOMAIN_ID`. When mapping, use a dedicated `ROS_DOMAIN_ID` and make sure no old simulator stack is running ([doc/12](doc/12_troubleshooting.md)). The MuJoCo model uses frictionless casters (`priority="1"`) and a stiffer wheel contact so that wheel odometry matches the true motion ([doc/05](doc/05_robot_description_and_simulation.md)).
+
 ### 4. Sensor Fusion with Extended Kalman Filter (EKF)
 
 Fuse wheel odometry with simulated IMU orientation:

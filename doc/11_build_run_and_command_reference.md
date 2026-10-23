@@ -252,6 +252,13 @@ ros2 run bumperbot_cpp_examples simple_tf_kinematics
   PYTHONPATH=src/bumperbot_mapping:$PYTHONPATH python3 -m pytest src/bumperbot_mapping/test -q
   colcon test --packages-select bumperbot_mapping bumperbot_bringup && colcon test-result --verbose
   ```
+- **MuJoCo odometry and map quality tests** (headless):
+  ```bash
+  PYTHONPATH=src/bumperbot_mapping:src/bumperbot_mujoco:$PYTHONPATH python3 -m pytest -q src/bumperbot_mujoco/test src/bumperbot_mapping/test/test_map_compare.py
+  # Opt-in full-stack SLAM map quality test (up to ~30 min, dedicated ROS_DOMAIN_ID=87 is set by the test)
+  BUMPERBOT_SLAM_E2E=1 colcon test --packages-select bumperbot_bringup --ctest-args -R test_slam_map_quality_mujoco
+  ```
+  When mapping by hand, use a dedicated `ROS_DOMAIN_ID` (for example `export ROS_DOMAIN_ID=87 ROS_LOCALHOST_ONLY=1`) and check `ros2 topic info /clock` shows one publisher.
 
 ---
 

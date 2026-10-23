@@ -162,6 +162,15 @@ Exploration is complete when no reachable frontier of meaningful size remains fo
 ### Taking over manually
 The joystick (`joy_vel`, 99) and the keyboard (`key_vel`, 90) have a higher `twist_mux` priority than the explorer, so moving the stick or pressing a key takes over immediately; the explorer resumes after the 0.5 s timeout once the manual input stops.
 
+### SLAM map quality test (`map_compare.py`)
+`bumperbot_mapping/map_compare.py` (pure Python, numpy + scipy, no rclpy, no OpenCV) compares a saved map with a reference after a rigid 2D alignment (truncated chamfer distance, coarse-to-fine search). `compare_maps(explored_yaml, reference_yaml)` returns a `MapQuality`: occupied-cell count and extent, inlier fraction (cells within 0.15 m of a reference wall), the global rotation, the residual dominant wall direction, and per-tile (4 m tiles, 2 m stride) residual rotation, shift and inlier fraction. The tile metrics detect a fan or a seam that a global alignment hides. `MapQuality.passes()` checks `DEFAULT_THRESHOLDS`: >= 2000 occupied cells, extent >= 15 x 9 m, inliers >= 0.80, dominant residual <= 2 deg, tile rotation <= 2 deg, tile shift <= 0.20 m, tile inliers >= 0.50.
+
+The full-stack test (`bumperbot_bringup/test/test_slam_map_quality_mujoco.launch.py`) runs `auto_explore.launch.py` headless on `small_house` and compares the saved map with `maps/small_house/map.yaml`. It is opt-in because it needs up to 30 minutes (the simulation runs at most in real time) and it runs on its own `ROS_DOMAIN_ID` with `ROS_LOCALHOST_ONLY=1` so that no other stack can interfere:
+```bash
+BUMPERBOT_SLAM_E2E=1 colcon test --packages-select bumperbot_bringup --ctest-args -R test_slam_map_quality_mujoco
+```
+Always use a dedicated `ROS_DOMAIN_ID` (or `ROS_LOCALHOST_ONLY=1`) when mapping, and make sure no old simulator is still running (see doc/12).
+
 ### Implementation notes
 The algorithms are in `bumperbot_mapping/frontier_exploration.py` (numpy + scipy, no rclpy), and `frontier_explorer.py` is a thin ROS wrapper. The node is Python-only: it is new, and the pure module is shared with the headless pytest and MuJoCo tests, which a C++ port could not run. A C++ port would be a separate feature. `slam_toolbox.yaml` is unchanged (`map_update_interval: 5.0` makes frontier updates slow, so the explorer keeps following its path between map updates).
 

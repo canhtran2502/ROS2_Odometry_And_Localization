@@ -2,7 +2,7 @@
   "slug": "auto-explore-slam",
   "title": "Autonomous frontier exploration with SLAM",
   "stage": "implement",
-  "iteration": 2,
+  "iteration": 3,
   "max_iterations": 5,
   "history": [
     {

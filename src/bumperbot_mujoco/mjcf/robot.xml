@@ -19,23 +19,23 @@
           <inertial pos="0 -0.014 0" quat="0.676729 -0.204983 -0.204987 0.676757" mass="0.0530086" diaginertia="3.11511e-05 1.88302e-05 1.87894e-05" />
           <joint name="wheel_right_joint" axis="0 1 0" />
           <geom quat="0.707388 0.706825 0 0" type="mesh" contype="0" conaffinity="0" group="1" rgba="0 0 1 1" mesh="wheel_right_link" name="wheel_right_link_visual" />
-          <geom size="0.033" pos="0 -0.015 0" quat="0.707388 0.706825 0 0" rgba="0 0 1 1" group="3" name="wheel_right_link_collision" friction="1.5 0.005 0.0001" />
+          <geom size="0.033" pos="0 -0.015 0" quat="0.707388 0.706825 0 0" rgba="0 0 1 1" group="3" name="wheel_right_link_collision" friction="1.5 0.005 0.0001" priority="1" solref="0.004 1" />
         </body>
         <body name="wheel_left_link" pos="0 0.0701102 0">
           <inertial pos="0 0.014 0" quat="0.568498 0.420504 0.42051 0.56847" mass="0.0530086" diaginertia="3.11511e-05 1.88302e-05 1.87894e-05" />
           <joint name="wheel_left_joint" axis="0 1 0" />
           <geom quat="0.707388 -0.706825 0 0" type="mesh" contype="0" conaffinity="0" group="1" rgba="0 0 1 1" mesh="wheel_left_link" name="wheel_left_link_visual" />
-          <geom size="0.033" pos="0 0.015 0" quat="0.707388 -0.706825 0 0" rgba="0 0 1 1" group="3" name="wheel_left_link_collision" friction="1.5 0.005 0.0001" />
+          <geom size="0.033" pos="0 0.015 0" quat="0.707388 -0.706825 0 0" rgba="0 0 1 1" group="3" name="wheel_left_link_collision" friction="1.5 0.005 0.0001" priority="1" solref="0.004 1" />
         </body>
         <body name="caster_front_link" pos="0.04755 0 -0.0275">
           <inertial pos="3.89968e-07 2.40073e-07 0.00219173" quat="0.500036 0.500003 -0.499973 0.499988" mass="1.44379e-06" diaginertia="1.00967e-10 7.23075e-11 3.87138e-11" />
           <geom quat="1 0 0 0" type="mesh" contype="0" conaffinity="0" group="1" rgba="0.79 0.82 0.93 1" mesh="caster_front_link" name="caster_front_link_visual" />
-          <geom size="0.005" rgba="0.79 0.82 0.93 1" group="3" name="caster_front_link_collision" condim="1" />
+          <geom size="0.005" rgba="0.79 0.82 0.93 1" group="3" name="caster_front_link_collision" condim="1" priority="1" />
         </body>
         <body name="caster_rear_link" pos="-0.04755 0 -0.0275">
           <inertial pos="3.89968e-07 2.40073e-07 0.00219173" quat="0.500036 0.500003 -0.499973 0.499988" mass="1.44379e-06" diaginertia="1.00967e-10 7.23075e-11 3.87138e-11" />
           <geom quat="1 0 0 0" type="mesh" contype="0" conaffinity="0" group="1" rgba="0.79 0.82 0.93 1" mesh="caster_rear_link" name="caster_rear_link_visual" />
-          <geom size="0.005" rgba="0.79 0.82 0.93 1" group="3" name="caster_rear_link_collision" condim="1" />
+          <geom size="0.005" rgba="0.79 0.82 0.93 1" group="3" name="caster_rear_link_collision" condim="1" priority="1" />
         </body>
         <body name="imu_link" pos="0 0 0.0698986">
           <inertial pos="-0.00552434 0.00016821 0.000514" quat="0.494232 0.505589 -0.494082 0.505962" mass="0.000528415" diaginertia="2.30279e-08 1.46209e-08 8.59337e-09" />

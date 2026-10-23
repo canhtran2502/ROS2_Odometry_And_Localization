@@ -61,6 +61,10 @@ if(BUILD_TESTING)
     ament_add_pytest_test(test_exploration_synthetic test/test_exploration_synthetic.py
       APPEND_ENV PYTHONPATH=${_pythonpath} TIMEOUT 600)
   endif()
+  if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test/test_map_compare.py)
+    ament_add_pytest_test(test_map_compare test/test_map_compare.py
+      APPEND_ENV PYTHONPATH=${_pythonpath} TIMEOUT 300)
+  endif()
   if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test/test_frontier_explorer_node.launch.py)
     add_launch_test(test/test_frontier_explorer_node.launch.py
       TARGET test_frontier_explorer_node TIMEOUT 90)

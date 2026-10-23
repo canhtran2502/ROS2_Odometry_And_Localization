@@ -23,6 +23,11 @@ if(BUILD_TESTING)
     add_launch_test(test/test_auto_explore_mujoco.launch.py
       TARGET test_auto_explore_mujoco TIMEOUT 180)
   endif()
+  # Full-stack SLAM map quality test: skips itself unless BUMPERBOT_SLAM_E2E=1 (runs ~30 min)
+  if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test/test_slam_map_quality_mujoco.launch.py)
+    add_launch_test(test/test_slam_map_quality_mujoco.launch.py
+      TARGET test_slam_map_quality_mujoco TIMEOUT 2100)
+  endif()
 endif()
 
 ament_package()
