@@ -24,7 +24,6 @@ BumperBot is an end-to-end Autonomous Mobile Robot (AMR) system developed in **R
 - [9. ROS 2 Command Reference](#9-ros-2-command-reference)
 - [10. Troubleshooting](#10-troubleshooting)
 - [11. Technical Documentation Index](#11-technical-documentation-index)
-- [12. Suggested Learning Path](#12-suggested-learning-path)
 
 ---
 
@@ -102,27 +101,29 @@ graph TD
 
     subgraph Tier1["Tier 1: Hardware Abstraction & Simulation"]
         GZ["Ignition Gazebo Fortress 6"]
+        MJ["MuJoCo (simulator:=mujoco)"]
         HW["BumperbotInterface (libserial C++)"]
         IMU["mpu6050_driver (I2C Python)"]
     end
 
-    KEY -->|/key_vel (Pri: 90)| TMUX
-    JOY -->|/joy_vel (Pri: 99)| TMUX
-    SAFETY -->|/safety_stop lock (Pri: 255)| TMUX
-    TMUX --> TREL -->|/bumperbot_controller/cmd_vel| DIFF
+    KEY -->|"/key_vel (Pri: 90)"| TMUX
+    JOY -->|"/joy_vel (Pri: 99)"| TMUX
+    SAFETY -->|"/safety_stop lock (Pri: 255)"| TMUX
+    TMUX --> TREL -->|"/bumperbot_controller/cmd_vel"| DIFF
     DIFF --> CM
-    CM <-->|ros2_control| GZ
-    CM <-->|Hardware Plugin| HW
+    CM <-->|"ros2_control"| GZ
+    CM <-->|"topic_based_ros2_control"| MJ
+    CM <-->|"Hardware Plugin"| HW
 
-    GZ -->|/scan| SAFETY
-    GZ -->|/scan| SLAM
-    GZ -->|/scan| AMCL
-    GZ -->|/imu/out| EKF
-    DIFF -->|/bumperbot_controller/odom| EKF
-    EKF -->|/odometry/filtered & TF: odom -> base_footprint| RVIZ
-    AMCL -->|TF: map -> odom| RVIZ
-    SLAM -->|TF: map -> odom| RVIZ
-    MAPS -->|/map| AMCL
+    GZ -->|"/scan"| SAFETY
+    GZ -->|"/scan"| SLAM
+    GZ -->|"/scan"| AMCL
+    GZ -->|"/imu/out"| EKF
+    DIFF -->|"/bumperbot_controller/odom"| EKF
+    EKF -->|"/odometry/filtered & TF: odom -> base_footprint"| RVIZ
+    AMCL -->|"TF: map -> odom"| RVIZ
+    SLAM -->|"TF: map -> odom"| RVIZ
+    MAPS -->|"/map"| AMCL
 ```
 
 For complete architectural details, concurrency models, and sequence diagrams, see [doc/02_system_architecture.md](doc/02_system_architecture.md).
@@ -159,7 +160,8 @@ bumperbot_ws/
 │   ├── bumperbot_utils/                # Reactive LiDAR safety supervisor
 │   ├── bumperbot_cpp_examples/         # C++ (rclcpp) tutorials & API patterns
 │   └── bumperbot_py_examples/          # Python (rclpy) tutorials & API patterns
-├── README.md                           # Master repository guide (this file)
+├── CLAUDE.md                           # Project guidance for Claude Code
+└── README.md                           # Master repository guide (this file)
 ```
 
 ---
@@ -340,6 +342,7 @@ ros2 launch bumperbot_localization local_localization.launch.py
 ```
 
 Inspect the filtered odometry output:
+
 ```bash
 ros2 topic echo /odometry/filtered --field pose.pose.position
 ```
