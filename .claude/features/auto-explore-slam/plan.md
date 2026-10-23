@@ -430,6 +430,20 @@ Not touched: `real_robot.launch.py`, `bumperbot_firmware/*`, `hardware_interface
     `caster_rear_link_collision` has `contact.dim == 1` (frictionless; today: 3).
   `test_sim_core.py` and AC5 still pass with the modified model.
 
+- AC11: The MuJoCo `small_house` collision geometry matches the house (root cause of the warped
+  maps, found in iteration 4). `tools/sdf_to_mjcf.py` decomposes the whole outer house wall
+  (`residential_HouseWallB_01`) into at most `MAX_HULLS = 8` convex hulls. MuJoCo collides
+  with each hull, so hulls such as `c0_0` (30 m2), `c0_5` (36 m2) and `c0_1` (21 m2) fill
+  whole strips of the house and produce diagonal walls that the lidar and SLAM see faithfully.
+  Pass conditions:
+  - a ground-truth occupancy grid of the MuJoCo world at lidar height (downward `mj_ray` over
+    the collision group, 0.05 m cells) compared with `maps/small_house/map.pgm` through
+    `map_compare.compare_maps` gives inlier fraction >= 0.85, max tile rotation <= 2 deg and
+    max tile shift <= 0.20 m;
+  - no collision hull of the house walls covers an XY hull area larger than 4 m2 while being
+    wider than 0.6 m in both directions (a thin wall segment, not a slab);
+  - `test_sim_core.py`, AC5, AC8 and AC10 still pass on the regenerated world.
+
 ## Test plan
 
 All commands run from the workspace root
@@ -504,6 +518,11 @@ All commands run from the workspace root
   - Pass: all pass, and the measured errors are printed. Before the robot.xml fix the drift tests
     and the caster contact test must FAIL (the coder checks this once, by running the test first).
   - Regression: rerun AC5 (`test_auto_explore_sim.py`) and AC8; both still pass.
+
+- AC11: world fidelity test.
+  - File: `src/bumperbot_mujoco/test/test_world_fidelity.py` (`pytest.importorskip("mujoco")`).
+  - Command: `PYTHONPATH=src/bumperbot_mapping:src/bumperbot_mujoco:$PYTHONPATH python3 -m pytest -q src/bumperbot_mujoco/test/test_world_fidelity.py`
+  - Pass: both checks of AC11 hold.
 
 ## Implementation steps
 
@@ -582,6 +601,15 @@ All commands run from the workspace root
     `ROS_DOMAIN_ID`, MuJoCo slip), `doc/08` + `doc/11` + `README.md` (the map quality test, its
     command and opt-in env var, and the advice to use a dedicated `ROS_DOMAIN_ID`).
 23. Rerun the whole Test plan (AC1-AC10).
+
+24. (AC11) Fix the collision geometry of the house walls in `tools/sdf_to_mjcf.py`. Large, thin,
+    concave structures must not be covered by a handful of hulls. Options, in order of preference:
+    (a) build wall collision from the wall mesh's 2D footprint as thin boxes (deterministic,
+    no CoACD); (b) adaptive decomposition: raise the hull budget per model until the summed
+    hull volume is within 1.5x of the mesh volume. Install the generator's deps only in a
+    venv (`python3 -m venv --system-site-packages`) under the session scratchpad, never into
+    the user's Python. Regenerate `mjcf/small_house.xml` and only the affected collision meshes,
+    then rerun AC5, AC8, AC9, AC10 and `test_sim_core.py`.
 
 ## Risks and open questions
 
