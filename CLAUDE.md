@@ -15,7 +15,7 @@ Detailed docs live in `doc/` (the folder is named `doc`, not `docs`). Read only 
 
 ## Rules
 
-- Do NOT commit or push until the user has reviewed the changes. Leave work uncommitted in the working tree and wait for approval.
+- Committing on the session's assigned branch is allowed. Do NOT merge into `main` (or push to `main`) under any circumstances; the user does that. Do not push unless asked.
 - Work only on the session's assigned branch. Do not open PRs unless asked.
 - All source-code comments must be in English (C++, Python, xacro, YAML, launch files).
 - Keep C++ and Python versions of the same node in sync.

@@ -8,8 +8,13 @@
   <!-- Load Simulated or Real Hardware Interfaces -->
   <xacro:arg name="is_sim" default="true"/>
 
+  <!-- Physics simulator used when is_sim is true: gazebo or mujoco -->
+  <xacro:arg name="simulator" default="gazebo"/>
+
   <!-- Include Gazebo Parameters -->
-  <xacro:include filename="$(find bumperbot_description)/urdf/bumperbot_gazebo.xacro" />
+  <xacro:if value="${'$(arg simulator)' == 'gazebo'}">
+    <xacro:include filename="$(find bumperbot_description)/urdf/bumperbot_gazebo.xacro" />
+  </xacro:if>
 
   <!-- Include ros2_control Plugins -->
   <xacro:include filename="$(find bumperbot_description)/urdf/bumperbot_ros2_control.xacro" />

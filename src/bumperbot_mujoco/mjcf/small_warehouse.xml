@@ -1,0 +1,231 @@
+<mujoco model="small_warehouse">
+  <compiler angle="radian" meshdir="../meshes" />
+  <option timestep="0.002" integrator="implicitfast" gravity="0 0 -9.81" />
+  <visual>
+    <headlight ambient="0.4 0.4 0.4" diffuse="0.6 0.6 0.6" />
+    <global offwidth="1280" offheight="720" />
+  </visual>
+  <statistic center="0 0 1" extent="12" />
+  <asset>
+    <texture name="skybox" type="skybox" builtin="gradient" rgb1="0.45 0.6 0.8" rgb2="0.05 0.05 0.1" width="512" height="3072" />
+    <texture name="grid" type="2d" builtin="checker" rgb1="0.75 0.75 0.75" rgb2="0.65 0.65 0.65" width="300" height="300" />
+    <material name="grid" texture="grid" texrepeat="50 50" reflectance="0" />
+    <mesh name="warehouse_Bucket_01_body_c0_0" file="models/warehouse_Bucket_01/warehouse_Bucket_01_body_c0_0.stl" />
+    <mesh name="warehouse_Bucket_01_v0" file="models/warehouse_Bucket_01/warehouse_Bucket_01_v0.stl" inertia="shell" />
+    <mesh name="warehouse_ClutteringA_01_link_c0_0" file="models/warehouse_ClutteringA_01/warehouse_ClutteringA_01_link_c0_0.stl" />
+    <mesh name="warehouse_ClutteringA_01_v0" file="models/warehouse_ClutteringA_01/warehouse_ClutteringA_01_v0.stl" inertia="shell" />
+    <mesh name="warehouse_ClutteringC_01_link_c0_0" file="models/warehouse_ClutteringC_01/warehouse_ClutteringC_01_link_c0_0.stl" />
+    <mesh name="warehouse_ClutteringC_01_v0" file="models/warehouse_ClutteringC_01/warehouse_ClutteringC_01_v0.stl" inertia="shell" />
+    <mesh name="warehouse_ClutteringD_01_link_c0_0" file="models/warehouse_ClutteringD_01/warehouse_ClutteringD_01_link_c0_0.stl" />
+    <mesh name="warehouse_ClutteringD_01_v0" file="models/warehouse_ClutteringD_01/warehouse_ClutteringD_01_v0.stl" inertia="shell" />
+    <mesh name="warehouse_GroundB_01_link_c0_0" file="models/warehouse_GroundB_01/warehouse_GroundB_01_link_c0_0.stl" />
+    <mesh name="warehouse_GroundB_01_v0" file="models/warehouse_GroundB_01/warehouse_GroundB_01_v0.stl" inertia="shell" />
+    <mesh name="warehouse_Lamp_01_link_c0_0" file="models/warehouse_Lamp_01/warehouse_Lamp_01_link_c0_0.stl" />
+    <mesh name="warehouse_Lamp_01_v0" file="models/warehouse_Lamp_01/warehouse_Lamp_01_v0.stl" inertia="shell" />
+    <mesh name="warehouse_PalletJackB_01_link_c0_0" file="models/warehouse_PalletJackB_01/warehouse_PalletJackB_01_link_c0_0.stl" />
+    <mesh name="warehouse_PalletJackB_01_link_c0_1" file="models/warehouse_PalletJackB_01/warehouse_PalletJackB_01_link_c0_1.stl" />
+    <mesh name="warehouse_PalletJackB_01_link_c0_2" file="models/warehouse_PalletJackB_01/warehouse_PalletJackB_01_link_c0_2.stl" />
+    <mesh name="warehouse_PalletJackB_01_link_c0_3" file="models/warehouse_PalletJackB_01/warehouse_PalletJackB_01_link_c0_3.stl" />
+    <mesh name="warehouse_PalletJackB_01_link_c0_4" file="models/warehouse_PalletJackB_01/warehouse_PalletJackB_01_link_c0_4.stl" />
+    <mesh name="warehouse_PalletJackB_01_link_c0_5" file="models/warehouse_PalletJackB_01/warehouse_PalletJackB_01_link_c0_5.stl" />
+    <mesh name="warehouse_PalletJackB_01_link_c0_6" file="models/warehouse_PalletJackB_01/warehouse_PalletJackB_01_link_c0_6.stl" />
+    <mesh name="warehouse_PalletJackB_01_link_c0_7" file="models/warehouse_PalletJackB_01/warehouse_PalletJackB_01_link_c0_7.stl" />
+    <mesh name="warehouse_PalletJackB_01_v0" file="models/warehouse_PalletJackB_01/warehouse_PalletJackB_01_v0.stl" inertia="shell" />
+    <mesh name="warehouse_ShelfD_01_link_c0_0" file="models/warehouse_ShelfD_01/warehouse_ShelfD_01_link_c0_0.stl" />
+    <mesh name="warehouse_ShelfD_01_link_c0_1" file="models/warehouse_ShelfD_01/warehouse_ShelfD_01_link_c0_1.stl" />
+    <mesh name="warehouse_ShelfD_01_link_c0_2" file="models/warehouse_ShelfD_01/warehouse_ShelfD_01_link_c0_2.stl" />
+    <mesh name="warehouse_ShelfD_01_link_c0_3" file="models/warehouse_ShelfD_01/warehouse_ShelfD_01_link_c0_3.stl" />
+    <mesh name="warehouse_ShelfD_01_link_c0_4" file="models/warehouse_ShelfD_01/warehouse_ShelfD_01_link_c0_4.stl" />
+    <mesh name="warehouse_ShelfD_01_link_c0_5" file="models/warehouse_ShelfD_01/warehouse_ShelfD_01_link_c0_5.stl" />
+    <mesh name="warehouse_ShelfD_01_v0" file="models/warehouse_ShelfD_01/warehouse_ShelfD_01_v0.stl" inertia="shell" />
+    <mesh name="warehouse_ShelfE_01_link_c0_0" file="models/warehouse_ShelfE_01/warehouse_ShelfE_01_link_c0_0.stl" />
+    <mesh name="warehouse_ShelfE_01_link_c0_1" file="models/warehouse_ShelfE_01/warehouse_ShelfE_01_link_c0_1.stl" />
+    <mesh name="warehouse_ShelfE_01_link_c0_2" file="models/warehouse_ShelfE_01/warehouse_ShelfE_01_link_c0_2.stl" />
+    <mesh name="warehouse_ShelfE_01_link_c0_3" file="models/warehouse_ShelfE_01/warehouse_ShelfE_01_link_c0_3.stl" />
+    <mesh name="warehouse_ShelfE_01_link_c0_4" file="models/warehouse_ShelfE_01/warehouse_ShelfE_01_link_c0_4.stl" />
+    <mesh name="warehouse_ShelfE_01_link_c0_5" file="models/warehouse_ShelfE_01/warehouse_ShelfE_01_link_c0_5.stl" />
+    <mesh name="warehouse_ShelfE_01_v0" file="models/warehouse_ShelfE_01/warehouse_ShelfE_01_v0.stl" inertia="shell" />
+    <mesh name="warehouse_ShelfF_01_link_c0_0" file="models/warehouse_ShelfF_01/warehouse_ShelfF_01_link_c0_0.stl" />
+    <mesh name="warehouse_ShelfF_01_link_c0_1" file="models/warehouse_ShelfF_01/warehouse_ShelfF_01_link_c0_1.stl" />
+    <mesh name="warehouse_ShelfF_01_link_c0_2" file="models/warehouse_ShelfF_01/warehouse_ShelfF_01_link_c0_2.stl" />
+    <mesh name="warehouse_ShelfF_01_link_c0_3" file="models/warehouse_ShelfF_01/warehouse_ShelfF_01_link_c0_3.stl" />
+    <mesh name="warehouse_ShelfF_01_link_c0_4" file="models/warehouse_ShelfF_01/warehouse_ShelfF_01_link_c0_4.stl" />
+    <mesh name="warehouse_ShelfF_01_link_c0_5" file="models/warehouse_ShelfF_01/warehouse_ShelfF_01_link_c0_5.stl" />
+    <mesh name="warehouse_ShelfF_01_link_c0_6" file="models/warehouse_ShelfF_01/warehouse_ShelfF_01_link_c0_6.stl" />
+    <mesh name="warehouse_ShelfF_01_link_c0_7" file="models/warehouse_ShelfF_01/warehouse_ShelfF_01_link_c0_7.stl" />
+    <mesh name="warehouse_ShelfF_01_v0" file="models/warehouse_ShelfF_01/warehouse_ShelfF_01_v0.stl" inertia="shell" />
+    <mesh name="warehouse_TrashCanC_01_link_c0_0" file="models/warehouse_TrashCanC_01/warehouse_TrashCanC_01_link_c0_0.stl" />
+    <mesh name="warehouse_TrashCanC_01_link_c0_1" file="models/warehouse_TrashCanC_01/warehouse_TrashCanC_01_link_c0_1.stl" />
+    <mesh name="warehouse_TrashCanC_01_link_c0_2" file="models/warehouse_TrashCanC_01/warehouse_TrashCanC_01_link_c0_2.stl" />
+    <mesh name="warehouse_TrashCanC_01_link_c0_3" file="models/warehouse_TrashCanC_01/warehouse_TrashCanC_01_link_c0_3.stl" />
+    <mesh name="warehouse_TrashCanC_01_link_c0_4" file="models/warehouse_TrashCanC_01/warehouse_TrashCanC_01_link_c0_4.stl" />
+    <mesh name="warehouse_TrashCanC_01_link_c0_5" file="models/warehouse_TrashCanC_01/warehouse_TrashCanC_01_link_c0_5.stl" />
+    <mesh name="warehouse_TrashCanC_01_link_c0_6" file="models/warehouse_TrashCanC_01/warehouse_TrashCanC_01_link_c0_6.stl" />
+    <mesh name="warehouse_TrashCanC_01_link_c0_7" file="models/warehouse_TrashCanC_01/warehouse_TrashCanC_01_link_c0_7.stl" />
+    <mesh name="warehouse_TrashCanC_01_v0" file="models/warehouse_TrashCanC_01/warehouse_TrashCanC_01_v0.stl" inertia="shell" />
+    <mesh name="warehouse_WallB_01_link_c0_0" file="models/warehouse_WallB_01/warehouse_WallB_01_link_c0_0.stl" />
+    <mesh name="warehouse_WallB_01_link_c0_1" file="models/warehouse_WallB_01/warehouse_WallB_01_link_c0_1.stl" />
+    <mesh name="warehouse_WallB_01_link_c0_2" file="models/warehouse_WallB_01/warehouse_WallB_01_link_c0_2.stl" />
+    <mesh name="warehouse_WallB_01_link_c0_3" file="models/warehouse_WallB_01/warehouse_WallB_01_link_c0_3.stl" />
+    <mesh name="warehouse_WallB_01_v0" file="models/warehouse_WallB_01/warehouse_WallB_01_v0.stl" inertia="shell" />
+  </asset>
+  <worldbody>
+    <light name="sun" directional="true" pos="0 0 10" dir="-0.5 0.1 -0.9" diffuse="0.7 0.7 0.7" />
+    <geom name="safety_floor" type="plane" size="50 50 0.1" pos="0 0 -0.1" rgba="0 0 0 0" friction="1 0.005 0.0001" />
+    <body name="aws_robomaker_warehouse_ShelfF_01_001" pos="-5.79514 -0.956635 0" quat="1 0 0 0">
+      <geom type="mesh" group="4" mesh="warehouse_ShelfF_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="warehouse_ShelfF_01_link_c0_1" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="warehouse_ShelfF_01_link_c0_2" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="warehouse_ShelfF_01_link_c0_3" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="warehouse_ShelfF_01_link_c0_4" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="warehouse_ShelfF_01_link_c0_5" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="warehouse_ShelfF_01_link_c0_6" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="warehouse_ShelfF_01_link_c0_7" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="warehouse_ShelfF_01_v0" contype="0" conaffinity="0" rgba="0.55 0.48 0.13 1" />
+    </body>
+    <body name="aws_robomaker_warehouse_WallB_01_001" pos="0 0 0" quat="1 0 0 0">
+      <geom type="mesh" group="4" mesh="warehouse_WallB_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="warehouse_WallB_01_link_c0_1" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="warehouse_WallB_01_link_c0_2" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="warehouse_WallB_01_link_c0_3" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="warehouse_WallB_01_v0" contype="0" conaffinity="0" rgba="0.89 0.88 0.86 1" />
+    </body>
+    <body name="aws_robomaker_warehouse_ShelfE_01_001" pos="4.73156 0.57943 0" quat="1 0 0 0">
+      <geom type="mesh" group="4" mesh="warehouse_ShelfE_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="warehouse_ShelfE_01_link_c0_1" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="warehouse_ShelfE_01_link_c0_2" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="warehouse_ShelfE_01_link_c0_3" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="warehouse_ShelfE_01_link_c0_4" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="warehouse_ShelfE_01_link_c0_5" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="warehouse_ShelfE_01_v0" contype="0" conaffinity="0" rgba="0.82 0.74 0 1" />
+    </body>
+    <body name="aws_robomaker_warehouse_ShelfE_01_002" pos="4.73156 -4.82705 0" quat="1 0 0 0">
+      <geom type="mesh" group="4" mesh="warehouse_ShelfE_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="warehouse_ShelfE_01_link_c0_1" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="warehouse_ShelfE_01_link_c0_2" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="warehouse_ShelfE_01_link_c0_3" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="warehouse_ShelfE_01_link_c0_4" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="warehouse_ShelfE_01_link_c0_5" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="warehouse_ShelfE_01_v0" contype="0" conaffinity="0" rgba="0.82 0.74 0 1" />
+    </body>
+    <body name="aws_robomaker_warehouse_ShelfE_01_003" pos="4.73156 -8.6651 0" quat="1 0 0 0">
+      <geom type="mesh" group="4" mesh="warehouse_ShelfE_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="warehouse_ShelfE_01_link_c0_1" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="warehouse_ShelfE_01_link_c0_2" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="warehouse_ShelfE_01_link_c0_3" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="warehouse_ShelfE_01_link_c0_4" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="warehouse_ShelfE_01_link_c0_5" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="warehouse_ShelfE_01_v0" contype="0" conaffinity="0" rgba="0.82 0.74 0 1" />
+    </body>
+    <body name="aws_robomaker_warehouse_ShelfD_01_001" pos="4.73156 -1.24267 0" quat="1 0 0 0">
+      <geom type="mesh" group="4" mesh="warehouse_ShelfD_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="warehouse_ShelfD_01_link_c0_1" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="warehouse_ShelfD_01_link_c0_2" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="warehouse_ShelfD_01_link_c0_3" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="warehouse_ShelfD_01_link_c0_4" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="warehouse_ShelfD_01_link_c0_5" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="warehouse_ShelfD_01_v0" contype="0" conaffinity="0" rgba="0.82 0.74 0 1" />
+    </body>
+    <body name="aws_robomaker_warehouse_ShelfD_01_002" pos="4.73156 -3.03855 0" quat="1 0 0 0">
+      <geom type="mesh" group="4" mesh="warehouse_ShelfD_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="warehouse_ShelfD_01_link_c0_1" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="warehouse_ShelfD_01_link_c0_2" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="warehouse_ShelfD_01_link_c0_3" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="warehouse_ShelfD_01_link_c0_4" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="warehouse_ShelfD_01_link_c0_5" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="warehouse_ShelfD_01_v0" contype="0" conaffinity="0" rgba="0.82 0.74 0 1" />
+    </body>
+    <body name="aws_robomaker_warehouse_ShelfD_01_003" pos="4.73156 -6.75054 0" quat="1 0 0 0">
+      <geom type="mesh" group="4" mesh="warehouse_ShelfD_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="warehouse_ShelfD_01_link_c0_1" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="warehouse_ShelfD_01_link_c0_2" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="warehouse_ShelfD_01_link_c0_3" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="warehouse_ShelfD_01_link_c0_4" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="warehouse_ShelfD_01_link_c0_5" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="warehouse_ShelfD_01_v0" contype="0" conaffinity="0" rgba="0.82 0.74 0 1" />
+    </body>
+    <body name="aws_robomaker_warehouse_GroundB_01_001" pos="0 0 -0.090092" quat="1 0 0 0">
+      <geom type="mesh" group="4" mesh="warehouse_GroundB_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="warehouse_GroundB_01_v0" contype="0" conaffinity="0" rgba="0.81 0.81 0.8 1" />
+    </body>
+    <body name="aws_robomaker_warehouse_Lamp_01_005" pos="0 0 -4" quat="1 0 0 0">
+      <geom type="mesh" group="4" mesh="warehouse_Lamp_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="warehouse_Lamp_01_v0" contype="0" conaffinity="0" rgba="0.69 0.71 0.72 1" />
+    </body>
+    <body name="aws_robomaker_warehouse_Bucket_01_020" pos="0.433449 9.63171 0" quat="0.709801 0 0 -0.704402">
+      <geom type="mesh" group="4" mesh="warehouse_Bucket_01_body_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="warehouse_Bucket_01_v0" contype="0" conaffinity="0" rgba="0.7 0.6 0.26 1" />
+    </body>
+    <body name="aws_robomaker_warehouse_Bucket_01_021" pos="-1.8321 -6.3752 0" quat="0.709801 0 0 -0.704402">
+      <geom type="mesh" group="4" mesh="warehouse_Bucket_01_body_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="warehouse_Bucket_01_v0" contype="0" conaffinity="0" rgba="0.7 0.6 0.26 1" />
+    </body>
+    <body name="aws_robomaker_warehouse_Bucket_01_022" pos="0.433449 8.59 0" quat="0.709801 0 0 -0.704402">
+      <geom type="mesh" group="4" mesh="warehouse_Bucket_01_body_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="warehouse_Bucket_01_v0" contype="0" conaffinity="0" rgba="0.7 0.6 0.26 1" />
+    </body>
+    <body name="aws_robomaker_warehouse_ClutteringA_01_016" pos="5.70814 8.61684 -0.017477" quat="1 0 0 0">
+      <geom type="mesh" group="4" mesh="warehouse_ClutteringA_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="warehouse_ClutteringA_01_v0" contype="0" conaffinity="0" rgba="0.77 0.59 0.33 1" />
+    </body>
+    <body name="aws_robomaker_warehouse_ClutteringA_01_017" pos="3.40864 8.61684 -0.017477" quat="1 0 0 0">
+      <geom type="mesh" group="4" mesh="warehouse_ClutteringA_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="warehouse_ClutteringA_01_v0" contype="0" conaffinity="0" rgba="0.77 0.59 0.33 1" />
+    </body>
+    <body name="aws_robomaker_warehouse_ClutteringA_01_018" pos="-1.49129 5.22243 -0.017477" quat="0.702713 0 0 -0.711473">
+      <geom type="mesh" group="4" mesh="warehouse_ClutteringA_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="warehouse_ClutteringA_01_v0" contype="0" conaffinity="0" rgba="0.77 0.59 0.33 1" />
+    </body>
+    <body name="aws_robomaker_warehouse_ClutteringC_01_027" pos="3.32496 3.82245 -0.012064" quat="0.709551 0 0 0.704654">
+      <geom type="mesh" group="4" mesh="warehouse_ClutteringC_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="warehouse_ClutteringC_01_v0" contype="0" conaffinity="0" rgba="0.77 0.59 0.33 1" />
+    </body>
+    <body name="aws_robomaker_warehouse_ClutteringC_01_028" pos="5.54171 3.81648 -0.015663" quat="0.702711 0 0 -0.711475">
+      <geom type="mesh" group="4" mesh="warehouse_ClutteringC_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="warehouse_ClutteringC_01_v0" contype="0" conaffinity="0" rgba="0.77 0.59 0.33 1" />
+    </body>
+    <body name="aws_robomaker_warehouse_ClutteringC_01_029" pos="5.38424 6.13715 0" quat="0.00420366 0 0 -0.999991">
+      <geom type="mesh" group="4" mesh="warehouse_ClutteringC_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="warehouse_ClutteringC_01_v0" contype="0" conaffinity="0" rgba="0.77 0.59 0.33 1" />
+    </body>
+    <body name="aws_robomaker_warehouse_ClutteringC_01_030" pos="3.236 6.13715 0" quat="0.00420366 0 0 -0.999991">
+      <geom type="mesh" group="4" mesh="warehouse_ClutteringC_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="warehouse_ClutteringC_01_v0" contype="0" conaffinity="0" rgba="0.77 0.59 0.33 1" />
+    </body>
+    <body name="aws_robomaker_warehouse_ClutteringC_01_031" pos="-1.57368 2.30199 -0.015663" quat="0.00420081 0 0 -0.999991">
+      <geom type="mesh" group="4" mesh="warehouse_ClutteringC_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="warehouse_ClutteringC_01_v0" contype="0" conaffinity="0" rgba="0.77 0.59 0.33 1" />
+    </body>
+    <body name="aws_robomaker_warehouse_ClutteringC_01_032" pos="-1.2196 9.407 -0.015663" quat="0.709551 0 0 0.704654">
+      <geom type="mesh" group="4" mesh="warehouse_ClutteringC_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="warehouse_ClutteringC_01_v0" contype="0" conaffinity="0" rgba="0.77 0.59 0.33 1" />
+    </body>
+    <body name="aws_robomaker_warehouse_ClutteringD_01_005" pos="-1.63468 -7.81181 -0.319559" quat="1 0 0 0">
+      <geom type="mesh" group="4" mesh="warehouse_ClutteringD_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="warehouse_ClutteringD_01_v0" contype="0" conaffinity="0" rgba="0.77 0.59 0.33 1" />
+    </body>
+    <body name="aws_robomaker_warehouse_TrashCanC_01_002" pos="-1.59244 7.71542 0" quat="1 0 0 0">
+      <geom type="mesh" group="4" mesh="warehouse_TrashCanC_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="warehouse_TrashCanC_01_link_c0_1" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="warehouse_TrashCanC_01_link_c0_2" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="warehouse_TrashCanC_01_link_c0_3" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="warehouse_TrashCanC_01_link_c0_4" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="warehouse_TrashCanC_01_link_c0_5" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="warehouse_TrashCanC_01_link_c0_6" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="warehouse_TrashCanC_01_link_c0_7" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="warehouse_TrashCanC_01_v0" contype="0" conaffinity="0" rgba="0.11 0.41 0.11 1" />
+    </body>
+    <body name="aws_robomaker_warehouse_PalletJackB_01_001" pos="-0.276098 -9.48194 0.023266" quat="1 0 0 0">
+      <geom type="mesh" group="4" mesh="warehouse_PalletJackB_01_link_c0_0" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="warehouse_PalletJackB_01_link_c0_1" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="warehouse_PalletJackB_01_link_c0_2" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="warehouse_PalletJackB_01_link_c0_3" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="warehouse_PalletJackB_01_link_c0_4" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="warehouse_PalletJackB_01_link_c0_5" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="warehouse_PalletJackB_01_link_c0_6" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="4" mesh="warehouse_PalletJackB_01_link_c0_7" rgba="0.5 0.5 0.5 1" friction="1 0.005 0.0001" />
+      <geom type="mesh" group="2" mesh="warehouse_PalletJackB_01_v0" contype="0" conaffinity="0" rgba="0.71 0.48 0.08 1" />
+    </body>
+  </worldbody>
+  <include file="robot.xml" />
+</mujoco>
