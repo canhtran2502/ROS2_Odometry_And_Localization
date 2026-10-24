@@ -124,7 +124,8 @@ def test_parameter_parity():
         py = {k: _norm(v) for k, v in _py_params(f.read()).items()}
     with open(CPP_NODE) as f:
         cpp = {k: _norm(v) for k, v in _cpp_params(f.read()).items()}
-    assert len(py) == 15, py.keys()
+    assert len(py) == 16, py.keys()
+    assert py["clock_stall_timeout"] == 30.0 and cpp["clock_stall_timeout"] == 30.0
     assert py == cpp, {k: (py.get(k), cpp.get(k)) for k in set(py) | set(cpp)
                        if py.get(k) != cpp.get(k)}
 
@@ -136,7 +137,8 @@ def test_parameter_defaults_match_plan_and_yaml():
             "robot_frame": "base_footprint", "goal_tolerance": 0.2, "max_retries": 2,
             "retry_delay": 1.0, "max_consecutive_failures": 2, "dock_max_retries": 3,
             "return_to_dock": True, "nav_server_timeout": 10.0, "nav_goal_timeout": 300.0,
-            "tf_timeout": 1.0, "status_rate": 2.0, "behavior_tree": ""}
+            "tf_timeout": 1.0, "clock_stall_timeout": 30.0, "status_rate": 2.0,
+            "behavior_tree": ""}
     assert py == plan
     with open(os.path.join(PKG, "config", "mission_manager.yaml")) as f:
         cfg = yaml.safe_load(f)["mission_manager"]["ros__parameters"]

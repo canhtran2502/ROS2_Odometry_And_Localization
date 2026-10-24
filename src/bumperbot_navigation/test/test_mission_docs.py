@@ -1,6 +1,11 @@
 """AC14: documentation mentions the new package, launch file, interfaces and stations file."""
 import os
 import re
+import signal
+import subprocess
+import time
+
+import pytest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, "..", "..", ".."))
@@ -35,9 +40,11 @@ def test_doc10_describes_review_fix_rules():
     text = read("doc/10_navigation.md")
     flat = re.sub(r"\s+", " ", text)
     for token in ("nav_server_timeout", "retry_delay", "duplicated", "frame_id", "global_frame",
-                  "1e3", "quoted", "REJECTED", "wall (steady) time", "Terminal status precedence",
+                  "1e3", "quoted", "REJECTED", "Terminal status precedence",
                   "DOCK_FAILED"):
         assert token in flat, token
+    # iteration 4 capitalized the bullet ("Wall (steady) time:"): same rule, case-insensitive
+    assert "wall (steady) time" in flat.lower()
     assert re.search(r"without counting a failed attempt", flat)
     assert re.search(r"refuses to start when `frame_id` differs from its `global_frame`", flat)
     assert re.search(r"not a non-null string", flat)
@@ -52,19 +59,76 @@ def test_nav2_params_controller_odom_topic():
         "/bumperbot_controller/odom"
 
 
-def test_review_fixes_launch_cpp():
-    """
-    Review-fix launch tests (rejection, cancel races) for the C++ mission_manager.
+# ------------------------------------------------------------------ iteration 4: shutdown
+# Registered pytest file for the signal / constructor-error tests (see test_stations_on_map.py).
+def _robust_imports():
+    import sys
+    if HERE not in sys.path:
+        sys.path.insert(0, HERE)
+    import robust_harness
+    return robust_harness
 
-    test_mission_review_fixes.launch.py is not registered with CMake on its own; the two
-    implementations run from pytest wrappers (this one and test_stations_on_map.py) so that both
-    stay in `colcon test` within the per-file timeout.
-    """
-    import subprocess
-    env = dict(os.environ, REVIEW_IMPL="cpp")
-    proc = subprocess.run(
-        ["launch_test", os.path.join(HERE, "test_mission_review_fixes.launch.py")],
-        capture_output=True, text=True, timeout=115, env=env)
+
+@pytest.mark.parametrize("sig", [signal.SIGINT, signal.SIGTERM], ids=["SIGINT", "SIGTERM"])
+@pytest.mark.parametrize("impl", ["cpp", "py"])
+def test_signal_mid_mission_cancels_nav2_goal_and_exits_cleanly(impl, sig, tmp_path):
+    rh = _robust_imports()
+    h = rh.Harness()
+    try:
+        proc = h.start_node(impl, tmp_path, {
+            "retry_delay": 0.1, "nav_server_timeout": 5.0, "nav_goal_timeout": 60.0})
+        assert h.wait_ready(), "execute_mission not available\n" + h.log()
+        h.mock.reset({"a": {"duration": 30.0}})
+        h.send(["a"])
+        assert rh.wait_until(lambda: any(g["name"] == "a" for g in h.mock.snapshot()[0]), 15.0)
+        time.sleep(0.5)
+        t0 = time.monotonic()
+        os.kill(proc.pid, sig)
+        try:
+            rc = proc.wait(timeout=15)
+        except subprocess.TimeoutExpired:
+            pytest.fail("node did not exit within 15 s after the signal\n" + h.log())
+        took = time.monotonic() - t0
+        out = h.log()
+        assert rc == 0, "exit code {} (signal {})\n{}".format(rc, -rc if rc < 0 else "", out)
+        for bad in ("terminate", "Traceback", "Aborted", "core dumped"):
+            assert bad not in out, out
+        assert took < 10.0, "shutdown took {:.1f} s".format(took)
+        assert rh.wait_until(lambda: h.mock.cancel_requests.get("a", 0) >= 1, 3.0), \
+            "Nav2 never received a cancel request for the active goal\n" + out
+        assert rh.wait_until(lambda: any(c["name"] == "a" for c in h.mock.snapshot()[1]), 3.0)
+    finally:
+        h.close()
+
+
+@pytest.mark.parametrize("sig", [signal.SIGINT, signal.SIGTERM], ids=["SIGINT", "SIGTERM"])
+@pytest.mark.parametrize("impl", ["cpp", "py"])
+def test_signal_while_idle_exits_cleanly(impl, sig, tmp_path):
+    rh = _robust_imports()
+    h = rh.Harness()
+    try:
+        proc = h.start_node(impl, tmp_path)
+        assert h.wait_ready(), "execute_mission not available\n" + h.log()
+        os.kill(proc.pid, sig)
+        try:
+            rc = proc.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            pytest.fail("node did not exit within 10 s after the signal\n" + h.log())
+        out = h.log()
+        assert rc == 0, "exit code {}\n{}".format(rc, out)
+        for bad in ("terminate", "Traceback", "Aborted"):
+            assert bad not in out, out
+    finally:
+        h.close()
+
+
+@pytest.mark.parametrize("impl", ["cpp", "py"])
+def test_constructor_error_gives_nonzero_exit_and_fatal_log(impl, tmp_path):
+    rh = _robust_imports()
+    cmd = [rh.executable(impl), "--ros-args", "-p",
+           "stations_file:=" + str(tmp_path / "does_not_exist.yaml")]
+    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
     out = proc.stdout + proc.stderr
-    assert proc.returncode == 0, out[-6000:]
-    assert "Ran 6 tests" in out, "review-fix launch tests did not run\n" + out[-3000:]
+    assert proc.returncode != 0, "node started with a missing stations file\n" + out
+    assert proc.returncode > 0, "killed by a signal ({})\n{}".format(proc.returncode, out)
+    assert "FATAL" in out, "no FATAL log for the constructor error\n" + out

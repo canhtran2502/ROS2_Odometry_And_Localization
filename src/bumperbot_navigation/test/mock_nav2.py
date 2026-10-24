@@ -48,12 +48,32 @@ class MockNav2(Node):
         self.group = ReentrantCallbackGroup()
         self.broadcaster = TransformBroadcaster(self)
         self.create_timer(0.05, self.publish_tf, callback_group=self.group)
-        self.server = ActionServer(
-            self, NavigateToPose, action_name,
-            execute_callback=self.execute,
-            goal_callback=self.on_goal,
-            cancel_callback=self.on_cancel,
-            callback_group=self.group)
+        self.action_name = action_name
+        self.closing = False
+        self.server = None
+        self.start_server()
+
+    def start_server(self):
+        """(Re)create the navigate_to_pose action server."""
+        if self.server is None:
+            self.server = ActionServer(
+                self, NavigateToPose, self.action_name,
+                execute_callback=self.execute,
+                goal_callback=self.on_goal,
+                cancel_callback=self.on_cancel,
+                callback_group=self.group)
+
+    def stop_server(self):
+        """Make the action server disappear (simulates a dead Nav2)."""
+        if self.server is not None:
+            self.server.destroy()
+            self.server = None
+
+    def close(self):
+        """Test teardown: end running goal threads and drop the server."""
+        self.closing = True
+        time.sleep(0.2)
+        self.stop_server()
 
     def reset(self, behaviors=None):
         with self.lock:
@@ -114,6 +134,12 @@ class MockNav2(Node):
         return best
 
     def execute(self, goal_handle):
+        try:
+            return self.run_goal(goal_handle)
+        except Exception:  # e.g. the server was destroyed while the goal was running
+            return NavigateToPose.Result()
+
+    def run_goal(self, goal_handle):
         pose = goal_handle.request.pose
         p, q = pose.pose.position, pose.pose.orientation
         name = self.resolve(p.x, p.y)
@@ -125,6 +151,8 @@ class MockNav2(Node):
             beh = dict(self.behaviors.get(name, {}))
         end = time.monotonic() + float(beh.get("duration", 0.2))
         while time.monotonic() < end:
+            if self.closing:
+                return NavigateToPose.Result()  # test teardown: drop the goal thread
             if goal_handle.is_cancel_requested:
                 if beh.get("succeed_on_cancel"):
                     break

@@ -120,3 +120,55 @@ Test infrastructure notes
 
 ## Failures
 None.
+
+---
+
+# Test report: iteration 4 (clock stall, dead Nav2, shutdown)
+Verdict: FAIL  (16/19: AC1-AC12, AC14-AC16 pass = 15 AC, AC13 fails; full-suite gate FAIL; review-fix checks PASS; iteration-4 checks FAIL)
+
+Build: clean rebuild of bumperbot_navigation/bumperbot_bringup, NO --symlink-install, with `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1` exported
+at build time too (otherwise ament_cmake_pytest cannot import pytest, because the user-site anyio plugin crashes, and the pytest
+tests are silently not registered: 9 instead of 13 ctest tests). Gate: `colcon test --packages-select bumperbot_navigation bumperbot_bringup`.
+Result: 13 ctest tests in bumperbot_navigation, 3 failing test cases (below); lint (flake8, pep257, uncrustify, cppcheck, lint_cmake, xmllint) passes.
+AC15/AC16 regression: `BUMPERBOT_MISSION_E2E=1 launch_test test_mission_sim_mujoco.launch.py` -> 2 tests OK in 124 s.
+
+| Item | Test | Result | Evidence |
+|---|---|---|---|
+| AC1-AC12, AC14-AC16 | unchanged | PASS | |
+| AC13 | test_interfaces_and_static.py::test_sim_independence_logic_and_nodes | FAIL | new product comments contain `/clock` |
+| Task 1 wrappers removed | colcon test_mission_review_fixes | PASS | wrappers deleted; the file is run by add_launch_test once per impl (6 tests [cpp] + test_exit_codes[cpp], same for [py]) |
+| Task 2 parity | test_parameter_parity / test_parameter_defaults_match_plan_and_yaml | PASS | 16 params, clock_stall_timeout 30.0 in cpp, py and mission_manager.yaml |
+| 3a Nav2 dies mid-goal | test_stations_on_map.py::test_nav2_disappears_mid_goal_fails_after_server_timeout[cpp/py x dock_failed/server_back] | PASS | attempt fails 2.0-5.5 s after the server is gone (nav_server_timeout 2, nav_goal_timeout 60); no server -> DOCK_FAILED docked=false; server back -> COMPLETED_WITH_SKIPS docked, goals [a, dock] |
+| 3b stalled clock | ::test_stalled_clock_wait_ends_after_clock_stall_timeout[cpp/py] | PASS | control: running clock, no warning; stall during dwell: ends ~3 s later with "Node clock did not advance" warning, mission COMPLETED |
+| 3d status on node clock | ::test_status_timer_follows_node_clock[cpp/py] | PASS | 2x /clock: 9-15 msgs in 3 s wall; stalled: <=1; resumed 1x: 4-8 |
+| 3c signal mid-mission | test_mission_docs.py::test_signal_mid_mission_cancels_nav2_goal_and_exits_cleanly[cpp/py x SIGINT/SIGTERM] | PASS | rc 0 in all, 12-15 repeats each without failure, mock got cancel request and goal canceled, no terminate/Traceback |
+| 3c signal idle | ::test_signal_while_idle_exits_cleanly[py-SIGTERM] | FAIL (flaky ~45%) | see ACx below; cpp both signals and py SIGINT 25/25 |
+| 3c constructor error | ::test_constructor_error_gives_nonzero_exit_and_fatal_log[cpp] / [py] | cpp PASS, py FAIL | |
+
+Durations vs registered TIMEOUT: test_mission_manager 246 s / 300 s (82%, tight, unchanged from iteration 3 but still the weakest margin);
+test_mission_review_fixes 204 s / 300 s (68%); each pytest file <= 55 s / 120 s (test_stations_on_map 54.5 s with the new tests). No timeouts hit.
+
+Test infrastructure changes: test/mock_nav2.py (start_server/stop_server/close, goal threads exit on teardown, execute wrapped so a destroyed
+server cannot kill the executor), new test/robust_harness.py (runs the real executables as processes, /clock publisher), test_doc10 now matches
+"Wall (steady) time" case-insensitively (the doc bullet was capitalised in iteration 4; the rule text is unchanged). Because CMakeLists.txt is
+product and the registered pytest list is fixed, the new tests live in the already registered pytest files test_stations_on_map.py and
+test_mission_docs.py (suggestion: register a dedicated test file, e.g. test_mission_robustness.py, in CMakeLists.txt).
+
+## Failures
+### AC13: simulator independence (static)
+- command: `python3 -m pytest src/bumperbot_navigation/test/test_interfaces_and_static.py -k sim_independence`
+- output: `mission_manager.py:225: # clock_stall_timeout wall seconds (/clock stalled) the wait counts as elapsed.`, `mission_manager.cpp:255: // Node clock: dwell and retry delays follow sim time. If /clock stalls ...`
+- root cause: iteration 4 comments mention `/clock`, which the plan (AC13) forbids in node/logic sources.
+- suggested fix: reword both comments ("the time source stalls"); no code change.
+
+### Iteration 4 / 3c: Python mission_manager exits with a traceback (code 1) on SIGTERM
+- command: `python3 -m pytest src/bumperbot_navigation/test/test_mission_docs.py -k "idle and py-SIGTERM"` (11 of 25 runs failed; also in colcon test)
+- output: `rclpy._rclpy_pybind11.RCLError: failed to initialize wait set: the given context is not valid, either rcl_init() was not called or rcl_shutdown() was called.` raised from `executor.spin()`, exit code 1.
+- root cause: bumperbot_navigation/mission_manager.py main() (~line 509-517) catches only KeyboardInterrupt/ExternalShutdownException; rclpy's SIGTERM handler shuts the context down while the executor is (re)building its wait set, giving RCLError (race, mostly right after startup/idle; mid-mission SIGTERM passed 15/15).
+- suggested fix: also catch `rclpy.exceptions.RCLError` (or check `rclpy.ok()` and treat it as shutdown) around `executor.spin()`; exit 0.
+
+### Iteration 4 / 3c: Python constructor error has no FATAL log
+- command: `python3 -m pytest src/bumperbot_navigation/test/test_mission_docs.py -k "constructor_error and py"`
+- output: raw `Traceback ... ValueError: cannot read stations file ...`, exit code 1, no `[FATAL]` line (C++ prints FATAL and returns 1).
+- root cause: mission_manager.py main() does not wrap `MissionManager()` in try/except like mission_manager.cpp:632-636.
+- suggested fix: catch Exception around construction, `rclpy.logging.get_logger("mission_manager").fatal(str(exc))`, shut down rclpy and `sys.exit(1)`.
