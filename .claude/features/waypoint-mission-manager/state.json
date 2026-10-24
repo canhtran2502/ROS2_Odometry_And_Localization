@@ -1,0 +1,8 @@
+{
+  "slug": "waypoint-mission-manager",
+  "title": "Waypoint mission manager for AGV",
+  "stage": "implement",
+  "iteration": 0,
+  "max_iterations": 5,
+  "history": []
+}
