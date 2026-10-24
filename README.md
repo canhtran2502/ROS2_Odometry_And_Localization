@@ -40,6 +40,7 @@ BumperBot is designed for roboticists and embedded software engineers mastering 
 - **State Estimation & Fusion**: 1D linear Kalman filter, Thrun's probabilistic sample odometry motion model, and 15-state Extended Kalman Filter (`robot_localization`).
 - **Mapping & SLAM**: Known-pose ray-projection occupancy grid mapper and full Graph SLAM using `slam_toolbox`.
 - **Global Localization**: Adaptive Monte Carlo Localization (`nav2_amcl`) with particle cloud convergence in pre-mapped environments.
+- **AGV Waypoint Missions**: `mission_manager` (C++ and Python, package `bumperbot_navigation`) runs ordered station missions on the saved map through Nav2 `NavigateToPose` (`/execute_mission`), with a TF tolerance check, dwell, retries, skip and automatic return to the dock.
 - **Physical Robot Interface**: Custom `hardware_interface::SystemInterface` plugin communicating with an Arduino PID controller over serial (`libserial`), coupled with an MPU6050 I2C IMU driver.
 - **Pedagogical Foundations**: 12 mirrored tutorial modules comparing C++ and Python ROS 2 implementations (Pub/Sub, Services, Actions, Parameters, QoS, Lifecycle nodes, and TF2).
 
@@ -57,7 +58,8 @@ BumperBot is designed for roboticists and embedded software engineers mastering 
 | **AMCL Localization** | Verified | `nav2_amcl` particle filter with map server lifecycle |
 | **Hardware Interface** | Verified | C++ `hardware_interface` over `/dev/ttyUSB0` + Arduino PID |
 | **Autonomous Exploration** | Verified | `frontier_explorer`: frontier detection, grid A*, pure pursuit on top of `slam_toolbox`, saves the map when done (`auto_explore.launch.py`) |
-| **Autonomous Navigation (Nav2)** | Planned | Architectural blueprint provided in [doc/10_navigation.md](doc/10_navigation.md) |
+| **Autonomous Navigation (Nav2)** | Verified (simulation) | Nav2 planner, controller, behaviors and `bt_navigator` configured in `bumperbot_navigation` (`navigation.launch.py`); velocity enters `twist_mux` as `nav_vel`. See [doc/10_navigation.md](doc/10_navigation.md) |
+| **AGV Waypoint Missions** | Verified (simulation) | `mission_manager` + `stations.yaml`: ordered stations, dwell, retry/skip, dock return (`mission_sim.launch.py`) |
 
 ---
 
@@ -158,6 +160,7 @@ bumperbot_ws/
 │   ├── bumperbot_localization/         # Kalman filter, EKF configs & AMCL launch
 │   ├── bumperbot_mapping/              # Known-pose occupancy mapper & SLAM Toolbox
 │   ├── bumperbot_msgs/                 # Custom ROS 2 IDL messages, services, actions
+│   ├── bumperbot_navigation/           # Nav2 config + AGV mission manager (C++ and Python)
 │   ├── bumperbot_mujoco/               # MuJoCo robot/world models, ROS 2 bridge node, converters
 │   ├── bumperbot_utils/                # Reactive LiDAR safety supervisor
 │   ├── bumperbot_cpp_examples/         # C++ (rclcpp) tutorials & API patterns
@@ -172,7 +175,7 @@ bumperbot_ws/
 
 | Package | Type | Primary Responsibilities | Key Nodes & Entry Points | Documentation |
 | :--- | :--- | :--- | :--- | :--- |
-| **`bumperbot_bringup`** | `ament_cmake` | Master system integration & unified launch orchestration | `simulated_robot.launch.py`, `real_robot.launch.py`, `auto_explore.launch.py` | [doc/01_repository_structure.md](doc/01_repository_structure.md) |
+| **`bumperbot_bringup`** | `ament_cmake` | Master system integration & unified launch orchestration | `simulated_robot.launch.py`, `real_robot.launch.py`, `auto_explore.launch.py`, `mission_sim.launch.py` | [doc/01_repository_structure.md](doc/01_repository_structure.md) |
 | **`bumperbot_controller`** | `ament_cmake` + Python | Analytical kinematics, noisy odometry, and teleop arbitration | `simple_controller`, `noisy_controller`, `twist_relay` | [doc/06_odometry_and_motion_control.md](doc/06_odometry_and_motion_control.md) |
 | **`bumperbot_description`** | `ament_cmake` | URDF/Xacro modeling, visual/collision meshes, Gazebo worlds | `display.launch.py`, `gazebo.launch.py` | [doc/05_robot_description_and_simulation.md](doc/05_robot_description_and_simulation.md) |
 | **`bumperbot_mujoco`** | `ament_python` | MuJoCo simulation: robot and world MJCF models, ROS 2 bridge (`/clock`, `/scan`, `/imu/out`, wheel commands) | `mujoco_sim_node`, `mujoco.launch.py` | [doc/05_robot_description_and_simulation.md](doc/05_robot_description_and_simulation.md) |
@@ -180,7 +183,8 @@ bumperbot_ws/
 | **`bumperbot_localization`** | `ament_cmake` + Python | 1D Kalman filter, particle sampling, EKF & AMCL configs | `kalman_filter`, `odometry_motion_model`, `imu_republisher` | [doc/09_localization.md](doc/09_localization.md) |
 | **`bumperbot_mapping`** | `ament_cmake` + Python | Known-pose occupancy grid generation & Graph SLAM | `mapping_with_known_poses`, `frontier_explorer`, `slam.launch.py` | [doc/08_mapping_and_slam.md](doc/08_mapping_and_slam.md) |
 | **`bumperbot_utils`** | `ament_cmake` + Python | 2-tier reactive LiDAR safety supervisor with RViz markers | `safety_stop` (.cpp/.py) | [doc/07_lidar_and_sensor_processing.md](doc/07_lidar_and_sensor_processing.md) |
-| **`bumperbot_msgs`** | `ament_cmake` | Custom IDL definitions (`AddTwoInts`, `GetTransform`, `Fibonacci`) | Interfaces generation | [doc/03_ros2_nodes_topics_services.md](doc/03_ros2_nodes_topics_services.md) |
+| **`bumperbot_navigation`** | `ament_cmake` + Python | Nav2 configuration for BumperBot and the AGV waypoint mission manager (stations, dwell, retries, dock return) | `mission_manager` (.cpp/.py), `navigation.launch.py`, `stations.yaml` | [doc/10_navigation.md](doc/10_navigation.md) |
+| **`bumperbot_msgs`** | `ament_cmake` | Custom IDL definitions (`AddTwoInts`, `GetTransform`, `Fibonacci`, `ExecuteMission`, `MissionStatus`) | Interfaces generation | [doc/03_ros2_nodes_topics_services.md](doc/03_ros2_nodes_topics_services.md) |
 | **`bumperbot_cpp_examples`** | `ament_cmake` | C++ (`rclcpp`) reference implementations | 12 tutorial nodes (Pub/Sub, Service, Action, TF2, QoS) | [doc/03_ros2_nodes_topics_services.md](doc/03_ros2_nodes_topics_services.md) |
 | **`bumperbot_py_examples`** | `ament_python` | Python (`rclpy`) reference implementations | 12 tutorial nodes (Pub/Sub, Service, Action, TF2, QoS) | [doc/03_ros2_nodes_topics_services.md](doc/03_ros2_nodes_topics_services.md) |
 
@@ -353,6 +357,24 @@ ros2 topic echo /explore/status
 
 SLAM map quality: `bumperbot_mapping/map_compare.py` compares a saved map with the reference after a rigid alignment and checks for fans and seams (see doc/08). The opt-in full-stack test runs with `BUMPERBOT_SLAM_E2E=1 colcon test --packages-select bumperbot_bringup --ctest-args -R test_slam_map_quality_mujoco` on its own `ROS_DOMAIN_ID`. When mapping, use a dedicated `ROS_DOMAIN_ID` and make sure no old simulator stack is running ([doc/12](doc/12_troubleshooting.md)). The MuJoCo model uses frictionless casters (`priority="1"`) and a stiffer wheel contact so that wheel odometry matches the true motion ([doc/05](doc/05_robot_description_and_simulation.md)).
 
+### 3c. AGV Waypoint Missions (Nav2 + mission_manager)
+
+The robot visits named stations of the saved `small_house` map in order, dwells at each one and returns to the dock:
+
+```bash
+# Terminal 1: simulator (gazebo or mujoco) + AMCL + Nav2 + mission_manager
+ros2 launch bumperbot_bringup mission_sim.launch.py simulator:=mujoco world_name:=small_house
+# Optional: use_python:=true (Python node), stations_file:=<file>, viewer:=false use_rviz:=false (headless)
+
+# Terminal 2: run a mission and follow the feedback
+ros2 action send_goal /execute_mission bumperbot_msgs/action/ExecuteMission "{stations: [pickup, dropoff]}" --feedback
+
+# Terminal 3: mission status (transient_local)
+ros2 topic echo /mission/status
+```
+
+Stations (`x`, `y`, `yaw`, `dwell`, plus the `dock`) are defined in `bumperbot_navigation/config/stations.yaml`. After Nav2 reports success, `mission_manager` checks with TF (`map -> base_footprint`) that the robot is within `goal_tolerance` (0.2 m); a failed station is retried `max_retries` times and then skipped; too many consecutive failures abort the mission; the end of the mission, an error and a cancel all send the robot back to the dock. Nav2 velocity goes through `twist_mux` as `nav_vel` (priority 20: below joystick and keyboard, above exploration; the `safety_stop` lock still wins). See [doc/10_navigation.md](doc/10_navigation.md).
+
 ### 4. Sensor Fusion with Extended Kalman Filter (EKF)
 
 Fuse wheel odometry with simulated IMU orientation:
@@ -400,6 +422,8 @@ ros2 service call /add_two_ints bumperbot_msgs/srv/AddTwoInts "{a: 10, b: 25}"
 # Action Invocations
 ros2 action list
 ros2 action send_goal /fibonacci bumperbot_msgs/action/Fibonacci "{order: 10}"
+ros2 action send_goal /execute_mission bumperbot_msgs/action/ExecuteMission "{stations: [pickup, dropoff]}" --feedback
+ros2 topic echo /mission/status
 
 # Coordinate Frames & TF2
 ros2 run tf2_tools view_frames
@@ -440,7 +464,7 @@ Detailed architectural and theoretical guides are available in the [doc/](doc/) 
 8. [**07. LiDAR Processing & Reactive Safety**](doc/07_lidar_and_sensor_processing.md) — Ray range filtering, IMU republisher, and safety supervisors.
 9. [**08. Mapping & SLAM**](doc/08_mapping_and_slam.md) — Occupancy grid algorithms, raycasting, and `slam_toolbox`.
 10. [**09. State Estimation & Localization**](doc/09_localization.md) — 1D Kalman filter, sample motion models, EKF, and AMCL.
-11. [**10. Navigation & Path Planning (Nav2)**](doc/10_navigation.md) — Nav2 gap analysis and step-by-step production implementation blueprint.
+11. [**10. Navigation & Path Planning (Nav2)**](doc/10_navigation.md) — Nav2 configuration, AGV mission manager (`bumperbot_navigation`, `/execute_mission`, `/mission/status`, `stations.yaml`) and Nav2 background.
 12. [**11. Build, Run & Command Reference**](doc/11_build_run_and_command_reference.md) — Complete handbook of verified commands.
 13. [**12. Troubleshooting & Diagnostics**](doc/12_troubleshooting.md) — Master failure diagnostic matrix and resolution procedures.
 14. [**13. AI Development Workflow**](doc/13_ai_development_workflow.md) — Claude Code feature pipeline: subagents, skills, hooks and the implement/test loop.

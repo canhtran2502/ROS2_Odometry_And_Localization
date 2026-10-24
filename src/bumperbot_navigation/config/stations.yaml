@@ -1,0 +1,10 @@
+# Stations on the saved small_house map. x, y in m (map frame), yaw in rad, dwell in s.
+# The robot spawns at (0, 0, 0) in simulation and AMCL starts there, so the dock is the spawn pose.
+frame_id: map
+map: small_house
+dock_station: dock
+stations:
+  dock:    {x: 0.0,  y: 0.0,  yaw: 0.0,  dwell: 0.0}
+  pickup:  {x: -1.5, y: 1.5,  yaw: 1.57, dwell: 3.0}
+  dropoff: {x: 3.0,  y: -2.5, yaw: 0.0,  dwell: 3.0}
+  storage: {x: -5.0, y: -3.0, yaw: 3.14, dwell: 3.0}

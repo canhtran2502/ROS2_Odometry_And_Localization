@@ -1,0 +1,205 @@
+# Shared parity cases for the Python and C++ MissionTracker (executed by both test suites).
+#
+# stations_file: stations file (relative to this directory) the tracker is built with.
+# params: TrackerParams overrides (defaults: max_retries 2, max_consecutive_failures 2,
+#         dock_max_retries 3, return_to_dock true, goal_tolerance 0.2).
+# events: consumed one per emitted step, in order:
+#   nav: {ok: bool, err: meters}  reported for a NAVIGATE step (err < 0 means NaN / TF unknown)
+#   dwell_done: true              reported for a DWELL step
+#   cancel: true                  request_cancel() instead of a report for the current step
+# expect.steps: every step emitted by next_step(), formatted as
+#   NAVIGATE:<station>:<attempt>[:dock]  |  DWELL:<station>  |  FINISHED
+stations_file: stations_test.yaml
+cases:
+  - name: ordered_success_then_dock
+    stations: [a, b, c]
+    events:
+      - {nav: {ok: true, err: 0.05}}
+      - {dwell_done: true}
+      - {nav: {ok: true, err: 0.05}}
+      - {dwell_done: true}
+      - {nav: {ok: true, err: 0.05}}
+      - {dwell_done: true}
+      - {nav: {ok: true, err: 0.05}}
+    expect:
+      steps: ["NAVIGATE:a:1", "DWELL:a", "NAVIGATE:b:1", "DWELL:b", "NAVIGATE:c:1", "DWELL:c",
+              "NAVIGATE:dock:1:dock", "FINISHED"]
+      outcome: 0
+      docked: true
+      visited: [a, b, c]
+      skipped: []
+      state: COMPLETED
+      progress: 1.0
+
+  - name: retry_then_success
+    stations: [b]
+    events:
+      - {nav: {ok: false, err: 0.0}}
+      - {nav: {ok: false, err: 0.0}}
+      - {nav: {ok: true, err: 0.0}}
+      - {dwell_done: true}
+      - {nav: {ok: true, err: 0.0}}
+    expect:
+      steps: ["NAVIGATE:b:1", "NAVIGATE:b:2", "NAVIGATE:b:3", "DWELL:b", "NAVIGATE:dock:1:dock",
+              "FINISHED"]
+      outcome: 0
+      docked: true
+      visited: [b]
+      skipped: []
+      progress: 1.0
+
+  - name: skip_after_max_retries_plus_one_failures
+    stations: [u1, c]
+    events:
+      - {nav: {ok: false, err: 0.0}}
+      - {nav: {ok: false, err: 0.0}}
+      - {nav: {ok: false, err: 0.0}}
+      - {nav: {ok: true, err: 0.0}}
+      - {dwell_done: true}
+      - {nav: {ok: true, err: 0.0}}
+    expect:
+      steps: ["NAVIGATE:u1:1", "NAVIGATE:u1:2", "NAVIGATE:u1:3", "NAVIGATE:c:1", "DWELL:c",
+              "NAVIGATE:dock:1:dock", "FINISHED"]
+      outcome: 1
+      docked: true
+      visited: [c]
+      skipped: [u1]
+      state: COMPLETED
+      progress: 1.0
+
+  - name: distance_error_too_large_counts_as_failure
+    stations: [b]
+    events:
+      - {nav: {ok: true, err: 0.35}}
+      - {nav: {ok: true, err: 0.15}}
+      - {dwell_done: true}
+      - {nav: {ok: true, err: 0.0}}
+    expect:
+      steps: ["NAVIGATE:b:1", "NAVIGATE:b:2", "DWELL:b", "NAVIGATE:dock:1:dock", "FINISHED"]
+      outcome: 0
+      docked: true
+      visited: [b]
+      skipped: []
+
+  - name: unknown_tf_counts_as_failure
+    stations: [b]
+    params: {max_retries: 0}
+    events:
+      - {nav: {ok: true, err: -1.0}}
+      - {nav: {ok: true, err: 0.0}}
+    expect:
+      steps: ["NAVIGATE:b:1", "NAVIGATE:dock:1:dock", "FINISHED"]
+      outcome: 1
+      docked: true
+      visited: []
+      skipped: [b]
+
+  - name: abort_after_consecutive_skips_then_dock
+    stations: [u1, u2, c]
+    events:
+      - {nav: {ok: false, err: 0.0}}
+      - {nav: {ok: false, err: 0.0}}
+      - {nav: {ok: false, err: 0.0}}
+      - {nav: {ok: false, err: 0.0}}
+      - {nav: {ok: false, err: 0.0}}
+      - {nav: {ok: false, err: 0.0}}
+      - {nav: {ok: true, err: 0.0}}
+    expect:
+      steps: ["NAVIGATE:u1:1", "NAVIGATE:u1:2", "NAVIGATE:u1:3",
+              "NAVIGATE:u2:1", "NAVIGATE:u2:2", "NAVIGATE:u2:3",
+              "NAVIGATE:dock:1:dock", "FINISHED"]
+      outcome: 2
+      docked: true
+      visited: []
+      skipped: [u1, u2]
+      state: ABORTED
+
+  - name: cancel_during_navigation_then_dock
+    stations: [a, b]
+    events:
+      - {nav: {ok: true, err: 0.0}}
+      - {dwell_done: true}
+      - {cancel: true}
+      - {nav: {ok: true, err: 0.0}}
+    expect:
+      steps: ["NAVIGATE:a:1", "DWELL:a", "NAVIGATE:b:1", "NAVIGATE:dock:1:dock", "FINISHED"]
+      outcome: 3
+      docked: true
+      visited: [a]
+      skipped: []
+      state: CANCELED
+
+  - name: cancel_during_dwell_then_dock
+    stations: [a, b]
+    events:
+      - {nav: {ok: true, err: 0.0}}
+      - {cancel: true}
+      - {nav: {ok: true, err: 0.0}}
+    expect:
+      steps: ["NAVIGATE:a:1", "DWELL:a", "NAVIGATE:dock:1:dock", "FINISHED"]
+      outcome: 3
+      docked: true
+      visited: [a]
+      skipped: []
+      state: CANCELED
+
+  - name: dock_unreachable
+    stations: [a]
+    params: {dock_max_retries: 1}
+    events:
+      - {nav: {ok: true, err: 0.0}}
+      - {dwell_done: true}
+      - {nav: {ok: false, err: 0.0}}
+      - {nav: {ok: false, err: 0.0}}
+    expect:
+      steps: ["NAVIGATE:a:1", "DWELL:a", "NAVIGATE:dock:1:dock", "NAVIGATE:dock:2:dock",
+              "FINISHED"]
+      outcome: 4
+      docked: false
+      visited: [a]
+      skipped: []
+      state: DOCK_FAILED
+
+  - name: mission_ending_at_dock_sends_no_second_dock_goal
+    stations: [a, dock]
+    events:
+      - {nav: {ok: true, err: 0.0}}
+      - {dwell_done: true}
+      - {nav: {ok: true, err: 0.0}}
+    expect:
+      steps: ["NAVIGATE:a:1", "DWELL:a", "NAVIGATE:dock:1", "FINISHED"]
+      outcome: 0
+      docked: true
+      visited: [a, dock]
+      skipped: []
+      progress: 1.0
+
+  - name: no_return_to_dock_when_disabled
+    stations: [b]
+    params: {return_to_dock: false}
+    events:
+      - {nav: {ok: true, err: 0.0}}
+      - {dwell_done: true}
+    expect:
+      steps: ["NAVIGATE:b:1", "DWELL:b", "FINISHED"]
+      outcome: 0
+      docked: false
+      visited: [b]
+      skipped: []
+
+  - name: abort_disabled_with_zero_consecutive_limit
+    stations: [u1, u2, c]
+    params: {max_consecutive_failures: 0, max_retries: 0}
+    events:
+      - {nav: {ok: false, err: 0.0}}
+      - {nav: {ok: false, err: 0.0}}
+      - {nav: {ok: true, err: 0.0}}
+      - {dwell_done: true}
+      - {nav: {ok: true, err: 0.0}}
+    expect:
+      steps: ["NAVIGATE:u1:1", "NAVIGATE:u2:1", "NAVIGATE:c:1", "DWELL:c",
+              "NAVIGATE:dock:1:dock", "FINISHED"]
+      outcome: 1
+      docked: true
+      visited: [c]
+      skipped: [u1, u2]

@@ -1,0 +1,5 @@
+frame_id: map
+dock_station: dock
+stations:
+  dock: {x: 0.0, y: 0.0, yaw: 0.0, dwell: 0.0}
+  a: {x: .nan, y: 0.5, yaw: 0.5, dwell: 1.0}

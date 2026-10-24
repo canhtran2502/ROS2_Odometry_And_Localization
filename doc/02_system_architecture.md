@@ -40,7 +40,7 @@ The software architecture is partitioned into seven distinct, decoupled operatio
                                       v (emergency inhibitor signal)
 +----------------------------------------------------------------------------------------------------+
 |                               TIER 3: VELOCITY MULTIPLEXING & RELAYS                               |
-|   [twist_mux]                        <--- Joy (99) / Key (90) / Locks: safety_stop (255)            |
+|   [twist_mux]                        <--- Joy (99) / Key (90) / Nav (20) / Explore (10) / Locks: 255|
 |   [twist_relay]                      Translates Twist unstamped <-> TwistStamped                    |
 +----------------------------------------------------------------------------------------------------+
                                       |
@@ -59,6 +59,10 @@ The software architecture is partitioned into seven distinct, decoupled operatio
 |               [mpu6050_driver]     <-> Linux I2C (/dev/i2c-1)   <-> MPU6050 6-DoF Sensor            |
 +----------------------------------------------------------------------------------------------------+
 ```
+
+### Navigation and Mission Layer (`bumperbot_navigation`)
+
+On top of the tiers above, the Nav2 servers (`planner_server`, `controller_server`, `behavior_server`, `bt_navigator`) turn a `NavigateToPose` goal into velocity commands on `nav_vel` (a `twist_mux` input, priority 20), using the `map` from `map_server`, `map -> odom` from AMCL and `/scan`. The `mission_manager` (C++ or Python) sits above Nav2: it exposes `/execute_mission` and `/mission/status`, sends one `NavigateToPose` goal per station and verifies the reached pose through TF `map -> base_footprint`. It depends only on that action, TF and its own interfaces, not on the simulator. The `twist_mux` priorities are joystick 99 > keyboard 90 > navigation 20 > exploration 10, with the `safety_stop` lock (255) above all. See [10_navigation.md](10_navigation.md).
 
 ---
 

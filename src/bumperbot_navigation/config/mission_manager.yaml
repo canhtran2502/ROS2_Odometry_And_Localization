@@ -1,0 +1,22 @@
+# Parameters of the mission_manager node (C++ and Python versions use the same names/defaults).
+mission_manager:
+  ros__parameters:
+    # Empty: <share bumperbot_navigation>/config/stations.yaml
+    stations_file: ""
+    nav_action_name: navigate_to_pose
+    global_frame: map
+    robot_frame: base_footprint
+    # Planar distance (m) accepted as "reached" after Nav2 reports SUCCEEDED
+    goal_tolerance: 0.2
+    # Extra attempts per station (max_retries + 1 attempts in total)
+    max_retries: 2
+    retry_delay: 1.0
+    # Consecutive skipped stations that abort the mission (0 = never)
+    max_consecutive_failures: 2
+    dock_max_retries: 3
+    return_to_dock: true
+    nav_server_timeout: 10.0
+    nav_goal_timeout: 300.0
+    tf_timeout: 1.0
+    status_rate: 2.0
+    behavior_tree: ""

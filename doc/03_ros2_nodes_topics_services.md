@@ -133,6 +133,23 @@ This document provides a comprehensive, verified catalog of every ROS 2 node, to
 
 ---
 
+### 4b. Navigation & Mission Nodes
+
+#### `mission_manager` (`mission_manager.cpp` / `mission_manager.py`)
+- **Package**: `bumperbot_navigation`
+- **Purpose**: AGV waypoint missions. Visits the stations of `stations.yaml` in order through Nav2, checks the reached pose with TF, dwells, retries and skips failed stations, and returns to the dock at the end, on error and on cancel. The state machine is the pure library `mission_logic` (C++) / `mission_logic.py`; both languages are checked against the same case table.
+- **Action server**: `/execute_mission` (`bumperbot_msgs/action/ExecuteMission`); rejects an empty list, unknown stations and a goal while a mission is active
+- **Action client**: `navigate_to_pose` (`nav2_msgs/action/NavigateToPose`)
+- **Publications**: `/mission/status` (`bumperbot_msgs/msg/MissionStatus`, reliable + transient_local)
+- **TF Lookups**: `map` -> `base_footprint` (latest, after each Nav2 success)
+- **Parameters**: `stations_file`, `nav_action_name`, `global_frame`, `robot_frame`, `goal_tolerance`, `max_retries`, `retry_delay`, `max_consecutive_failures`, `dock_max_retries`, `return_to_dock`, `nav_server_timeout`, `nav_goal_timeout`, `tf_timeout`, `status_rate`, `behavior_tree` (see `config/mission_manager.yaml`)
+- **Launch**: `bumperbot_bringup/launch/mission_sim.launch.py` (see doc/10)
+
+#### Nav2 servers (`navigation.launch.py`)
+`controller_server` and `behavior_server` (`cmd_vel` remapped to `nav_vel`), `planner_server`, `bt_navigator` and `lifecycle_manager_navigation`, configured by `bumperbot_navigation/config/nav2_params.yaml`.
+
+---
+
 ### 5. Physical Hardware & Serial Bridge Nodes
 
 #### `mpu6050_driver` (`mpu6050_driver.py`)
@@ -179,6 +196,8 @@ This document provides a comprehensive, verified catalog of every ROS 2 node, to
 | `/imu_ekf` | `sensor_msgs/msg/Imu` | `imu_republisher_node` | `robot_localization` (EKF) | Axis-corrected IMU data for fusion |
 | `/scan` | `sensor_msgs/msg/LaserScan` | `ros_gz_bridge` (LiDAR) | `safety_stop`, `nav2_amcl`, `slam_toolbox` | 2D planar laser range scan |
 | `explore_vel` | `geometry_msgs/msg/Twist` | `frontier_explorer` | `twist_mux` (input `explore`, priority 10) | Autonomous exploration velocity demand (lowest priority; joystick 99 > keyboard 90 > explore 10; the `safety_stop` lock 255 wins) |
+| `nav_vel` | `geometry_msgs/msg/Twist` | Nav2 `controller_server`, `behavior_server` | `twist_mux` (input `navigation`, priority 20) | Nav2 velocity demand (joystick 99 > keyboard 90 > navigation 20 > explore 10; the `safety_stop` lock 255 wins; nothing publishes it on the real robot) |
+| `/mission/status` | `bumperbot_msgs/msg/MissionStatus` | `mission_manager` | User / tests | Mission state, current station, progress, visited and skipped stations (transient_local) |
 | `/explore/status` | `std_msgs/msg/String` | `frontier_explorer` | User / tests | `WAITING_FOR_MAP`, `EXPLORING`, `COMPLETE`, `MAP_SAVED`, `MAP_SAVE_FAILED` (latched) |
 | `/explore/path` | `nav_msgs/msg/Path` | `frontier_explorer` | RViz2 | Current A* path |
 | `/explore/frontiers` | `visualization_msgs/msg/MarkerArray` | `frontier_explorer` | RViz2 | Frontier centroids and selected goal |
@@ -192,7 +211,7 @@ This document provides a comprehensive, verified catalog of every ROS 2 node, to
 
 ## D. Custom Interfaces (`bumperbot_msgs`)
 
-The `bumperbot_msgs` package defines three custom IDL interfaces used throughout the example suite:
+The `bumperbot_msgs` package defines custom IDL interfaces: three used throughout the example suite and two for the mission manager (`action/ExecuteMission.action`, `msg/MissionStatus.msg`, section 4 and 5):
 
 ### 1. `srv/AddTwoInts.srv`
 ```idl
@@ -227,3 +246,45 @@ int32[] sequence
 int32[] partial_sequence
 ```
 
+### 4. `action/ExecuteMission.action` (`/execute_mission`)
+```idl
+# Goal: ordered list of station names from stations.yaml
+string[] stations
+---
+# Result
+uint8 OUTCOME_COMPLETED=0
+uint8 OUTCOME_COMPLETED_WITH_SKIPS=1
+uint8 OUTCOME_ABORTED=2
+uint8 OUTCOME_CANCELED=3
+uint8 OUTCOME_DOCK_FAILED=4
+uint8 outcome
+bool docked
+string[] visited
+string[] skipped
+string message
+---
+# Feedback
+string state
+string current_station
+int32 current_index
+uint32 total_stations
+uint32 attempt
+float32 progress
+float32 distance_remaining
+```
+
+### 5. `msg/MissionStatus.msg` (`/mission/status`)
+```idl
+# State constants: IDLE, NAVIGATING, DWELLING, RETURNING_TO_DOCK, COMPLETED, ABORTED, CANCELED, DOCK_FAILED
+builtin_interfaces/Time stamp
+string state
+string current_station
+int32 current_index
+uint32 total_stations
+uint32 attempt
+float32 progress
+string[] stations
+string[] visited
+string[] skipped
+string message
+```

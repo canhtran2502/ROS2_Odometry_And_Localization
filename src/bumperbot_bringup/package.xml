@@ -17,12 +17,15 @@
   <exec_depend>bumperbot_mapping</exec_depend>
   <exec_depend>bumperbot_localization</exec_depend>
   <exec_depend>bumperbot_utils</exec_depend>
+  <exec_depend>bumperbot_navigation</exec_depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
   <test_depend>ament_cmake_pytest</test_depend>
   <test_depend>launch_testing_ament_cmake</test_depend>
   <test_depend>launch_testing_ros</test_depend>
+  <test_depend>nav2_msgs</test_depend>
+  <test_depend>bumperbot_msgs</test_depend>
   <test_depend>python3-scipy</test_depend>
   <test_depend>python3-yaml</test_depend>
 

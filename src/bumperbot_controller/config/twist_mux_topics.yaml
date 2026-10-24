@@ -16,3 +16,10 @@ twist_mux:
         topic: explore_vel
         timeout: 0.5
         priority: 10
+      # Nav2 navigation (mission_manager missions); above exploration, below the joystick and
+      # the keyboard. The safety_stop lock (255) still overrides it. Nothing publishes on
+      # nav_vel on the real robot unless navigation.launch.py is started.
+      navigation:
+        topic: nav_vel
+        timeout: 0.5
+        priority: 20

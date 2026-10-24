@@ -19,6 +19,15 @@ if(BUILD_TESTING)
   if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test/test_launch_config.py)
     ament_add_pytest_test(test_launch_config test/test_launch_config.py TIMEOUT 120)
   endif()
+  if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test/test_mission_launch_config.py)
+    ament_add_pytest_test(test_mission_launch_config test/test_mission_launch_config.py
+      TIMEOUT 120)
+  endif()
+  # Headless MuJoCo mission smoke test; the full mission E2E needs BUMPERBOT_MISSION_E2E=1
+  if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test/test_mission_sim_mujoco.launch.py)
+    add_launch_test(test/test_mission_sim_mujoco.launch.py
+      TARGET test_mission_sim_mujoco TIMEOUT 900)
+  endif()
   if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test/test_auto_explore_mujoco.launch.py)
     add_launch_test(test/test_auto_explore_mujoco.launch.py
       TARGET test_auto_explore_mujoco TIMEOUT 180)
