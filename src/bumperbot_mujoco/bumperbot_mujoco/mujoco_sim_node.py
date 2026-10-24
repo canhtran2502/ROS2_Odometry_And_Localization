@@ -3,6 +3,7 @@
 
 It replaces the Gazebo + ros_gz_bridge pair and provides the same interface to the rest of the stack:
   publishes   /clock, /scan, /imu/out, /mujoco/joint_states
+              /mujoco/ground_truth (simulation only, base_footprint pose in world)
   subscribes  /mujoco/joint_commands   (wheel velocity commands from topic_based_ros2_control)
 """
 import math
@@ -11,6 +12,7 @@ import os
 import rclpy
 from ament_index_python.packages import get_package_share_directory
 from builtin_interfaces.msg import Time
+from nav_msgs.msg import Odometry
 from rclpy.node import Node
 from rosgraph_msgs.msg import Clock
 from sensor_msgs.msg import Imu, JointState, LaserScan
@@ -26,6 +28,8 @@ LASER_RANGE_MAX = 12.0
 LASER_NOISE_STD = 0.01
 LASER_RATE = 5.0
 TICK_RATE = 100.0
+# Ground truth (simulation only) is published every GROUND_TRUTH_EVERY ticks: 50 Hz
+GROUND_TRUTH_EVERY = 2
 
 
 def to_time_msg(seconds):
@@ -57,6 +61,8 @@ class MujocoSimNode(Node):
         self.scan_pub = self.create_publisher(LaserScan, "/scan", 10)
         self.imu_pub = self.create_publisher(Imu, "/imu/out", 10)
         self.joint_state_pub = self.create_publisher(JointState, "/mujoco/joint_states", 10)
+        # Simulator ground truth of base_footprint in the world frame (equals map), simulation only
+        self.ground_truth_pub = self.create_publisher(Odometry, "/mujoco/ground_truth", 10)
         self.create_subscription(JointState, "/mujoco/joint_commands", self.command_callback, 10)
 
         self.viewer = None
@@ -89,6 +95,8 @@ class MujocoSimNode(Node):
         self.publish_imu(stamp)
         if self.tick % self.scan_every == 0:
             self.publish_scan(stamp)
+        if self.tick % GROUND_TRUTH_EVERY == 0:
+            self.publish_ground_truth(stamp)
         self.tick += 1
         if self.viewer is not None:
             if self.viewer.is_running():
@@ -103,6 +111,18 @@ class MujocoSimNode(Node):
         msg.position = self.sim.wheel_positions()
         msg.velocity = self.sim.wheel_velocities()
         self.joint_state_pub.publish(msg)
+
+    def publish_ground_truth(self, stamp):
+        x, y, yaw = self.sim.base_pose()
+        msg = Odometry()
+        msg.header.stamp = stamp
+        msg.header.frame_id = "world"
+        msg.child_frame_id = "base_footprint"
+        msg.pose.pose.position.x = x
+        msg.pose.pose.position.y = y
+        msg.pose.pose.orientation.z = math.sin(yaw / 2.0)
+        msg.pose.pose.orientation.w = math.cos(yaw / 2.0)
+        self.ground_truth_pub.publish(msg)
 
     def publish_imu(self, stamp):
         orientation, gyro, accel = self.sim.imu()

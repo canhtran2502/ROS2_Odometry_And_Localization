@@ -59,6 +59,7 @@ BumperBot is designed for roboticists and embedded software engineers mastering 
 | **Hardware Interface** | Verified | C++ `hardware_interface` over `/dev/ttyUSB0` + Arduino PID |
 | **Autonomous Exploration** | Verified | `frontier_explorer`: frontier detection, grid A*, pure pursuit on top of `slam_toolbox`, saves the map when done (`auto_explore.launch.py`) |
 | **Autonomous Navigation (Nav2)** | Verified (MuJoCo simulation) | Nav2 planner, controller, behaviors and `bt_navigator` configured in `bumperbot_navigation` (`navigation.launch.py`); velocity enters `twist_mux` as `nav_vel`. See [doc/10_navigation.md](doc/10_navigation.md) |
+| **Auto-Docking and Battery** | In progress (MuJoCo simulation) | `dock_manager` (`/dock_robot`, C++/Python) + `battery_monitor`; `battery_sim` and `dock_marker_sim` are simulation only (`dock_sim.launch.py`); velocity on `dock_vel` (twist_mux priority 30) |
 | **AGV Waypoint Missions** | Verified (MuJoCo simulation) | `mission_manager` + `stations.yaml`: ordered stations, dwell, retry/skip, dock return (`mission_sim.launch.py`) |
 
 ---
@@ -175,7 +176,7 @@ bumperbot_ws/
 
 | Package | Type | Primary Responsibilities | Key Nodes & Entry Points | Documentation |
 | :--- | :--- | :--- | :--- | :--- |
-| **`bumperbot_bringup`** | `ament_cmake` | Master system integration & unified launch orchestration | `simulated_robot.launch.py`, `real_robot.launch.py`, `auto_explore.launch.py`, `mission_sim.launch.py` | [doc/01_repository_structure.md](doc/01_repository_structure.md) |
+| **`bumperbot_bringup`** | `ament_cmake` | Master system integration & unified launch orchestration | `simulated_robot.launch.py`, `real_robot.launch.py`, `auto_explore.launch.py`, `mission_sim.launch.py`, `dock_sim.launch.py` | [doc/01_repository_structure.md](doc/01_repository_structure.md) |
 | **`bumperbot_controller`** | `ament_cmake` + Python | Analytical kinematics, noisy odometry, and teleop arbitration | `simple_controller`, `noisy_controller`, `twist_relay` | [doc/06_odometry_and_motion_control.md](doc/06_odometry_and_motion_control.md) |
 | **`bumperbot_description`** | `ament_cmake` | URDF/Xacro modeling, visual/collision meshes, Gazebo worlds | `display.launch.py`, `gazebo.launch.py` | [doc/05_robot_description_and_simulation.md](doc/05_robot_description_and_simulation.md) |
 | **`bumperbot_mujoco`** | `ament_python` | MuJoCo simulation: robot and world MJCF models, ROS 2 bridge (`/clock`, `/scan`, `/imu/out`, wheel commands) | `mujoco_sim_node`, `mujoco.launch.py` | [doc/05_robot_description_and_simulation.md](doc/05_robot_description_and_simulation.md) |
@@ -374,6 +375,27 @@ ros2 topic echo /mission/status
 ```
 
 Stations (`x`, `y`, `yaw`, `dwell`, plus the `dock`) are defined in `bumperbot_navigation/config/stations.yaml`. After Nav2 reports success, `mission_manager` checks with TF (`map -> base_footprint`) that the robot is within `goal_tolerance` (0.2 m); a failed station is retried `max_retries` times and then skipped; too many consecutive failures abort the mission; the end of the mission, an error and a cancel all send the robot back to the dock (skipped only when the robot is currently at the dock). `stations.yaml` must not contain duplicate names, numeric fields must be plain YAML numbers, and its `frame_id` must equal the `global_frame` parameter. A cancel in progress ends the action CANCELED even if the dock return fails (`outcome` stays `DOCK_FAILED`). Timing: dwell, `retry_delay` and the `/mission/status` timer use the node clock (sim time with `use_sim_time`), while `nav_goal_timeout`, `nav_server_timeout` and `tf_timeout` use wall time; a node-clock wait ends after `clock_stall_timeout` (default 30 s, wall; 0 disables) without the clock advancing. If Nav2 disappears mid-goal for `nav_server_timeout`, that attempt fails at once. On Ctrl+C/SIGTERM the active Nav2 goal is canceled (best effort) and the mission thread is joined before exit. Nav2 velocity goes through `twist_mux` as `nav_vel` (priority 20: below joystick and keyboard, above exploration; the `safety_stop` lock still wins). See [doc/10_navigation.md](doc/10_navigation.md).
+
+### 3d. Auto-Docking and Battery (dock_manager + battery_monitor)
+
+The robot docks to a charger on its own, charges and undocks again. `dock_manager` (C++ and Python, same behavior) serves the `/dock_robot` action (`bumperbot_msgs/action/DockRobot`, command DOCK or UNDOCK): it drives to the dock station of `stations.yaml` (the staging pose) with Nav2, then backs straight into the charger (0.5 m behind the staging pose), closed loop on odometry, and verifies the final pose. State and result are published on `/dock/status` (`DockStatus`). `battery_monitor` watches `/battery_state`: below `low_threshold` (0.20) it cancels an active mission (the `mission_manager` returns to the dock station), sends DOCK, waits in CHARGING until `full_threshold` (0.95) and then sends UNDOCK. In simulation `battery_sim` (**simulation only**) publishes `/battery_state` (drains while idle, faster while moving, charges while docked).
+
+```bash
+# Terminal 1: mission stack + dock_manager + battery_monitor + battery_sim + dock marker emulator
+ros2 launch bumperbot_bringup dock_sim.launch.py simulator:=mujoco
+# Optional: use_python:=true, battery_initial:=0.5, viewer:=false use_rviz:=false (headless)
+
+# Terminal 2: dock by hand (command 0 = DOCK, 1 = UNDOCK) and watch the state
+ros2 action send_goal /dock_robot bumperbot_msgs/action/DockRobot "{command: 0}" --feedback
+ros2 topic echo /dock/status
+
+# Terminal 3: force a low battery (automatic dock sequence) -- battery_sim is simulation only
+ros2 param set /battery_sim percentage_override 0.15
+```
+
+Dock detection decision: the dock target is the known map pose of the charger, refined by an abstract fiducial-style pose topic `/dock/detected_pose` (`geometry_msgs/PoseStamped`). A LiDAR dock detector was rejected: it needs a dock model in the world (this would change the world behind the saved map and AMCL tests), and a LiDAR-visible dock right behind the robot is closer than the `safety_stop` `danger_distance` (0.2 m), so the lock (255) would block the final insertion. In MuJoCo the sim-only `dock_marker_sim` (`bumperbot_mujoco`) emulates a rear-facing detector from `/mujoco/ground_truth` (range, field of view, seeded noise). With `simulator:=gazebo` no emulator runs and `detection_mode: optional` falls back to the map pose (precision then depends on the AMCL error).
+
+Safety: docking velocity enters `twist_mux` as `dock_vel` (priority 30: above Nav2 `nav_vel` 20, below keyboard 90 and joystick 99). The `safety_stop` lock (255) still overrides it; `dock_manager` only reads `/safety_stop`, commands zero while it is locked and fails the attempt after `safety_stop_timeout`. Every failure, cancel and shutdown ends with a zero velocity command. `docking.launch.py` is not part of `real_robot.launch.py`, so nothing publishes `dock_vel` on the real robot unless it is started explicitly. See [doc/10_navigation.md](doc/10_navigation.md) and [doc/12](doc/12_troubleshooting.md).
 
 ### 4. Sensor Fusion with Extended Kalman Filter (EKF)
 

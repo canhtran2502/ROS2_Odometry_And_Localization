@@ -67,6 +67,10 @@ graph TD
 
 ---
 
+## C2. Frames Used by Auto-Docking
+
+`dock_manager` publishes no TF. It reads `map -> base_footprint`, `map -> odom` and `odom -> base_footprint` and runs the final approach in `odom` (smooth, no AMCL jumps). The charger pose is the `base_footprint` pose when docked: `staging_distance` (0.5 m) behind the staging pose (the `dock` station of `stations.yaml`), on the staging heading. Detections on `/dock/detected_pose` may be in any TF-resolvable frame (simulation: `base_footprint`; real robot: e.g. a camera frame) and are transformed into `odom` at their stamp (fallback: latest transform). The three frame names must be distinct, and `global_frame` must equal the `frame_id` of `stations.yaml`. In MuJoCo the world frame equals `map` because the robot spawns at (0, 0, 0) and AMCL starts there; `/mujoco/ground_truth` carries the frame id `world` only inside that message (it is not in TF) and is used by the simulation-only `dock_marker_sim` and the tests.
+
 ## D. Detailed Joint & Transform Offsets Table
 
 | Parent Frame | Child Frame | Transform Type | Source Broadcaster | Translation $(x, y, z)$ [m] | Rotation $(R, P, Y)$ [rad] |

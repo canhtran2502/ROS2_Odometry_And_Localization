@@ -1,0 +1,22 @@
+# SIMULATION ONLY: emulated rear-facing dock marker detector (MuJoCo).
+# dock_x/dock_y/dock_yaw is the charger pose (the docked base_footprint pose) in the MuJoCo
+# world frame, which equals the map frame. It must match the charger pose computed by
+# dock_manager from the dock station of stations.yaml (staging pose 0.5 m in front).
+dock_marker_sim:
+  ros__parameters:
+    dock_x: -0.5
+    dock_y: 0.0
+    dock_yaw: 0.0
+    # Detection range in m and field of view in rad
+    max_range: 2.0
+    fov: 2.1
+    # Side of the robot the detector looks at: rear or front
+    facing: rear
+    # Gaussian noise standard deviations (m, rad) and the random seed
+    position_noise: 0.005
+    yaw_noise: 0.01
+    seed: 7
+    rate: 10.0
+    ground_truth_topic: /mujoco/ground_truth
+    detection_topic: /dock/detected_pose
+    detection_frame: base_footprint

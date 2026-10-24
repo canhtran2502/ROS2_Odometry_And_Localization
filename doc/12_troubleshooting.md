@@ -93,6 +93,15 @@ Cause: `topic_based_ros2_control/TopicBasedSystem::write()` only publishes when 
 
 ---
 
+### 3c. Docking fails: `safety_stop` lock near a physical dock, missing detection, AMCL bias
+
+- **`safety_stop` lock near a physical dock (real robot).** A real charger body within `danger_distance` (0.2 m) of the LiDAR raises the `/safety_stop` lock (255) while the robot backs in. `dock_manager` then commands zero and the attempt ends with `SAFETY_TIMEOUT` after `safety_stop_timeout`, ending as `OUTCOME_DOCKING_FAILED`. This is the intended safe behavior. Fix it in hardware or configuration (mount the dock below the scan plane, or a `danger_distance` change reviewed by the user). Never bypass the lock in docking code.
+- **No detection (`OUTCOME_DETECTION_FAILED`, or `detection_used: false`).** Check `ros2 topic hz /dock/detected_pose`. In simulation `dock_marker_sim` runs only with `simulator:=mujoco` and only sees the charger within `max_range` 2.0 m and the rear field of view; with Gazebo, `detection_mode: optional` falls back to the map pose. `required` needs a detection within `detection_timeout`.
+- **Final error above 0.05 m without detections.** The map-only target is limited by the AMCL error. Use a detector, or relocalize before docking.
+- **DOCK rejected.** The reply says why: mission active, `map -> base_footprint` or `odom -> base_footprint` missing, Nav2 `navigate_to_pose` not ready, or the state is not DOCKED for UNDOCK.
+
+---
+
 ### 4. Cleaning Zombie Background Processes
 (MuJoCo: an old `mujoco_sim_node`, `ros2_control_node` or `twist_mux` from an earlier launch keeps publishing `/clock`, `/scan` and TF on the same domain and corrupts a new run. Check with `ros2 topic info /clock`; clean up with `pkill -f mujoco_sim_node`, `pkill -f ros2_control_node`, `pkill -f twist_mux`.)
 

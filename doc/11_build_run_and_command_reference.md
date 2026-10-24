@@ -92,6 +92,7 @@ colcon build --symlink-install --packages-select bumperbot_firmware bumperbot_br
 | `ros2 launch bumperbot_bringup simulated_robot.launch.py use_slam:=true` | `world_name:=small_house`<br>`use_slam:=true` | Gazebo, `diff_drive_controller`, `twist_mux`, `safety_stop`, `slam_toolbox`, `map_saver_server`, RViz2 (SLAM layout) | RViz shows dynamic map generation as robot explores |
 | `ros2 launch bumperbot_bringup auto_explore.launch.py` | `simulator:=gazebo`<br>`world_name:=small_house`<br>`use_rviz:=true`<br>`viewer:=true`<br>`map_save_path:=` (empty = YAML value) | `simulated_robot.launch.py use_slam:=True` + `frontier_explorer` | Robot explores the world, `/explore/status` goes to `MAP_SAVED`, map saved under `~/bumperbot_maps/` |
 | `ros2 launch bumperbot_bringup mission_sim.launch.py` | `simulator:=gazebo`<br>`world_name:=small_house`<br>`use_rviz:=true`<br>`viewer:=true`<br>`use_python:=false`<br>`stations_file:=` (package default)<br>`mission_config:=` (package default) | `simulated_robot.launch.py use_slam:=False` + `navigation.launch.py` + `mission_manager` | `/execute_mission` and `/navigate_to_pose` available, `/mission/status` is `IDLE`; send a mission with `ros2 action send_goal /execute_mission bumperbot_msgs/action/ExecuteMission "{stations: [pickup, dropoff]}" --feedback` |
+| `ros2 launch bumperbot_bringup dock_sim.launch.py` | `simulator:=mujoco`<br>`world_name:=small_house`<br>`use_rviz:=true`<br>`viewer:=true`<br>`use_python:=false`<br>`battery_initial:=1.0`<br>`battery_sim_config:=`, `dock_marker_config:=` (package defaults) | `mission_sim.launch.py` + `docking.launch.py` (`dock_manager`, `battery_monitor`) + `battery_sim` (simulation only) + `dock_marker_sim` (simulation only, `simulator:=mujoco`) | `/dock_robot` available, `/dock/status` is UNDOCKED, `/battery_state` published; `dock_vel` is a `twist_mux` input (priority 30) |
 | `ros2 launch bumperbot_navigation navigation.launch.py` | `use_sim_time:=false`<br>`nav2_params:=` (package default) | `controller_server`, `planner_server`, `behavior_server`, `bt_navigator`, `lifecycle_manager_navigation` (velocity on `nav_vel`) | Nav2 lifecycle nodes active; needs a map, AMCL and TF |
 | `ros2 launch bumperbot_bringup real_robot.launch.py` | N/A | `ros2_control_node` (`BumperbotInterface`), `diff_drive_controller`, `mpu6050_driver.py`, `twist_mux` | Robot drives via serial commands to Arduino; IMU publishes at 100 Hz |
 | `ros2 launch bumperbot_description display.launch.py` | `model:=bumperbot.urdf.xacro` | `robot_state_publisher`, `joint_state_publisher_gui`, RViz2 | Interactive joint slider GUI and 3D visual robot model |
@@ -143,7 +144,7 @@ ros2 run bumperbot_localization imu_republisher
 ### 2b. Navigation & Missions
 ```bash
 # Build the mission packages (interfaces first)
-colcon build --packages-select bumperbot_msgs bumperbot_controller bumperbot_navigation bumperbot_bringup
+colcon build --packages-select bumperbot_msgs bumperbot_controller bumperbot_navigation bumperbot_mujoco bumperbot_bringup
 
 # Run the mission manager alone (C++ or Python); it needs a Nav2 navigate_to_pose server and TF
 ros2 run bumperbot_navigation mission_manager
@@ -153,6 +154,14 @@ ros2 run bumperbot_navigation mission_manager.py
 # Mission interfaces
 ros2 action send_goal /execute_mission bumperbot_msgs/action/ExecuteMission "{stations: [pickup, dropoff]}" --feedback
 ros2 topic echo /mission/status
+
+# Docking: dock_manager alone (C++ or Python; needs Nav2, TF and a /dock/detected_pose source or detection_mode:=none)
+ros2 launch bumperbot_navigation docking.launch.py use_sim_time:=true use_python:=false
+ros2 action send_goal /dock_robot bumperbot_msgs/action/DockRobot "{command: 0}" --feedback   # DOCK (1 = UNDOCK)
+ros2 topic echo /dock/status
+ros2 param set /battery_sim percentage_override 0.15     # simulation only: trigger the low-battery dock sequence
+# Docking tests (isolate with a dedicated domain)
+ROS_DOMAIN_ID=90 ROS_LOCALHOST_ONLY=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 colcon test --packages-select bumperbot_msgs bumperbot_navigation bumperbot_mujoco bumperbot_bringup
 
 # Tests (headless, mock Nav2); isolate them with a dedicated domain
 ROS_DOMAIN_ID=88 ROS_LOCALHOST_ONLY=1 colcon test --packages-select bumperbot_navigation bumperbot_bringup

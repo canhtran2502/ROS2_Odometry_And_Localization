@@ -13,6 +13,8 @@ find_package(rclpy REQUIRED)
 find_package(bumperbot_msgs REQUIRED)
 find_package(nav2_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(std_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
@@ -36,13 +38,26 @@ ament_target_dependencies(mission_manager
   rclcpp rclcpp_action bumperbot_msgs nav2_msgs geometry_msgs tf2 tf2_ros tf2_geometry_msgs
   ament_index_cpp)
 
-install(TARGETS mission_logic
+# Pure docking logic, no ROS dependency
+add_library(dock_logic src/dock_logic.cpp)
+target_include_directories(dock_logic PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>)
+target_link_libraries(dock_logic PUBLIC mission_logic)
+
+add_executable(dock_manager src/dock_manager.cpp)
+target_link_libraries(dock_manager dock_logic mission_logic)
+ament_target_dependencies(dock_manager
+  rclcpp rclcpp_action bumperbot_msgs nav2_msgs geometry_msgs sensor_msgs std_msgs tf2 tf2_ros
+  tf2_geometry_msgs ament_index_cpp)
+
+install(TARGETS mission_logic dock_logic
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION bin
 )
 
-install(TARGETS mission_manager
+install(TARGETS mission_manager dock_manager
   DESTINATION lib/${PROJECT_NAME}
 )
 
@@ -52,6 +67,9 @@ install(DIRECTORY include
 
 install(PROGRAMS
   ${PROJECT_NAME}/mission_manager.py
+  ${PROJECT_NAME}/dock_manager.py
+  ${PROJECT_NAME}/battery_monitor.py
+  ${PROJECT_NAME}/battery_sim.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
@@ -78,17 +96,37 @@ if(BUILD_TESTING)
       CONFIG_DIR="${CMAKE_CURRENT_SOURCE_DIR}/config")
   endif()
 
+  if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test/test_dock_logic.cpp)
+    ament_add_gtest(test_dock_logic_cpp test/test_dock_logic.cpp)
+    target_link_libraries(test_dock_logic_cpp dock_logic mission_logic)
+    target_compile_definitions(test_dock_logic_cpp PRIVATE
+      TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/test/data"
+      CONFIG_DIR="${CMAKE_CURRENT_SOURCE_DIR}/config")
+  endif()
+
   foreach(py_test
       test_mission_logic
       test_stations_on_map
       test_interfaces_and_static
-      test_mission_docs)
+      test_mission_docs
+      test_dock_logic
+      test_dock_geometry_on_map
+      test_battery_logic
+      test_dock_static
+      test_dock_docs)
     if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test/${py_test}.py)
       ament_add_pytest_test(${py_test} test/${py_test}.py
         APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR}:${CMAKE_CURRENT_SOURCE_DIR}/test
         TIMEOUT 120)
     endif()
   endforeach()
+
+  # Process-level robustness tests start both dock_manager executables
+  if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test/test_dock_robustness.py)
+    ament_add_pytest_test(test_dock_robustness test/test_dock_robustness.py
+      APPEND_ENV PYTHONPATH=${CMAKE_CURRENT_SOURCE_DIR}:${CMAKE_CURRENT_SOURCE_DIR}/test
+      TIMEOUT 600)
+  endif()
 
   if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test/test_mission_manager.launch.py)
     add_launch_test(test/test_mission_manager.launch.py
@@ -98,6 +136,16 @@ if(BUILD_TESTING)
   if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test/test_mission_review_fixes.launch.py)
     add_launch_test(test/test_mission_review_fixes.launch.py
       TARGET test_mission_review_fixes TIMEOUT 360)
+  endif()
+
+  if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test/test_dock_manager.launch.py)
+    add_launch_test(test/test_dock_manager.launch.py
+      TARGET test_dock_manager TIMEOUT 900)
+  endif()
+
+  if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test/test_battery_nodes.launch.py)
+    add_launch_test(test/test_battery_nodes.launch.py
+      TARGET test_battery_nodes TIMEOUT 400)
   endif()
 endif()
 

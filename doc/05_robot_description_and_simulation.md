@@ -148,6 +148,12 @@ robot xacro --(simulator:=mujoco)--> topic_based_ros2_control/TopicBasedSystem
 - `mujoco_sim_node` wraps `bumperbot_mujoco/sim_core.py` (pure Python, no ROS). Wheels use velocity servos, the IMU uses MuJoCo `gyro`/`accelerometer`/`framequat` sensors with the Gazebo noise values, and the lidar casts 360 rays with `mj_multiRay` against the world collision geoms only.
 - Geom groups: 1 robot visual, 2 world visual, 3 robot collision, 4 world collision (hidden in the viewer, hit by the lidar).
 
+### Ground truth and dock marker emulator (simulation only)
+
+- `mujoco_sim_node` publishes `/mujoco/ground_truth` (`nav_msgs/Odometry`, `frame_id world`, `child_frame_id base_footprint`, 50 Hz, simulator stamp) from `BumperbotSim.base_pose()`. The world frame equals `map` (the robot spawns at the origin where AMCL starts). Existing topics are unchanged.
+- `dock_marker_sim` (`config/dock_marker_sim.yaml`, charger pose `dock_x/y/yaw` = (-0.5, 0, 0), `max_range` 2.0 m, `fov` 2.1 rad, `facing: rear`, seeded noise) turns the ground truth into `/dock/detected_pose`, standing in for a fiducial detector. It is started only by `dock_sim.launch.py` with `simulator:=mujoco`.
+- `battery_sim` (`bumperbot_navigation`, **simulation only**) publishes `/battery_state`; it is also started only by `dock_sim.launch.py`. The world has no dock model on purpose (the saved map and the AMCL tests depend on the world), see [10_navigation.md](10_navigation.md).
+
 ### Generated assets
 
 `mjcf/` and `meshes/` are generated and committed, so normal users do not need the converters. Regenerate them after changing the URDF or the SDF worlds (`pip install -r src/bumperbot_mujoco/tools/requirements.txt`):

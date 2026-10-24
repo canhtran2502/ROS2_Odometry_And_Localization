@@ -36,7 +36,8 @@ bumperbot_ws/
     │       ├── real_robot.launch.py                   # Physical AMR hardware launch
     │       ├── simulated_robot.launch.py              # Full simulation bringup (Gazebo/MuJoCo, RViz/SLAM/AMCL)
     │       ├── auto_explore.launch.py                 # SLAM + frontier_explorer autonomous exploration
-    │       └── mission_sim.launch.py                  # Simulator + AMCL + Nav2 + mission_manager (AGV missions)
+    │       ├── mission_sim.launch.py                  # Simulator + AMCL + Nav2 + mission_manager (AGV missions)
+    │       └── dock_sim.launch.py                     # mission_sim + dock_manager + battery_sim + dock marker emulator
     │
     ├── bumperbot_controller/                          # Kinematics, odometry, velocity multiplexing
     │   ├── CMakeLists.txt
@@ -57,7 +58,7 @@ bumperbot_ws/
     │   │   ├── bumperbot_controllers.yaml             # ros2_control diff_drive_controller parameters
     │   │   ├── joy_config.yaml                        # Linux joystick device driver configuration
     │   │   ├── joy_teleop.yaml                        # Button-to-Twist axis mappings
-    │   │   ├── twist_mux_topics.yaml                  # Priority input channels (joy:99, key:90)
+    │   │   ├── twist_mux_topics.yaml                  # Priority input channels (joy:99, key:90, dock:30, nav:20, explore:10)
     │   │   ├── twist_mux_locks.yaml                   # Safety stop emergency inhibitor lock (255)
     │   │   └── twist_mux_joy.yaml                     # Turbo speed scaling configuration
     │   └── launch/
@@ -66,6 +67,7 @@ bumperbot_ws/
     │
     ├── bumperbot_description/                         # Robot kinematics, visual/collision meshes, worlds
     ├── bumperbot_mujoco/                              # MuJoCo models, ROS 2 bridge node, SDF/URDF converters
+    │   │                                              # (also /mujoco/ground_truth, dock_marker_sim.py + config/dock_marker_sim.yaml, sim only)
     │   ├── CMakeLists.txt
     │   ├── package.xml
     │   ├── urdf/
@@ -170,19 +172,32 @@ bumperbot_ws/
     │   ├── package.xml
     │   ├── include/bumperbot_navigation/
     │   │   ├── mission_logic.hpp                      # C++ pure mission logic API (no rclcpp)
-    │   │   └── mission_manager.hpp                    # C++ mission_manager node class
+    │   │   ├── mission_manager.hpp                    # C++ mission_manager node class
+    │   │   ├── dock_logic.hpp                         # C++ pure docking logic API (no rclcpp)
+    │   │   └── dock_manager.hpp                       # C++ dock_manager node class
     │   ├── src/
     │   │   ├── mission_logic.cpp                      # Station loading (yaml-cpp) + MissionTracker
-    │   │   └── mission_manager.cpp                    # C++ /execute_mission server + Nav2 client
+    │   │   ├── mission_manager.cpp                    # C++ /execute_mission server + Nav2 client
+    │   │   ├── dock_logic.cpp                         # Docking geometry, controller, DockTracker
+    │   │   └── dock_manager.cpp                       # C++ /dock_robot server + Nav2 client
     │   ├── bumperbot_navigation/
     │   │   ├── mission_logic.py                       # Python twin of mission_logic.cpp (no rclpy)
-    │   │   └── mission_manager.py                     # Python twin of mission_manager.cpp
+    │   │   ├── mission_manager.py                     # Python twin of mission_manager.cpp
+    │   │   ├── dock_logic.py                          # Python twin of dock_logic.cpp (no rclpy)
+    │   │   ├── dock_manager.py                        # Python twin of dock_manager.cpp
+    │   │   ├── battery_logic.py                       # BatteryModel (sim) + BatteryMonitorLogic (no rclpy)
+    │   │   ├── battery_monitor.py                     # Low-battery dock trigger, undock when full
+    │   │   └── battery_sim.py                         # SIMULATION ONLY: /battery_state publisher
     │   ├── config/
     │   │   ├── stations.yaml                          # Named stations on small_house, incl. the dock
     │   │   ├── mission_manager.yaml                   # mission_manager parameters
+    │   │   ├── dock_manager.yaml                      # dock_manager parameters
+    │   │   ├── battery_monitor.yaml                   # battery_monitor parameters
+    │   │   ├── battery_sim.yaml                       # SIMULATION ONLY: battery model parameters
     │   │   └── nav2_params.yaml                       # Nav2 parameters for BumperBot
     │   ├── launch/
-    │   │   └── navigation.launch.py                   # Nav2 servers + lifecycle manager
+    │   │   ├── navigation.launch.py                   # Nav2 servers + lifecycle manager
+    │   │   └── docking.launch.py                      # dock_manager + battery_monitor (simulator independent)
     │   └── test/                                      # Unit, launch and static tests + shared test data
     │
     ├── bumperbot_msgs/                                # Custom ROS 2 IDL interface definitions
