@@ -288,3 +288,121 @@ def test_sim_time_with_running_clock_docks(impl, tmp_path, rig_factory):
     time.sleep(0.4)
     assert (w.cmds[-1]["v"], w.cmds[-1]["w"]) == (0.0, 0.0)
     assert math.isfinite(pos)
+
+
+# ====================================================================== review fix M1
+# A Nav2 goal request that is still unanswered when the dock goal ends (cancel, shutdown, stalled
+# clock, answer timeout) must not leave an orphan Nav2 goal: a goal accepted late is canceled
+# exactly once. The mock Nav2 holds its goal response back (nav_accept_delay) and then accepts.
+NAV_PARAMS = {"nav_server_timeout": 10.0, "nav_goal_timeout": 30.0}
+
+
+def start_slow_nav(rig, impl, tmp_path, delay, params=None):
+    """Start the node with a Nav2 whose goal response takes ``delay`` s; send a DOCK goal."""
+    merged = dict(NAV_PARAMS)
+    merged.update(params or {})
+    proc = start_ready(rig, impl, tmp_path, merged, pose=FAR_START, nav_script={"duration": 30.0})
+    rig.world.nav_accept_delay = delay
+    run = send(rig)
+    wait_state(rig, "NAVIGATING_TO_STAGING", 10.0)
+    assert wait_until(lambda: len(rig.world.nav_goals) == 1, 5.0), "no Nav2 goal request"
+    time.sleep(0.2)     # the request is in flight: Nav2 has not answered yet
+    assert not rig.world.nav_cancel_requests
+    return proc, run
+
+
+def assert_one_late_cancel(rig, proc, timeout):
+    """Expect exactly one cancel request for the late-accepted Nav2 goal, and it stays at one."""
+    assert wait_until(lambda: len(rig.world.nav_cancel_requests) >= 1, timeout), \
+        "the late-accepted Nav2 goal was never canceled\n" + proc.log()
+    time.sleep(1.5)
+    assert len(rig.world.nav_cancel_requests) == 1, rig.world.nav_cancel_requests
+    assert len(rig.world.nav_goals) == 1, "unexpected extra Nav2 goals"
+    assert wait_until(lambda: len(rig.world.nav_cancels) == 1, 3.0), \
+        "the mock Nav2 did not end the goal as canceled"
+
+
+@pytest.mark.parametrize("delay", [0.5, 2.0])
+def test_m1_cancel_before_nav2_answers_cancels_the_late_goal(delay, impl, tmp_path, rig_factory):
+    """M1: DockRobot cancel while the Nav2 request is unanswered -> late goal canceled once."""
+    rig = rig_factory()
+    proc, run = start_slow_nav(rig, impl, tmp_path, delay)
+    t_cancel = time.monotonic()
+    rig.world.cancel(run)
+    assert wait_until(lambda: run.result is not None, 5.0), "no result\n" + proc.log()
+    assert run.result.status == GoalStatus.STATUS_CANCELED
+    assert run.result.result.outcome == R.OUTCOME_CANCELED
+    assert not run.result.result.docked
+    assert run.t_result - t_cancel <= 2.5, "the cancel took {:.2f} s".format(
+        run.t_result - t_cancel)
+    assert_one_late_cancel(rig, proc, delay + 3.0)
+    assert not [c for c in rig.world.cmds if moving(c)]
+    assert proc.alive(), proc.log()
+    assert "Traceback" not in proc.log(), proc.log()
+
+
+@pytest.mark.parametrize("signal_name", sorted(SIGNALS))
+def test_m1_shutdown_before_nav2_answers_cancels_the_late_goal(
+        signal_name, impl, tmp_path, rig_factory):
+    """M1: SIGINT / SIGTERM while the request is unanswered: the late goal is canceled once."""
+    rig = rig_factory()
+    proc, run = start_slow_nav(rig, impl, tmp_path, 0.5)
+    proc.send_signal(SIGNALS[signal_name])
+    code = proc.wait_exit(10.0)
+    assert code == 0, "exit code {}\n{}".format(code, proc.log())
+    assert_aborted_with_error(run)
+    assert_one_late_cancel(rig, proc, 3.0)
+    assert not [c for c in rig.world.cmds if moving(c)]
+    assert "Traceback" not in proc.log() and "terminate called" not in proc.log(), proc.log()
+
+
+def test_m1_clock_stall_before_nav2_answers_cancels_the_late_goal(impl, tmp_path, rig_factory):
+    """M1: the node clock stalls while the request is unanswered: the late goal is canceled."""
+    rig = rig_factory(sim_time=True)
+    assert wait_until(lambda: rig.clock.sim > 1000.5, 5.0)
+    params = dict(SIM_PARAMS)
+    params["nav_server_timeout"] = 20.0
+    proc, run = start_slow_nav(rig, impl, tmp_path, 6.0, params)
+    rig.clock.speed = 0.0
+    t_stop = time.monotonic()
+    assert wait_until(lambda: run.result is not None, 3.0 + 3.0), \
+        "no result after the clock stopped\n" + proc.log()
+    assert run.result.status == ABORTED
+    assert run.result.result.outcome == R.OUTCOME_ERROR
+    assert run.t_result - t_stop <= 3.0 + 3.0
+    assert_one_late_cancel(rig, proc, 6.0 + 3.0)
+    assert not [c for c in rig.world.cmds if moving(c)]
+    assert proc.alive(), proc.log()
+
+
+def test_m1_answer_timeout_cancels_every_late_goal(impl, tmp_path, rig_factory):
+    """M1: Nav2 answers later than nav_server_timeout: each late goal is canceled exactly once."""
+    rig = rig_factory()
+    proc = start_ready(rig, impl, tmp_path, {"nav_server_timeout": 1.0}, pose=FAR_START,
+                       nav_script={"duration": 30.0})
+    rig.world.nav_accept_delay = 2.5
+    run = send(rig)
+    assert wait_until(lambda: run.result is not None, 60.0), "no result\n" + proc.log()
+    assert run.result.status == ABORTED
+    assert run.result.result.outcome in (R.OUTCOME_STAGING_FAILED, R.OUTCOME_ERROR)
+    goals = len(rig.world.nav_goals)
+    assert goals >= 1
+    assert wait_until(lambda: len(rig.world.nav_cancel_requests) == goals, 2.5 + 3.0), \
+        "{} cancels for {} Nav2 goals\n{}".format(
+            len(rig.world.nav_cancel_requests), goals, proc.log())
+    time.sleep(1.5)
+    assert len(rig.world.nav_cancel_requests) == goals
+    assert len(rig.world.nav_goals) == goals
+    assert not [c for c in rig.world.cmds if moving(c)]
+
+
+def test_m1_goal_answered_in_time_is_not_canceled_early(impl, tmp_path, rig_factory):
+    """Control: with a Nav2 that answers within the timeout the goal runs until it succeeds."""
+    rig = rig_factory()
+    start_ready(rig, impl, tmp_path, NAV_PARAMS, pose=FAR_START, nav_script={"duration": 0.5})
+    rig.world.nav_accept_delay = 1.0
+    run = send(rig)
+    assert rig.world.wait_result(run, 120.0), "no result"
+    assert run.result.status == GoalStatus.STATUS_SUCCEEDED, run.result.result.message
+    assert rig.world.nav_cancel_requests == []
+    assert len(rig.world.nav_goals) == 1

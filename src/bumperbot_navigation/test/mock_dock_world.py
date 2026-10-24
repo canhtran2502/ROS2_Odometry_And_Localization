@@ -76,6 +76,8 @@ class GoalRun:
         self.result = None      # GetResult response (status + result)
         self.t_result = None
         self.t_cancel = None
+        self.cancel_code = None     # return_code of the cancel response (ERROR_NONE = accepted)
+        self.cancel_state = None    # /dock/status state that triggers a cancel (cancel_on_state)
         self.error = None
 
     @property
@@ -123,7 +125,10 @@ class MockDockWorld(Node):
         self.nav_cancels = []   # dicts: t
         self.nav_results = []   # dicts: t, result
         self.nav_count = 0
+        self.nav_accept_delay = 0.0     # seconds the Nav2 goal response is held back
+        self.nav_cancel_requests = []   # dicts: t (every cancel request the Nav2 server received)
         self.status_log = []    # dicts, one per /dock/status message
+        self.cancel_triggers = []   # GoalRuns that are canceled when their cancel_state shows up
         self.inject_index = 0
         self.nav_epoch = 0
         self.closing = False
@@ -137,10 +142,8 @@ class MockDockWorld(Node):
                                  callback_group=self.timer_group)
         self.safety_pub = self.create_publisher(Bool, "/safety_stop", 10)
         self.detection_pub = self.create_publisher(PoseStamped, "/dock/detected_pose", 10)
-        self.mission_pub = self.create_publisher(
-            MissionStatus, "/mission/status",
-            QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
-                       durability=DurabilityPolicy.TRANSIENT_LOCAL))
+        self.mission_pub = None
+        self.make_mission_publisher()
         self.battery_pub = self.create_publisher(BatteryState, "/battery_state", 10)
         for period, callback in ((STEP_PERIOD, self.step), (0.1, self.publish_detection),
                                  (0.02, self.publish_safety), (0.5, self.publish_battery),
@@ -179,7 +182,11 @@ class MockDockWorld(Node):
             self.nav_cancels = []
             self.nav_results = []
             self.nav_count = 0
+            self.nav_accept_delay = 0.0
+            self.nav_cancel_requests = []
+            self.cancel_triggers = []
             self.status_log = []
+        self.make_mission_publisher()
 
     def teleport(self, pose):
         """Move the robot (O and T) without any command, e.g. to push it away from the dock."""
@@ -211,7 +218,26 @@ class MockDockWorld(Node):
             self.nav_server.destroy()
             self.nav_server = None
 
+    def make_mission_publisher(self):
+        """Create the latched /mission/status publisher unless it exists."""
+        if self.mission_pub is None:
+            self.mission_pub = self.create_publisher(
+                MissionStatus, "/mission/status",
+                QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
+                           durability=DurabilityPolicy.TRANSIENT_LOCAL))
+
+    def drop_mission_publisher(self):
+        """
+        Remove the /mission/status publisher (mission_manager died).
+
+        The last sample stays latched in the subscribers but nobody publishes any more.
+        """
+        if self.mission_pub is not None:
+            self.destroy_publisher(self.mission_pub)
+            self.mission_pub = None
+
     def set_mission(self, state):
+        self.make_mission_publisher()
         msg = MissionStatus()
         msg.stamp = self.get_clock().now().to_msg()
         msg.state = state
@@ -286,6 +312,11 @@ class MockDockWorld(Node):
         with self.lock:
             self.state = msg.state
             self.status_log.append(entry)
+            runs = list(self.cancel_triggers)
+        for run in runs:
+            if (run.cancel_state == msg.state and run.t_cancel is None
+                    and run.handle is not None and run.result is None):
+                self.cancel(run)
 
     # ------------------------------------------------------------------ periodic work
     def step(self):
@@ -406,9 +437,16 @@ class MockDockWorld(Node):
             self.nav_goals.append({
                 "t": time.monotonic(), "frame_id": pose.header.frame_id, "x": pose.pose.position.x,
                 "y": pose.pose.position.y, "yaw": yaw_of(pose.pose.orientation)})
+            delay = self.nav_accept_delay
+        # A slow Nav2: the goal response is held back, then the goal is accepted
+        end = time.monotonic() + delay
+        while time.monotonic() < end and not self.closing:
+            time.sleep(0.01)
         return GoalResponse.ACCEPT
 
     def nav_on_cancel(self, _handle):
+        with self.lock:
+            self.nav_cancel_requests.append({"t": time.monotonic()})
         return CancelResponse.ACCEPT
 
     def nav_execute(self, goal_handle):
@@ -494,7 +532,22 @@ class MockDockWorld(Node):
 
     def cancel(self, run):
         run.t_cancel = time.monotonic()
-        run.handle.cancel_goal_async()
+        future = run.handle.cancel_goal_async()
+
+        def on_cancel_response(done):
+            try:
+                run.cancel_code = done.result().return_code
+            except Exception:  # noqa: BLE001
+                run.cancel_code = -1
+
+        future.add_done_callback(on_cancel_response)
+        return future
+
+    def cancel_on_state(self, run, state):
+        """Cancel the goal as soon as a /dock/status message with this state arrives."""
+        run.cancel_state = state
+        with self.lock:
+            self.cancel_triggers.append(run)
 
     def wait_decision(self, run, timeout=5.0):
         end = time.monotonic() + timeout

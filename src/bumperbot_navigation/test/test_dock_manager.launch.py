@@ -512,6 +512,214 @@ class TestCancelAndErrors(DockTestCase):
         self.assert_fresh_goal_possible()
 
 
+# ====================================================================== review fix M2, M4 (node)
+MISSION_MESSAGE = "a mission became active during the dock goal"
+
+
+class TestMissionInterlock(DockTestCase):
+    """Iteration 2: a mission that becomes active during a dock goal ends it (M2)."""
+
+    def interlock(self, impl, label, pose, script, wait, mission_state, motion):
+        self.prepare(impl, pose=pose, nav_script=script)
+        w = self.world
+        run = self.accepted_goal()
+        wait()
+        if label == "NAVIGATING":
+            self.assertTrue(wait_until(lambda: len(w.nav_goals) == 1, 5.0))
+            time.sleep(0.3)
+        t_mission = time.monotonic()
+        w.set_mission(mission_state)
+        status, result = self.finish(run, 15.0)
+        what = "{} / {}".format(label, mission_state)
+        self.assertEqual(status, ABORTED, what + ": " + result.message)
+        self.assertEqual(result.outcome, R.OUTCOME_ERROR, what)
+        self.assertFalse(result.docked, what)
+        self.assertIn(MISSION_MESSAGE, result.message, what)
+        self.assertLessEqual(run.t_result - t_mission, 2.0, what + ": ended too late")
+        if label == "NAVIGATING":
+            self.assertTrue(wait_until(lambda: len(w.nav_cancels) >= 1, 3.0),
+                            what + ": the Nav2 goal was not canceled")
+            self.assert_no_motion()
+        else:
+            self.assert_stop_after(t_mission, 0.5, what)
+        if w.commands_since(0.0):
+            self.assert_last_command_zero()
+        self.assert_idle_state("FAILED")
+        self.assertFalse(w.last_status()["docked"], what)
+        # the mission ends: the node accepts a new goal again
+        w.set_mission("CANCELED")
+        time.sleep(0.6)
+        self.assert_fresh_goal_possible()
+
+    def test_mission_during_navigation(self, impl):
+        """M2: NAVIGATING_TO_STAGING + mission NAVIGATING -> ERROR, Nav2 canceled, no motion."""
+        self.interlock(impl, "NAVIGATING", FAR_START, {"duration": 30.0},
+                       lambda: self.wait_state("NAVIGATING_TO_STAGING", 10.0),
+                       "NAVIGATING", False)
+
+    def test_mission_during_navigation_returning_to_dock(self, impl):
+        """M2: RETURNING_TO_DOCK counts as an active mission as well."""
+        self.interlock(impl, "NAVIGATING", FAR_START, {"duration": 30.0},
+                       lambda: self.wait_state("NAVIGATING_TO_STAGING", 10.0),
+                       "RETURNING_TO_DOCK", False)
+
+    def test_mission_during_alignment(self, impl):
+        """M2: ALIGNING + mission DWELLING -> ERROR within 2 s and zero cmd_vel."""
+        self.interlock(impl, "ALIGNING", (0.2, 0.1, 0.3), {},
+                       lambda: self.wait_state("ALIGNING", 20.0, moving_cmd=True),
+                       "DWELLING", True)
+
+    def test_mission_during_docking(self, impl):
+        """M2: DOCKING + mission NAVIGATING -> ERROR and zero cmd_vel, not docked."""
+        self.interlock(impl, "DOCKING", NEAR_START, {},
+                       lambda: self.wait_state("DOCKING", 30.0, moving_cmd=True),
+                       "NAVIGATING", True)
+
+    def test_inactive_mission_states_do_not_abort(self, impl):
+        """Control: IDLE / COMPLETED / CANCELED status messages never interrupt a dock goal."""
+        self.prepare(impl, pose=NEAR_START)
+        w = self.world
+        run = self.accepted_goal()
+        self.wait_state("DOCKING", 30.0, moving_cmd=True)
+        for state in ("IDLE", "COMPLETED", "CANCELED", "ABORTED", "DOCK_FAILED"):
+            w.set_mission(state)
+            time.sleep(0.2)
+        status, result = self.finish(run, 60.0)
+        self.assertEqual(status, SUCCEEDED, result.message)
+        self.assertEqual(result.outcome, R.OUTCOME_DOCKED)
+
+    def test_dock_rejected_with_an_active_mission_and_a_live_publisher(self, impl):
+        """Control for M4: with mission_manager alive an active mission still rejects DOCK."""
+        self.prepare(impl, pose=NEAR_START)
+        w = self.world
+        w.set_mission("NAVIGATING")
+        time.sleep(0.8)
+        run = self.start_goal()
+        self.assertFalse(run.accepted, "DOCK accepted during a mission")
+        self.assertLessEqual(run.t_decision - run.t_sent, 1.0)
+        w.set_mission("IDLE")
+
+    def test_stale_latched_mission_is_ignored_at_acceptance(self, impl):
+        """M4: NAVIGATING latched but no /mission/status publisher left -> DOCK is accepted."""
+        self.prepare(impl, pose=NEAR_START)
+        w = self.world
+        w.set_mission("NAVIGATING")
+        time.sleep(0.8)
+        w.drop_mission_publisher()
+        self.assertTrue(wait_until(lambda: not w.publishers_of("/mission/status"), 5.0))
+        time.sleep(1.0)
+        accepted = []
+
+        def retry():
+            run = self.start_goal()
+            if run.accepted:
+                accepted.append(run)
+            return bool(accepted)
+
+        self.assertTrue(wait_until(retry, 8.0, 0.5),
+                        "DOCK rejected because of a stale mission status\n" + self.log())
+        w.cancel(accepted[0])
+        status, _ = self.finish(accepted[0], 15.0)
+        self.assertEqual(status, CANCELED)
+        w.set_mission("IDLE")
+
+
+# ====================================================================== review fix L3
+class TestCancelAfterDecision(DockTestCase):
+    """Iteration 2: a cancel after the successful verify must not turn the goal into CANCELED."""
+
+    def test_cancel_right_after_already_docked_decision(self, impl):
+        """L3: ALREADY_DOCKED is decided at once; a cancel arriving later ends SUCCEEDED."""
+        self.prepare(impl, pose=NEAR_START)
+        run, status, result = self.dock()
+        self.assertEqual(result.outcome, R.OUTCOME_DOCKED, result.message)
+        accepted_cancels = 0
+        for attempt in range(10):
+            run = self.start_goal()
+            self.assertTrue(run.accepted)
+            self.world.cancel(run)
+            status, result = self.finish(run, 10.0)
+            self.assertTrue(wait_until(lambda: run.cancel_code is not None, 2.0))
+            if run.cancel_code == 0:       # ERROR_NONE: the cancel reached a running goal
+                accepted_cancels += 1
+            self.assertEqual(status, SUCCEEDED, "attempt {}: {}".format(attempt, result.message))
+            self.assertEqual(result.outcome, R.OUTCOME_ALREADY_DOCKED, attempt)
+            self.assertTrue(result.docked, attempt)
+        # evidence that the test really hits CANCELING -> SUCCEEDED (not only terminal goals)
+        print("L3[{}]: {} of 10 cancels reached the running goal".format(
+            impl, accepted_cancels))
+        self.assertGreaterEqual(accepted_cancels, 1,
+                                "no cancel reached a running goal: the test never hit the window")
+
+    def test_cancel_right_after_verify_dock_and_undock(self, impl):
+        """L3: cancel on the final DOCKED / UNDOCKED status (after the decision) -> SUCCEEDED."""
+        self.prepare(impl, pose=NEAR_START)
+        w = self.world
+        hits = []
+        for attempt in range(3):
+            w.teleport(NEAR_START)
+            time.sleep(0.8)
+            run = self.accepted_goal()
+            w.cancel_on_state(run, "DOCKED")
+            status, result = self.finish(run, 60.0)
+            self.assertIsNotNone(run.t_cancel, "the DOCKED status never triggered the cancel")
+            self.assertTrue(wait_until(lambda: run.cancel_code is not None, 2.0))
+            hits.append(run.cancel_code)
+            self.assertEqual(status, SUCCEEDED, "dock {}: {}".format(attempt, result.message))
+            self.assertEqual(result.outcome, R.OUTCOME_DOCKED)
+            self.assertTrue(result.docked)
+            self.assertTrue(wait_until(lambda: (w.last_status() or {}).get("docked"), 3.0))
+            self.assert_docked_pose()
+            self.assert_last_command_zero()
+
+            run = self.accepted_goal(DockRobot.Goal.COMMAND_UNDOCK)
+            w.cancel_on_state(run, "UNDOCKED")
+            status, result = self.finish(run, 60.0)
+            self.assertIsNotNone(run.t_cancel, "the UNDOCKED status never triggered the cancel")
+            self.assertEqual(status, SUCCEEDED, "undock {}: {}".format(attempt, result.message))
+            self.assertEqual(result.outcome, R.OUTCOME_UNDOCKED)
+            self.assertFalse(result.docked)
+            self.assert_last_command_zero()
+        print("L3[{}]: dock cancel return codes {}".format(impl, hits))
+
+    def test_cancel_during_motion_phases_still_cancels(self, impl):
+        """L3 regression: cancel before the decision (ALIGNING, DOCKING) is CANCELED, zero cmd."""
+        w = self.world
+        for pose, phase in (((0.2, 0.1, 0.3), "ALIGNING"), (NEAR_START, "DOCKING")):
+            self.prepare(impl, pose=pose)
+            run = self.accepted_goal()
+            self.wait_state(phase, 30.0, moving_cmd=True)
+            t_cancel = time.monotonic()
+            w.cancel(run)
+            status, result = self.finish(run, 15.0)
+            self.assertEqual(status, CANCELED, phase)
+            self.assertEqual(result.outcome, R.OUTCOME_CANCELED, phase)
+            self.assertFalse(result.docked)
+            self.assert_stop_after(t_cancel, 0.2, "cancel in " + phase)
+
+
+# ====================================================================== test infrastructure
+class TestImplementationUnderTest(DockTestCase):
+    """Guard: each parametrization really runs its own executable (cpp is an ELF binary)."""
+
+    def test_the_requested_implementation_is_running(self, impl):
+        self.prepare(impl, pose=NEAR_START)
+        pid = self.rig.proc.pid
+        exe = os.path.realpath("/proc/{}/exe".format(pid))
+        with open("/proc/{}/cmdline".format(pid), "rb") as f:
+            cmdline = f.read().replace(b"\0", b" ").decode()
+        with open(exe, "rb") as f:
+            magic = f.read(4)
+        if impl == "cpp":
+            self.assertEqual(magic, b"\x7fELF", exe)
+            self.assertTrue(exe.endswith("/lib/bumperbot_navigation/dock_manager"), exe)
+            self.assertNotIn("dock_manager.py", cmdline)
+        else:
+            self.assertIn("python", os.path.basename(exe))
+            self.assertIn("dock_manager.py", cmdline)
+        self.assertEqual(self.node_impl, impl)
+
+
 # ====================================================================== AC11
 class TestDockedFlag(DockTestCase):
 
@@ -693,21 +901,28 @@ class TestUndock(DockTestCase):
 # ====================================================================== AC20 (runtime)
 class TestParameterParity(DockTestCase):
 
+    def call(self, client, request, what):
+        """Call a service; a lost request is sent again (3 tries of 8 s)."""
+        for _ in range(3):
+            future = client.call_async(request)
+            if wait_until(future.done, 8.0):
+                return future.result()
+            client.remove_pending_request(future)
+            print("service call to {} had no answer: sent again".format(what))
+        self.fail("no answer to " + what)
+
     def fetch(self, name):
         node = self.world
         lister = node.create_client(ListParameters, name + "/list_parameters")
         getter = node.create_client(GetParameters, name + "/get_parameters")
         self.assertTrue(lister.wait_for_service(20.0), name + " has no list_parameters")
         self.assertTrue(getter.wait_for_service(20.0))
-        future = lister.call_async(ListParameters.Request())
-        self.assertTrue(wait_until(future.done, 10.0))
-        names = sorted(future.result().result.names)
+        names = sorted(self.call(lister, ListParameters.Request(), name + " list").result.names)
         request = GetParameters.Request()
         request.names = names
-        future = getter.call_async(request)
-        self.assertTrue(wait_until(future.done, 10.0))
+        response = self.call(getter, request, name + " get")
         out = {}
-        for key, value in zip(names, future.result().values):
+        for key, value in zip(names, response.values):
             out[key] = (value.type, {1: value.bool_value, 2: value.integer_value,
                                      3: value.double_value, 4: value.string_value}.get(value.type))
         return out

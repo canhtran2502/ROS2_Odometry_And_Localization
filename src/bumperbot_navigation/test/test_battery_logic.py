@@ -91,11 +91,16 @@ def run_monitor(case):
             logic.on_mission_status(event["mission"])
         if "dock_status" in event:
             logic.on_dock_status(event["dock_status"])
+        if event.get("accepted"):
+            logic.on_dock_accepted()
         if "result" in event:
             logic.on_dock_result(t, event["result"])
         if event.get("reset"):
             logic.reset()
-        actions = logic.update(t) if event.get("update", True) else []
+        if event.get("update", True):
+            actions = logic.update(t, event.get("server", True))
+        else:
+            actions = []
         where = "{} at t={}".format(case["name"], t)
         assert list(actions) == event.get("actions", []), where
         if "state" in event and event.get("update", True):
@@ -137,10 +142,47 @@ def test_monitor_table_covers_required_scenarios():
             "rejected_retries_are_not_counted_then_error",
             "failed_dock_goals_count_until_max_attempts", "docked_then_undock_when_full",
             "not_docked_while_charging_goes_monitoring",
-            "undock_failure_is_error_and_reset_recovers"):
+            "undock_failure_is_error_and_reset_recovers",
+            # iteration 2 (review fixes M2, M3, M4)
+            "cancel_repeats_every_retry_delay_while_the_mission_stays_active",
+            "cancel_cadence_follows_dock_retry_delay",
+            "mission_started_during_docking_is_canceled_again",
+            "mission_started_during_charging_is_canceled_again",
+            "unanswered_dock_request_is_abandoned_counted_failed_and_retried",
+            "unanswered_dock_request_with_the_server_gone_is_abandoned",
+            "accepted_dock_goal_with_the_server_up_is_never_timed_out",
+            "server_lost_during_an_accepted_dock_goal_is_abandoned",
+            "unanswered_undock_request_is_abandoned_and_ends_in_error",
+            "server_lost_during_an_accepted_undock_goal_ends_in_error",
+            "accepted_undock_goal_with_the_server_up_is_never_timed_out"):
         assert required in names, required
     model_names = {c["name"] for c in MODEL["cases"]}
     for required in ("idle_drain", "moving_drains_faster_linear", "charge_while_docked",
                      "charge_clamped_at_one", "drain_clamped_at_zero",
                      "negative_dt_changes_nothing", "huge_dt_is_clamped_to_one_second"):
         assert required in model_names, required
+
+
+def test_m3_abandon_action_exists_and_default_server_ready_keeps_old_calls_working():
+    """update(now) without the server flag still works (server assumed ready)."""
+    assert bl.ACTION_ABANDON_DOCK == "ABANDON_DOCK"
+    logic = bl.BatteryMonitorLogic(bl.MonitorParams(dock_request_timeout=10.0))
+    logic.on_battery(0.0, 0.1, False)
+    assert logic.update(0.0) == [bl.ACTION_SEND_DOCK]
+    assert logic.update(9.9) == []
+    assert logic.update(10.0) == [bl.ACTION_ABANDON_DOCK]
+
+
+def test_m4_cancel_actions_stop_as_soon_as_the_mission_is_gone():
+    logic = bl.BatteryMonitorLogic(bl.MonitorParams(dock_retry_delay=1.0,
+                                                    mission_cancel_timeout=100.0))
+    logic.on_battery(0.0, 0.5, False)
+    logic.on_mission_status(True)
+    logic.update(0.0)
+    logic.on_battery(1.0, 0.1, False)
+    assert logic.update(1.0) == [bl.ACTION_CANCEL_MISSION]
+    sent = [t for t in (2.0, 3.0, 4.0) if logic.update(t) == [bl.ACTION_CANCEL_MISSION]]
+    assert sent == [2.0, 3.0, 4.0]
+    logic.on_mission_status(False)
+    assert logic.update(5.0) == [bl.ACTION_SEND_DOCK]
+    assert logic.update(6.0) == []

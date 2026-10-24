@@ -121,15 +121,15 @@ class MockWorld(Node):
         self.dock_status = None
         self.odom_twist = None
         self.closing = False
-
-        self.server = ActionServer(
-            self, DockRobot, "dock_robot", execute_callback=self.execute,
-            goal_callback=self.on_goal, cancel_callback=self.on_cancel,
-            callback_group=self.group)
-        self.create_service(CancelGoal, "execute_mission/_action/cancel_goal", self.on_cancel_all,
-                            callback_group=self.group)
+        self.dock_delay = 0.0          # seconds the DockRobot goal response is held back
+        self.cancel_mode = "ok"        # ok | refuse: the cancel-all return code
+        self.server = None
+        self.cancel_srv = None
+        self.mission_pub = None
+        self.make_dock_server()
+        self.make_cancel_service()
         self.battery_pub = self.create_publisher(BatteryState, "battery_state", 10)
-        self.mission_pub = self.create_publisher(MissionStatus, "mission/status", LATCHED)
+        self.make_mission_publisher()
         self.dock_status_pub = self.create_publisher(DockStatus, "dock/status", LATCHED)
         self.odom_pub = self.create_publisher(Odometry, "bumperbot_controller/odom", 10)
         self.create_subscription(String, "battery_monitor/state", self.on_state, LATCHED,
@@ -139,10 +139,48 @@ class MockWorld(Node):
         self.create_timer(0.1, self.publish_inputs, callback_group=self.group)
 
     # ----- DockRobot server
+    def make_dock_server(self):
+        if self.server is None:
+            self.server = ActionServer(
+                self, DockRobot, "dock_robot", execute_callback=self.execute,
+                goal_callback=self.on_goal, cancel_callback=self.on_cancel,
+                callback_group=self.group)
+
+    def drop_dock_server(self):
+        """Make dock_manager disappear (crash)."""
+        if self.server is not None:
+            self.server.destroy()
+            self.server = None
+
+    def make_cancel_service(self):
+        if self.cancel_srv is None:
+            self.cancel_srv = self.create_service(
+                CancelGoal, "execute_mission/_action/cancel_goal", self.on_cancel_all,
+                callback_group=self.group)
+
+    def drop_cancel_service(self):
+        if self.cancel_srv is not None:
+            self.destroy_service(self.cancel_srv)
+            self.cancel_srv = None
+
+    def make_mission_publisher(self):
+        if self.mission_pub is None:
+            self.mission_pub = self.create_publisher(MissionStatus, "mission/status", LATCHED)
+
+    def drop_mission_publisher(self):
+        """mission_manager died: the last sample stays latched, nobody publishes."""
+        if self.mission_pub is not None:
+            self.destroy_publisher(self.mission_pub)
+            self.mission_pub = None
+
     def on_goal(self, request):
         with self.lock:
             self.dock_goals.append((time.monotonic(), request.command))
             mode = self.dock_mode
+            delay = self.dock_delay
+        end = time.monotonic() + delay
+        while time.monotonic() < end and not self.closing:
+            time.sleep(0.01)
         return GoalResponse.REJECT if mode == "reject" else GoalResponse.ACCEPT
 
     def on_cancel(self, _handle):
@@ -183,7 +221,10 @@ class MockWorld(Node):
             self.cancel_requests.append({
                 "t": time.monotonic(), "uuid": bytes(info.goal_id.uuid),
                 "sec": info.stamp.sec, "nanosec": info.stamp.nanosec})
-        response.return_code = CancelGoal.Response.ERROR_NONE
+        with self.lock:
+            refuse = self.cancel_mode == "refuse"
+        response.return_code = (CancelGoal.Response.ERROR_REJECTED if refuse
+                                else CancelGoal.Response.ERROR_NONE)
         return response
 
     # ----- recorders and publishers
@@ -232,6 +273,7 @@ class MockWorld(Node):
             self.battery = None
 
     def set_mission(self, state):
+        self.make_mission_publisher()
         msg = MissionStatus()
         msg.stamp = self.get_clock().now().to_msg()
         msg.state = state
@@ -247,7 +289,12 @@ class MockWorld(Node):
 
     def reset(self):
         self.release.clear()
+        self.make_dock_server()
+        self.make_cancel_service()
+        self.make_mission_publisher()
         with self.lock:
+            self.dock_delay = 0.0
+            self.cancel_mode = "ok"
             self.dock_mode = "hold"
             self.dock_outcome = DockRobot.Result.OUTCOME_DOCKED
             self.dock_goals = []
@@ -261,7 +308,7 @@ class MockWorld(Node):
     def close(self):
         self.closing = True
         time.sleep(0.2)
-        self.server.destroy()
+        self.drop_dock_server()
 
 
 class BatteryTestCase(unittest.TestCase):
@@ -444,6 +491,293 @@ class TestBatteryMonitor(BatteryTestCase):
         self.assertTrue(wait_until(lambda: len(w.dock_cancels) >= 1, 3.0),
                         "the DockRobot goal was not canceled")
         self.monitor = None
+
+
+# ====================================================================== review fixes M2, M3, M4
+class TestMissionInterlockAndWatchdogs(BatteryTestCase):
+    """Iteration 2: cancel retry and response check (M4), interlock (M2), request watchdog (M3)."""
+
+    def go_low_with_mission(self):
+        w = self.world
+        w.set_battery(0.5)
+        w.set_mission("NAVIGATING")
+        self.wait_state("MONITORING")
+        w.set_battery(0.15)
+
+    def cancel_times(self):
+        with self.world.lock:
+            return [r["t"] for r in self.world.cancel_requests]
+
+    def dock_to_charging(self):
+        w = self.world
+        w.set_battery(0.15)
+        self.assertTrue(wait_until(lambda: len(w.dock_goals) >= 1, 5.0), self.monitor.log())
+        self.wait_state("DOCKING")
+        w.set_dock_status(True)
+        w.finish_goal(DockRobot.Result.OUTCOME_DOCKED)
+        self.wait_state("CHARGING")
+        w.set_battery(0.5, CHARGING)
+
+    # ---------------------------------------------------------------- M4: cancel retry
+    def test_cancel_is_repeated_while_the_mission_stays_active(self):
+        """M4: cancel-all every dock_retry_delay (0.5 s here) until the mission is gone."""
+        w = self.world
+        self.start_monitor()
+        self.go_low_with_mission()
+        self.assertTrue(wait_until(lambda: len(self.cancel_times()) >= 4, 5.0),
+                        "the cancel was not repeated: {}\n{}".format(
+                            self.cancel_times(), self.monitor.log()))
+        times = self.cancel_times()
+        gaps = [b - a for a, b in zip(times, times[1:])]
+        for gap in gaps:
+            self.assertGreaterEqual(gap, 0.4, gaps)
+            self.assertLessEqual(gap, 1.5, gaps)
+        self.wait_state("CANCELING_MISSION")
+        self.assertEqual(w.dock_goals, [], "DOCK sent while the mission was active")
+        w.set_mission("CANCELED")
+        self.assertTrue(wait_until(lambda: len(w.dock_goals) >= 1, 3.0), self.monitor.log())
+        count = len(self.cancel_times())
+        time.sleep(1.5)
+        self.assertEqual(len(self.cancel_times()), count, "cancel sent after the mission ended")
+
+    def test_cancel_service_not_ready_is_retried(self):
+        """M4: no cancel service -> warning and retry; the cancel arrives once it is back."""
+        w = self.world
+        w.drop_cancel_service()
+        time.sleep(1.0)
+        self.start_monitor()
+        self.go_low_with_mission()
+        self.assertTrue(wait_until(
+            lambda: "cancel service is not available" in self.monitor.log(), 3.0),
+            self.monitor.log())
+        time.sleep(1.5)
+        self.assertEqual(w.cancel_requests, [])
+        self.assertEqual(w.dock_goals, [], "DOCK sent although the mission was never canceled")
+        t_back = time.monotonic()
+        w.make_cancel_service()
+        self.assertTrue(wait_until(lambda: len(w.cancel_requests) >= 1, 6.0),
+                        "the cancel was never retried\n" + self.monitor.log())
+        self.assertGreater(w.cancel_requests[0]["t"], t_back)
+        self.assertEqual(w.dock_goals, [])
+        self.wait_state("CANCELING_MISSION")
+
+    def test_refused_cancel_response_is_checked_and_retried(self):
+        """M4: a return code other than ERROR_NONE is logged and the cancel is sent again."""
+        w = self.world
+        w.cancel_mode = "refuse"
+        self.start_monitor()
+        self.go_low_with_mission()
+        self.assertTrue(wait_until(lambda: len(self.cancel_times()) >= 3, 5.0),
+                        self.monitor.log())
+        self.assertTrue(wait_until(lambda: "refused" in self.monitor.log(), 2.0),
+                        "the refusal was not reported\n" + self.monitor.log())
+        w.cancel_mode = "ok"
+        count = len(self.cancel_times())
+        self.assertTrue(wait_until(lambda: len(self.cancel_times()) > count, 3.0))
+        w.set_mission("CANCELED")
+        self.assertTrue(wait_until(lambda: len(w.dock_goals) >= 1, 3.0), self.monitor.log())
+
+    def test_mission_cancel_timeout_still_sends_dock_with_repeated_cancels(self):
+        """M4: after mission_cancel_timeout the DOCK is sent anyway (cancels kept repeating)."""
+        w = self.world
+        self.start_monitor(mission_cancel_timeout=3.0)
+        t0 = time.monotonic()
+        self.go_low_with_mission()
+        self.assertTrue(wait_until(lambda: len(w.dock_goals) >= 1, 7.0), self.monitor.log())
+        self.assertGreaterEqual(w.dock_goals[0][0] - t0, 2.5)
+        self.assertGreaterEqual(len(self.cancel_times()), 3)
+
+    # ---------------------------------------------------------------- M4: stale latched status
+    def test_latched_mission_without_publisher_is_ignored_after_5_s(self):
+        """M4: NAVIGATING stays latched but mission_manager is gone: stale after 5 s, warning."""
+        w = self.world
+        self.start_monitor(mission_cancel_timeout=100.0)
+        w.set_battery(0.5)
+        w.set_mission("NAVIGATING")
+        self.wait_state("MONITORING")
+        time.sleep(0.5)
+        t_drop = time.monotonic()
+        w.drop_mission_publisher()
+        time.sleep(1.0)
+        w.set_battery(0.15)
+        self.wait_state("CANCELING_MISSION")
+        time.sleep(2.0)
+        self.assertEqual(w.dock_goals, [], "treated as stale too early")
+        self.assertNotIn("stale", self.monitor.log())
+        self.assertTrue(wait_until(lambda: len(w.dock_goals) >= 1, 8.0),
+                        "the stale mission was never ignored\n" + self.monitor.log())
+        self.assertGreaterEqual(w.dock_goals[0][0] - t_drop, 4.5)
+        self.assertLessEqual(w.dock_goals[0][0] - t_drop, 9.0)
+        self.assertIn("stale", self.monitor.log())
+        self.assertIn("WARN", self.monitor.log().upper())
+
+    def test_latched_mission_with_a_publisher_is_not_stale(self):
+        """Control: while mission_manager publishes, a long mission is never treated as stale."""
+        w = self.world
+        self.start_monitor(mission_cancel_timeout=100.0)
+        self.go_low_with_mission()
+        self.wait_state("CANCELING_MISSION")
+        time.sleep(7.0)
+        self.assertEqual(w.dock_goals, [])
+        self.assertEqual(w.states()[-1], "CANCELING_MISSION")
+        self.assertNotIn("stale", self.monitor.log())
+
+    # ---------------------------------------------------------------- M2: interlock
+    def test_mission_started_during_docking_is_canceled(self):
+        """M2: a mission that shows up while DOCKING is canceled (and again) until it is gone."""
+        w = self.world
+        self.start_monitor()
+        w.set_battery(0.15)
+        self.assertTrue(wait_until(lambda: len(w.dock_goals) >= 1, 5.0), self.monitor.log())
+        self.wait_state("DOCKING")
+        time.sleep(1.0)
+        self.assertEqual(w.cancel_requests, [])
+        t_mission = time.monotonic()
+        w.set_mission("NAVIGATING")
+        self.assertTrue(wait_until(lambda: len(self.cancel_times()) >= 1, 2.0),
+                        "no cancel for the mission during DOCKING\n" + self.monitor.log())
+        self.assertLessEqual(self.cancel_times()[0] - t_mission, 2.0)
+        self.assertTrue(wait_until(lambda: len(self.cancel_times()) >= 3, 4.0),
+                        "the cancel was not repeated during DOCKING")
+        self.assertEqual(len(w.dock_goals), 1, "an extra dock goal was sent")
+        self.assertEqual(w.states()[-1], "DOCKING")
+        w.set_mission("CANCELED")
+        time.sleep(0.6)
+        count = len(self.cancel_times())
+        time.sleep(1.5)
+        self.assertEqual(len(self.cancel_times()), count)
+
+    def test_mission_started_during_charging_is_canceled(self):
+        """M2: a mission that shows up while CHARGING is canceled; the robot stays CHARGING."""
+        w = self.world
+        self.start_monitor()
+        self.dock_to_charging()
+        time.sleep(1.0)
+        self.assertEqual(w.cancel_requests, [])
+        w.set_mission("NAVIGATING")
+        self.assertTrue(wait_until(lambda: len(self.cancel_times()) >= 3, 5.0),
+                        "no repeated cancel during CHARGING\n" + self.monitor.log())
+        self.assertEqual(w.states()[-1], "CHARGING")
+        self.assertEqual(len(w.dock_goals), 1)
+        w.set_mission("CANCELED")
+        time.sleep(0.6)
+        count = len(self.cancel_times())
+        time.sleep(1.5)
+        self.assertEqual(len(self.cancel_times()), count)
+        self.assertEqual(w.states()[-1], "CHARGING")
+
+    # ---------------------------------------------------------------- M3: request watchdog
+    def test_unanswered_dock_request_is_dropped_counted_and_retried(self):
+        """M3: no goal response for dock_request_timeout -> FAILED, retry, ERROR after 3."""
+        w = self.world
+        w.dock_delay = 5.0
+        self.start_monitor()
+        w.set_battery(0.15)
+        self.assertTrue(wait_until(lambda: len(w.dock_goals) >= 1, 3.0), self.monitor.log())
+        t_first = w.dock_goals[0][0]
+        self.assertTrue(wait_until(lambda: len(w.dock_goals) >= 2, 6.0),
+                        "no retry after the request timeout\n" + self.monitor.log())
+        self.assertGreaterEqual(w.dock_goals[1][0] - t_first, 3.0)
+        self.assertLessEqual(w.dock_goals[1][0] - t_first, 5.0)
+        self.assertTrue(wait_until(lambda: (w.states() or [None])[-1] == "ERROR", 15.0),
+                        "{}\n{}".format(w.states(), self.monitor.log()))
+        self.assertEqual(len(w.dock_goals), 3, "3 failed attempts expected: " + str(w.dock_goals))
+        # every goal that dock_manager accepted late is canceled by the monitor, once each
+        self.assertTrue(wait_until(lambda: len(w.dock_cancels) == 3, 8.0),
+                        "late goals not canceled: {}".format(len(w.dock_cancels)))
+        time.sleep(1.5)
+        self.assertEqual(len(w.dock_cancels), 3)
+        self.assertEqual(len(w.dock_goals), 3, "goals after ERROR")
+
+    def test_dock_manager_disappearing_during_a_goal_is_recovered(self):
+        """M3: server gone with an accepted goal -> dropped after the timeout, retried."""
+        w = self.world
+        self.start_monitor()
+        w.set_battery(0.15)
+        self.assertTrue(wait_until(lambda: len(w.dock_goals) >= 1, 5.0), self.monitor.log())
+        self.wait_state("DOCKING")
+        time.sleep(0.5)
+        t_gone = time.monotonic()
+        w.drop_dock_server()
+        self.assertTrue(wait_until(lambda: "no answer" in self.monitor.log(), 6.0),
+                        "the dead dock_manager was not noticed\n" + self.monitor.log())
+        self.assertGreaterEqual(time.monotonic() - t_gone, 2.5)
+        self.assertNotEqual(w.states()[-1], "ERROR")
+        count = len(w.dock_goals)
+        w.make_dock_server()
+        self.assertTrue(wait_until(lambda: len(w.dock_goals) > count, 6.0),
+                        "no new DOCK after dock_manager came back\n" + self.monitor.log())
+        self.wait_state("DOCKING")
+        w.set_dock_status(True)
+        w.finish_goal(DockRobot.Result.OUTCOME_DOCKED)
+        self.wait_state("CHARGING")
+        self.assertNotIn("ERROR", w.states())
+
+    def test_accepted_goal_is_not_timed_out(self):
+        """M3: a goal accepted with the server up runs longer than dock_request_timeout (3 s)."""
+        w = self.world
+        self.start_monitor()
+        w.set_battery(0.15)
+        self.assertTrue(wait_until(lambda: len(w.dock_goals) >= 1, 5.0), self.monitor.log())
+        self.wait_state("DOCKING")
+        time.sleep(3.0 * 2 + 0.5)
+        self.assertEqual(len(w.dock_goals), 1, "the running goal was dropped and re-sent")
+        self.assertEqual(w.dock_cancels, [])
+        self.assertEqual(w.states()[-1], "DOCKING")
+        self.assertNotIn("no answer", self.monitor.log())
+        w.set_dock_status(True)
+        w.finish_goal(DockRobot.Result.OUTCOME_DOCKED)
+        self.wait_state("CHARGING")
+
+    def test_unanswered_undock_request_ends_in_error(self):
+        """M3: the same watchdog for UNDOCK: dropped, FAILED -> ERROR, late goal canceled."""
+        w = self.world
+        self.start_monitor()
+        self.dock_to_charging()
+        w.dock_delay = 5.0
+        w.set_battery(0.96, CHARGING)
+        self.assertTrue(wait_until(lambda: len(w.goals_of(DockRobot.Goal.COMMAND_UNDOCK)) >= 1,
+                                   3.0), self.monitor.log())
+        self.wait_state("UNDOCKING")
+        self.wait_state("ERROR", 3.0 + 3.0)
+        self.assertTrue(wait_until(lambda: len(w.dock_cancels) >= 1, 6.0),
+                        "the late UNDOCK goal was not canceled\n" + self.monitor.log())
+        time.sleep(1.5)
+        self.assertEqual(len(w.dock_cancels), 1)
+        self.assertEqual(len(w.goals_of(DockRobot.Goal.COMMAND_UNDOCK)), 1)
+
+    def test_dock_manager_disappearing_during_undock_ends_in_error(self):
+        """M3: server gone with an accepted UNDOCK goal -> ERROR after dock_request_timeout."""
+        w = self.world
+        self.start_monitor()
+        self.dock_to_charging()
+        w.set_battery(0.96, CHARGING)
+        self.assertTrue(wait_until(lambda: len(w.goals_of(DockRobot.Goal.COMMAND_UNDOCK)) >= 1,
+                                   3.0), self.monitor.log())
+        self.wait_state("UNDOCKING")
+        time.sleep(0.5)
+        t_gone = time.monotonic()
+        w.drop_dock_server()
+        self.wait_state("ERROR", 3.0 + 3.0)
+        self.assertGreaterEqual(time.monotonic() - t_gone, 2.5)
+
+    def test_accepted_undock_goal_is_not_timed_out(self):
+        """M3: an UNDOCK goal accepted with the server up runs beyond dock_request_timeout."""
+        w = self.world
+        self.start_monitor()
+        self.dock_to_charging()
+        w.set_battery(0.96, CHARGING)
+        self.assertTrue(wait_until(lambda: len(w.goals_of(DockRobot.Goal.COMMAND_UNDOCK)) >= 1,
+                                   3.0), self.monitor.log())
+        self.wait_state("UNDOCKING")
+        time.sleep(3.0 * 2 + 0.5)
+        self.assertEqual(w.states()[-1], "UNDOCKING")
+        self.assertEqual(len(w.goals_of(DockRobot.Goal.COMMAND_UNDOCK)), 1)
+        self.assertEqual(w.dock_cancels, [])
+        w.set_dock_status(False)
+        w.set_battery(0.96, DISCHARGING)
+        w.finish_goal(DockRobot.Result.OUTCOME_UNDOCKED)
+        self.wait_state("MONITORING")
 
 
 # ====================================================================== AC17

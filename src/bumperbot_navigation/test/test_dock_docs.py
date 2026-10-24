@@ -74,3 +74,114 @@ def test_docs_name_the_run_commands():
                     "ros2 topic echo /dock/status",
                     "ros2 param set /battery_sim percentage_override"):
         assert command in text, command
+
+
+# ---------------------------------------------------------------- iteration 2 (review fixes)
+def flat(rel):
+    """Document text without markdown code ticks and with collapsed whitespace."""
+    return re.sub(r"\s+", " ", read(rel).replace("`", ""))
+
+
+def test_doc10_has_the_mission_dock_interlock_section():
+    """M2/M3/M4 are documented in doc/10: the section, the three parts and the exact outcome."""
+    text = flat("doc/10_navigation.md")
+    assert "Mission/dock interlock." in text
+    section = text[text.index("Mission/dock interlock."):]
+    section = section[:section.index("Cancel after the decision.")]
+    for needle in (
+            "A mission and a dock goal never drive together",
+            "battery_monitor repeats the cancel-all",
+            "dock_retry_delay",
+            "CANCELING_MISSION, DOCKING and CHARGING",
+            "dock_manager rejects DOCK while a mission is active",
+            "inactive to active edge on /mission/status",
+            "ABORTED with OUTCOME_ERROR",
+            "a mission became active during the dock goal",
+            "counts it as a failed attempt",
+            "mission_manager is unchanged",
+            "latched /mission/status is stale",
+            "ignores it after 5 s with a warning",
+            "dock_request_timeout watchdog",
+            "a goal accepted late is canceled",
+            "same for UNDOCK",
+            "retry/ERROR logic",
+            "unanswered when a dock cancel, a shutdown or a clock stall ends the goal is "
+            "abandoned",
+            "both languages"):
+        assert needle in section, needle
+
+
+def test_doc10_documents_the_cancel_after_the_decision():
+    text = flat("doc/10_navigation.md")
+    assert "Cancel after the decision." in text
+    part = text[text.index("Cancel after the decision."):]
+    for needle in ("DOCKED, UNDOCKED, ALREADY_DOCKED", "ends SUCCEEDED", "mission_manager"):
+        assert needle in part, needle
+
+
+def test_readme_documents_the_interlock():
+    text = flat("README.md")
+    assert "A mission and a dock goal never run together" in text
+    assert "keeps canceling missions while docking or charging" in text
+    assert "aborts its goal if a mission becomes active" in text
+
+
+def test_doc03_battery_monitor_lists_the_cancelgoal_service_client():
+    """battery_monitor has one DockRobot action client and a CancelGoal service client."""
+    lines = [line for line in read("doc/03_ros2_nodes_topics_services.md").splitlines()
+             if "/dock/status" in line and "/mission/status" in line and "Subscriptions" in line]
+    assert len(lines) == 1, lines
+    line = lines[0].replace("`", "")
+    assert "Action client**: dock_robot" in line
+    assert "Service client**: execute_mission/_action/cancel_goal" in line
+    assert "action_msgs/srv/CancelGoal" in line
+    assert "Action clients" not in line
+    assert "execute_mission" not in line.split("Service client")[0], \
+        "execute_mission is still listed as an action client"
+
+
+def test_battery_monitor_really_has_only_that_client_surface():
+    """The doc line matches the node: one ActionClient (DockRobot) and one CancelGoal client."""
+    path = os.path.join(ROOT, "src", "bumperbot_navigation", "bumperbot_navigation",
+                        "battery_monitor.py")
+    with open(path) as f:
+        code = f.read()
+    assert len(re.findall(r"ActionClient\(", code)) == 1
+    assert re.search(r"ActionClient\(\s*self,\s*DockRobot", code)
+    assert len(re.findall(r"create_client\(", code)) == 1
+    assert "CancelGoal" in code and "execute_mission/_action/cancel_goal" in code
+
+
+@pytest.mark.parametrize("rel", ["README.md", "doc/10_navigation.md", "doc/12_troubleshooting.md"])
+def test_docs_state_that_real_robot_launch_has_no_safety_stop(rel):
+    text = flat(rel)
+    assert re.search(r"real_robot\.launch\.py does not start safety_stop", text), rel
+    assert re.search(r"(start|starts) safety_stop (yourself|separately)|"
+                     r"user starts safety_stop", text), rel
+
+
+def test_real_robot_launch_really_has_no_safety_stop():
+    """The documented statement is true: no safety_stop node or include in real_robot.launch.py."""
+    path = os.path.join(ROOT, "src", "bumperbot_bringup", "launch", "real_robot.launch.py")
+    with open(path) as f:
+        code = f.read()
+    assert "safety_stop" not in code
+
+
+def test_doc12_known_limitations_list():
+    text = flat("doc/12_troubleshooting.md")
+    assert "Known limitations (hardware)." in text
+    part = text[text.index("Known limitations (hardware)."):]
+    part = part[:part.index("safety_stop on the real robot.")]
+    for marker, needles in (
+            ("(a)", ["stamp 0 skips the age check", "yaw gate", "relative to the map prior"]),
+            ("(b)", ["tf_stale_timeout (0.5 s)", "tf_timeout (1.0 s)", "timers firing",
+                     "synchronize the clocks"]),
+            ("(c)", ["dock_request_timeout (120 s)", "battery_monitor to ERROR", "~/reset"]),
+            ("(d)", ["already active before dock_manager started", "publishes only on change",
+                     "twist_mux still blocks", "STALL"])):
+        assert marker in part, marker
+        for needle in needles:
+            assert needle in part, "{} {}".format(marker, needle)
+    assert part.index("(a)") < part.index("(b)") < part.index("(c)") < part.index("(d)")
+    assert "safety_stop on the real robot." in text

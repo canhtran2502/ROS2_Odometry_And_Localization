@@ -113,14 +113,30 @@ monitor:
         - {t: 2.0, battery: [0.14, false], state: CANCELING_MISSION}
         - {t: 3.0, battery: [0.14, false], state: CANCELING_MISSION}
         - {t: 4.0, battery: [0.14, false], mission: false, actions: [SEND_DOCK], state: DOCKING}
+    # Iteration 2 (review fix M4): the cancel is intentionally repeated every dock_retry_delay (5 s
+    # by default) while the mission stays active, so the t=10.9 update now emits CANCEL_MISSION.
+    # The old expectation (no action before t=11) described the one-shot cancel that M4 removed.
     - name: mission_cancel_timeout_sends_dock_anyway
       params: {mission_cancel_timeout: 10.0}
       events:
         - {t: 0.0, battery: [0.5, false], mission: true, state: MONITORING}
         - {t: 1.0, battery: [0.15, false], actions: [CANCEL_MISSION], state: CANCELING_MISSION}
         - {t: 5.0, battery: [0.15, false], state: CANCELING_MISSION}
-        - {t: 10.9, battery: [0.15, false], state: CANCELING_MISSION}
+        - {t: 10.9, battery: [0.15, false], actions: [CANCEL_MISSION], state: CANCELING_MISSION}
         - {t: 11.0, battery: [0.15, false], actions: [SEND_DOCK], state: DOCKING}
+    - name: mission_cancel_timeout_with_updates_every_second
+      params: {mission_cancel_timeout: 10.0}
+      events:
+        - {t: 0.0, battery: [0.5, false], mission: true, state: MONITORING}
+        - {t: 1.0, battery: [0.15, false], actions: [CANCEL_MISSION], state: CANCELING_MISSION}
+        - {t: 2.0, state: CANCELING_MISSION}
+        - {t: 3.0, state: CANCELING_MISSION}
+        - {t: 4.0, state: CANCELING_MISSION}
+        - {t: 5.0, state: CANCELING_MISSION}
+        - {t: 6.0, actions: [CANCEL_MISSION], state: CANCELING_MISSION}
+        - {t: 7.0, state: CANCELING_MISSION}
+        - {t: 10.0, state: CANCELING_MISSION}
+        - {t: 11.0, actions: [SEND_DOCK], state: DOCKING}
     - name: stale_battery_never_triggers
       events:
         - {t: 0.0, battery: [0.1, false], update: false}
@@ -266,3 +282,157 @@ monitor:
         - {t: 0.0, battery: [0.19, true], state: MONITORING}
         - {t: 1.0, battery: [0.19, true], state: MONITORING}
         - {t: 2.0, battery: [0.19, false], actions: [SEND_DOCK], state: DOCKING}
+    # ----- Iteration 2, review fix M4: the mission cancel is repeated and never one-shot
+    - name: cancel_repeats_every_retry_delay_while_the_mission_stays_active
+      params: {mission_cancel_timeout: 100.0, dock_retry_delay: 5.0}
+      events:
+        - {t: 0.0, battery: [0.5, false], mission: true, state: MONITORING}
+        - {t: 1.0, battery: [0.15, false], actions: [CANCEL_MISSION], state: CANCELING_MISSION}
+        - {t: 3.0, state: CANCELING_MISSION}
+        - {t: 5.9, state: CANCELING_MISSION}
+        - {t: 6.0, actions: [CANCEL_MISSION], state: CANCELING_MISSION}
+        - {t: 10.9, state: CANCELING_MISSION}
+        - {t: 11.0, actions: [CANCEL_MISSION], state: CANCELING_MISSION}
+        - {t: 12.0, mission: false, actions: [SEND_DOCK], state: DOCKING}
+    - name: cancel_cadence_follows_dock_retry_delay
+      params: {mission_cancel_timeout: 100.0, dock_retry_delay: 2.0}
+      events:
+        - {t: 0.0, battery: [0.5, false], mission: true, state: MONITORING}
+        - {t: 1.0, battery: [0.15, false], actions: [CANCEL_MISSION], state: CANCELING_MISSION}
+        - {t: 2.9, state: CANCELING_MISSION}
+        - {t: 3.0, actions: [CANCEL_MISSION], state: CANCELING_MISSION}
+        - {t: 4.9, state: CANCELING_MISSION}
+        - {t: 5.0, actions: [CANCEL_MISSION], state: CANCELING_MISSION}
+    - name: cancel_is_not_repeated_without_an_active_mission
+      params: {dock_retry_delay: 2.0}
+      events:
+        - {t: 0.0, battery: [0.1, false], actions: [SEND_DOCK], state: DOCKING}
+        - {t: 5.0, state: DOCKING}
+        - {t: 10.0, state: DOCKING}
+        - {t: 11.0, result: DOCKED, state: CHARGING}
+        - {t: 12.0, battery: [0.3, true], dock_status: true, state: CHARGING}
+        - {t: 20.0, battery: [0.4, true], state: CHARGING}
+    - name: mission_started_during_docking_is_canceled_again
+      params: {dock_retry_delay: 5.0, dock_request_timeout: 1000.0}
+      events:
+        - {t: 0.0, battery: [0.1, false], actions: [SEND_DOCK], state: DOCKING}
+        - {t: 0.5, accepted: true, state: DOCKING}
+        - {t: 1.0, mission: true, actions: [CANCEL_MISSION], state: DOCKING}
+        - {t: 3.0, state: DOCKING}
+        - {t: 5.9, state: DOCKING}
+        - {t: 6.0, actions: [CANCEL_MISSION], state: DOCKING}
+        - {t: 7.0, mission: false, state: DOCKING}
+        - {t: 12.0, state: DOCKING}
+        - {t: 13.0, result: DOCKED, state: CHARGING}
+    - name: mission_active_when_dock_request_begins_is_canceled_at_once
+      params: {mission_cancel_timeout: 4.0, dock_retry_delay: 5.0, dock_request_timeout: 1000.0}
+      events:
+        - {t: 0.0, battery: [0.5, false], mission: true, state: MONITORING}
+        - {t: 1.0, battery: [0.15, false], actions: [CANCEL_MISSION], state: CANCELING_MISSION}
+        - {t: 5.0, actions: [SEND_DOCK], state: DOCKING}
+        - {t: 5.5, accepted: true, state: DOCKING}
+        - {t: 6.0, actions: [CANCEL_MISSION], state: DOCKING}
+        - {t: 8.0, state: DOCKING}
+        - {t: 11.0, actions: [CANCEL_MISSION], state: DOCKING}
+    - name: mission_started_during_charging_is_canceled_again
+      params: {dock_retry_delay: 5.0}
+      events:
+        - {t: 0.0, battery: [0.1, false], actions: [SEND_DOCK], state: DOCKING}
+        - {t: 1.0, result: DOCKED, state: CHARGING}
+        - {t: 2.0, battery: [0.3, true], dock_status: true, state: CHARGING}
+        - {t: 3.0, battery: [0.31, true], mission: true, actions: [CANCEL_MISSION], state: CHARGING}
+        - {t: 5.0, battery: [0.32, true], state: CHARGING}
+        - {t: 8.0, battery: [0.33, true], actions: [CANCEL_MISSION], state: CHARGING}
+        - {t: 9.0, battery: [0.34, true], mission: false, state: CHARGING}
+        - {t: 20.0, battery: [0.35, true], state: CHARGING}
+    - name: mission_during_charging_does_not_undock_or_dock
+      params: {dock_retry_delay: 5.0}
+      events:
+        - {t: 0.0, battery: [0.1, false], actions: [SEND_DOCK], state: DOCKING}
+        - {t: 1.0, result: DOCKED, state: CHARGING}
+        - {t: 2.0, battery: [0.5, true], dock_status: true, mission: true, actions: [CANCEL_MISSION], state: CHARGING}
+        - {t: 3.0, battery: [0.5, true], state: CHARGING}
+    # ----- Iteration 2, review fix M3: a request without answer / a dead dock_manager is dropped
+    - name: unanswered_dock_request_is_abandoned_counted_failed_and_retried
+      params: {dock_retry_delay: 5.0, dock_request_timeout: 20.0, max_dock_attempts: 2}
+      events:
+        - {t: 0.0, battery: [0.1, false], actions: [SEND_DOCK], state: DOCKING}
+        - {t: 19.9, state: DOCKING, attempts: 0}
+        - {t: 20.0, actions: [ABANDON_DOCK], state: DOCKING, attempts: 1}
+        - {t: 22.0, state: DOCKING}
+        - {t: 24.9, state: DOCKING}
+        - {t: 25.0, actions: [SEND_DOCK], state: DOCKING}
+        - {t: 44.9, state: DOCKING, attempts: 1}
+        - {t: 45.0, actions: [ABANDON_DOCK], state: ERROR, attempts: 2}
+        - {t: 60.0, battery: [0.1, false], state: ERROR}
+    - name: unanswered_dock_request_with_the_server_gone_is_abandoned
+      params: {dock_retry_delay: 5.0, dock_request_timeout: 20.0, max_dock_attempts: 3}
+      events:
+        - {t: 0.0, battery: [0.1, false], actions: [SEND_DOCK], state: DOCKING}
+        - {t: 10.0, server: false, state: DOCKING}
+        - {t: 19.9, server: false, state: DOCKING}
+        - {t: 20.0, server: false, actions: [ABANDON_DOCK], state: DOCKING, attempts: 1}
+        - {t: 25.0, server: true, actions: [SEND_DOCK], state: DOCKING}
+    - name: accepted_dock_goal_with_the_server_up_is_never_timed_out
+      params: {dock_retry_delay: 5.0, dock_request_timeout: 20.0}
+      events:
+        - {t: 0.0, battery: [0.1, false], actions: [SEND_DOCK], state: DOCKING}
+        - {t: 1.0, accepted: true, state: DOCKING}
+        - {t: 100.0, state: DOCKING, attempts: 0}
+        - {t: 5000.0, state: DOCKING, attempts: 0}
+        - {t: 5001.0, result: DOCKED, state: CHARGING}
+    - name: server_lost_during_an_accepted_dock_goal_is_abandoned
+      params: {dock_retry_delay: 5.0, dock_request_timeout: 20.0, max_dock_attempts: 3}
+      events:
+        - {t: 0.0, battery: [0.1, false], actions: [SEND_DOCK], state: DOCKING}
+        - {t: 1.0, accepted: true, state: DOCKING}
+        - {t: 10.0, server: false, state: DOCKING}
+        - {t: 29.9, server: false, state: DOCKING, attempts: 0}
+        - {t: 30.0, server: false, actions: [ABANDON_DOCK], state: DOCKING, attempts: 1}
+        - {t: 35.0, server: true, actions: [SEND_DOCK], state: DOCKING}
+        - {t: 36.0, accepted: true, server: true, state: DOCKING}
+        - {t: 100.0, server: true, state: DOCKING, attempts: 1}
+    - name: server_flapping_resets_the_lost_timer
+      params: {dock_retry_delay: 5.0, dock_request_timeout: 20.0}
+      events:
+        - {t: 0.0, battery: [0.1, false], actions: [SEND_DOCK], state: DOCKING}
+        - {t: 1.0, accepted: true, state: DOCKING}
+        - {t: 10.0, server: false, state: DOCKING}
+        - {t: 25.0, server: true, state: DOCKING}
+        - {t: 26.0, server: false, state: DOCKING}
+        - {t: 45.9, server: false, state: DOCKING, attempts: 0}
+        - {t: 46.0, server: false, actions: [ABANDON_DOCK], state: DOCKING, attempts: 1}
+    - name: abandoned_dock_requests_end_in_error_after_max_attempts
+      params: {dock_retry_delay: 1.0, dock_request_timeout: 10.0, max_dock_attempts: 2}
+      events:
+        - {t: 0.0, battery: [0.1, false], actions: [SEND_DOCK], state: DOCKING}
+        - {t: 10.0, actions: [ABANDON_DOCK], state: DOCKING, attempts: 1}
+        - {t: 11.0, actions: [SEND_DOCK], state: DOCKING}
+        - {t: 21.0, actions: [ABANDON_DOCK], state: ERROR, attempts: 2}
+    - name: unanswered_undock_request_is_abandoned_and_ends_in_error
+      params: {dock_retry_delay: 5.0, dock_request_timeout: 20.0}
+      events:
+        - {t: 0.0, battery: [0.1, false], actions: [SEND_DOCK], state: DOCKING}
+        - {t: 1.0, result: DOCKED, state: CHARGING}
+        - {t: 2.0, battery: [0.96, true], dock_status: true, actions: [SEND_UNDOCK], state: UNDOCKING}
+        - {t: 21.9, state: UNDOCKING}
+        - {t: 22.0, actions: [ABANDON_DOCK], state: ERROR}
+    - name: server_lost_during_an_accepted_undock_goal_ends_in_error
+      params: {dock_retry_delay: 5.0, dock_request_timeout: 20.0}
+      events:
+        - {t: 0.0, battery: [0.1, false], actions: [SEND_DOCK], state: DOCKING}
+        - {t: 1.0, result: DOCKED, state: CHARGING}
+        - {t: 2.0, battery: [0.96, true], dock_status: true, actions: [SEND_UNDOCK], state: UNDOCKING}
+        - {t: 3.0, accepted: true, state: UNDOCKING}
+        - {t: 4.0, server: false, state: UNDOCKING}
+        - {t: 23.9, server: false, state: UNDOCKING}
+        - {t: 24.0, server: false, actions: [ABANDON_DOCK], state: ERROR}
+    - name: accepted_undock_goal_with_the_server_up_is_never_timed_out
+      params: {dock_retry_delay: 5.0, dock_request_timeout: 20.0}
+      events:
+        - {t: 0.0, battery: [0.1, false], actions: [SEND_DOCK], state: DOCKING}
+        - {t: 1.0, result: DOCKED, state: CHARGING}
+        - {t: 2.0, battery: [0.96, true], dock_status: true, actions: [SEND_UNDOCK], state: UNDOCKING}
+        - {t: 3.0, accepted: true, state: UNDOCKING}
+        - {t: 1000.0, state: UNDOCKING}
+        - {t: 1001.0, battery: [0.96, false], result: UNDOCKED, state: MONITORING}
