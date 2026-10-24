@@ -252,7 +252,7 @@ bool MissionManager::handle_cancel_if_pending()
 
 bool MissionManager::wait_clock(double seconds, bool interruptible)
 {
-  // Node clock: dwell and retry delays follow sim time. If /clock stalls (the node clock does not
+  // Node clock: dwell and retry delays follow sim time. If the time source stalls (the node clock does not
   // advance for clock_stall_timeout_ wall seconds) the wait counts as elapsed.
   const auto clock = get_clock();
   const rclcpp::Time end = clock->now() + rclcpp::Duration::from_seconds(seconds);

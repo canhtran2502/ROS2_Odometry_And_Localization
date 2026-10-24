@@ -7,6 +7,7 @@ machine itself lives in mission_logic.py (MissionTracker); this node only does t
 """
 import math
 import os
+import sys
 import threading
 import time
 
@@ -17,6 +18,7 @@ from bumperbot_msgs.action import ExecuteMission
 from bumperbot_msgs.msg import MissionStatus
 from geometry_msgs.msg import PoseStamped
 from nav2_msgs.action import NavigateToPose
+from rclpy._rclpy_pybind11 import RCLError
 from rclpy.action import ActionClient, ActionServer, CancelResponse, GoalResponse
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.duration import Duration
@@ -222,7 +224,7 @@ class MissionManager(Node):
     def wait_clock(self, seconds, interruptible):
         """Wait on the node clock. Returns True when interrupted by a cancel request."""
         # The node clock is sim time with use_sim_time. If it does not advance for
-        # clock_stall_timeout wall seconds (/clock stalled) the wait counts as elapsed.
+        # clock_stall_timeout wall seconds (time source stalled) the wait counts as elapsed.
         clock = self.get_clock()
         end = clock.now() + Duration(seconds=seconds)
         last = clock.now()
@@ -506,19 +508,32 @@ class MissionManager(Node):
 
 def main(args=None):
     rclpy.init(args=args)
-    node = MissionManager()
+    try:
+        node = MissionManager()
+    except Exception as exc:  # noqa: BLE001 - any constructor failure is fatal
+        rclpy.logging.get_logger("mission_manager").fatal(str(exc))
+        if rclpy.ok():
+            rclpy.shutdown()
+        sys.exit(1)
     executor = MultiThreadedExecutor(num_threads=6)
     executor.add_node(node)
     try:
         executor.spin()
-    except (KeyboardInterrupt, ExternalShutdownException):
+    except (KeyboardInterrupt, ExternalShutdownException, RCLError):
+        # A signal-driven shutdown can invalidate the context while spinning
         pass
     # Cancel the active Nav2 goal and let the mission loop end before the node goes away
     node.shutdown_mission()
     executor.shutdown(timeout_sec=1.0)
-    node.destroy_node()
-    if rclpy.ok():
-        rclpy.shutdown()
+    try:
+        node.destroy_node()
+    except RCLError:
+        pass
+    try:
+        if rclpy.ok():
+            rclpy.shutdown()
+    except RCLError:
+        pass
 
 
 if __name__ == "__main__":

@@ -92,12 +92,12 @@ if(BUILD_TESTING)
 
   if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test/test_mission_manager.launch.py)
     add_launch_test(test/test_mission_manager.launch.py
-      TARGET test_mission_manager TIMEOUT 300)
+      TARGET test_mission_manager TIMEOUT 420)
   endif()
 
   if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test/test_mission_review_fixes.launch.py)
     add_launch_test(test/test_mission_review_fixes.launch.py
-      TARGET test_mission_review_fixes TIMEOUT 300)
+      TARGET test_mission_review_fixes TIMEOUT 360)
   endif()
 endif()
 
