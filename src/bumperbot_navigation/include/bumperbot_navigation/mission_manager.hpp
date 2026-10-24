@@ -8,6 +8,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "bumperbot_msgs/action/execute_mission.hpp"
@@ -31,6 +32,11 @@ public:
   using NavGoalHandle = rclcpp_action::ClientGoalHandle<NavigateToPose>;
 
   explicit MissionManager(const rclcpp::NodeOptions & options = rclcpp::NodeOptions());
+  ~MissionManager() override;
+
+  // Stop the mission thread: cancels the active Nav2 goal (best effort) and joins the thread.
+  // Safe to call more than once; must be called while the executor is still spinning.
+  void shutdown_mission();
 
 private:
   // Action server callbacks
@@ -48,9 +54,14 @@ private:
   void publish_all();
 
   // Helpers
+  bool running() const;
   bool cancel_signaled();
   bool handle_cancel_if_pending();
+  // Waits on the node clock (sim time with use_sim_time); returns true when a cancel interrupted
+  // it. A node clock that does not advance for clock_stall_timeout_ wall seconds ends the wait.
   bool wait_clock(double seconds, bool interruptible);
+  // Best-effort cancel of a Nav2 goal; never throws
+  void cancel_nav_goal(const NavGoalHandle::SharedPtr & nav_handle, double wait_seconds);
   NavigateToPose::Goal make_goal(const Station & station);
   double distance_to_station(const Station & station);
   // Returns true when the navigation succeeded; interrupted is set when a cancel stopped it
@@ -65,6 +76,7 @@ private:
   double nav_server_timeout_;
   double nav_goal_timeout_;
   double tf_timeout_;
+  double clock_stall_timeout_;
 
   rclcpp::CallbackGroup::SharedPtr group_;
   std::mutex mutex_;
@@ -75,6 +87,8 @@ private:
   std::shared_ptr<MissionGoalHandle> goal_handle_;
   std::atomic<bool> cancel_requested_{false};
   bool cancel_handled_ = false;
+  std::atomic<bool> shutdown_{false};
+  std::thread mission_thread_;
 
   std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
   std::shared_ptr<tf2_ros::TransformListener> tf_listener_;

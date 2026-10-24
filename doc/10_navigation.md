@@ -64,6 +64,8 @@ stations:
 - Goal: an ordered list of station names. An empty list, an unknown station name or a second goal while a mission is active is rejected.
 - For each station: send a `NavigateToPose` goal (frame `map`, yaw to quaternion), wait for the Nav2 result, then check with TF `map -> base_footprint` that the planar distance to the station is at most `goal_tolerance` (0.2 m). A Nav2 SUCCEEDED with a larger distance (or an unavailable TF) counts as a failed attempt. After the check the robot dwells `dwell` seconds.
 - Nav2 not ready: a goal REJECTED by the `NavigateToPose` server is treated as "server not ready" (for example the lifecycle is not active yet). The goal is re-sent every `retry_delay` seconds without counting a failed attempt; only after `nav_server_timeout` of continuous rejection does it count as a failure.
+- Dead Nav2 mid-goal: while waiting for the result, if the `NavigateToPose` server stays unavailable for longer than `nav_server_timeout` (wall) the attempt fails at once (no cancel is possible) instead of waiting for `nav_goal_timeout`; it counts as a failed attempt.
+- Shutdown: on Ctrl+C / SIGTERM (or node destruction) while a Nav2 goal is active, a best-effort cancel of that goal is sent (it cannot throw) and the C++ mission thread (a joinable `std::thread`) is joined before the node exits, so it never outlives the node and `std::terminate` is not reached. The mission result is ABORTED with message `node shutting down`.
 - Retries: a failed attempt is repeated after `retry_delay` seconds, up to `max_retries` extra attempts; then the station is skipped and the mission goes on.
 - Abort: `max_consecutive_failures` consecutive skipped stations abort the mission (the remaining stations are not tried; 0 disables this).
 - Dock: after the last station (`return_to_dock`), after an abort and after a cancel the robot navigates to the dock station (skipped only when the robot is currently at the dock: it reached the dock and has not started driving to another station since), with up to `dock_max_retries` extra attempts. If the dock cannot be reached the outcome is `OUTCOME_DOCK_FAILED` and `docked` is false.
@@ -71,11 +73,13 @@ stations:
 - Result: `outcome` (COMPLETED 0, COMPLETED_WITH_SKIPS 1, ABORTED 2, CANCELED 3, DOCK_FAILED 4), `docked`, `visited`, `skipped`, `message`. Final action status: SUCCEEDED for outcomes 0 and 1, ABORTED for 2 and 4, CANCELED for 3.
 - `/mission/status` (`bumperbot_msgs/msg/MissionStatus`, reliable + transient_local): `IDLE`, `NAVIGATING`, `DWELLING`, `RETURNING_TO_DOCK`, `COMPLETED`, `ABORTED`, `CANCELED`, `DOCK_FAILED`, with the current station, index, attempt, progress and the visited/skipped lists; published at start, on every change and at `status_rate` Hz. Action feedback carries the same content plus `distance_remaining`.
 
-Parameters (`config/mission_manager.yaml`): `stations_file` (empty = package default), `nav_action_name`, `global_frame`, `robot_frame`, `goal_tolerance`, `max_retries`, `retry_delay`, `max_consecutive_failures`, `dock_max_retries`, `return_to_dock`, `nav_server_timeout`, `nav_goal_timeout`, `tf_timeout`, `status_rate`, `behavior_tree`.
+Parameters (`config/mission_manager.yaml`): `stations_file` (empty = package default), `nav_action_name`, `global_frame`, `robot_frame`, `goal_tolerance`, `max_retries`, `retry_delay`, `max_consecutive_failures`, `dock_max_retries`, `return_to_dock`, `nav_server_timeout`, `nav_goal_timeout`, `tf_timeout`, `clock_stall_timeout` (30.0 s wall; node-clock waits end after this long without the clock advancing; 0 disables), `status_rate`, `behavior_tree`.
 
 ## A6. Simulator Independence
 
-The mission manager depends only on the `navigate_to_pose` action, TF and its own interfaces; it does not reference Gazebo or MuJoCo. Clocks: the dwell and the `retry_delay` use the node clock (so `use_sim_time` works unchanged); `nav_goal_timeout`, `nav_server_timeout` and `tf_timeout` use wall (steady) time.
+The mission manager depends only on the `navigate_to_pose` action, TF and its own interfaces; it does not reference Gazebo or MuJoCo. Clocks, exactly:
+  - Node clock (sim time when `use_sim_time=true`): the dwell, `retry_delay` (also the retry delay while Nav2 rejects goals and the docking retry delay) and the `/mission/status` timer (`create_timer` in both C++ and Python, so the status stops and starts with sim time identically). These waits are interruptible by a cancel (docking waits excepted: the dock return must finish) and bounded by a wall-clock fallback: if the node clock does not advance for `clock_stall_timeout` wall seconds (for example `/clock` stalled) the wait counts as elapsed and a warning is logged.
+  - Wall (steady) time: `nav_goal_timeout`, `nav_server_timeout`, `tf_timeout` and `clock_stall_timeout` itself.
 
 ## A7. Tests
 

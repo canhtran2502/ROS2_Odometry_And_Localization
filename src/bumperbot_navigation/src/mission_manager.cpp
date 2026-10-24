@@ -1,8 +1,10 @@
 #include "bumperbot_navigation/mission_manager.hpp"
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cmath>
+#include <csignal>
 #include <functional>
 #include <limits>
 #include <stdexcept>
@@ -47,6 +49,7 @@ MissionManager::MissionManager(const rclcpp::NodeOptions & options)
   declare_parameter<double>("nav_server_timeout", 10.0);
   declare_parameter<double>("nav_goal_timeout", 300.0);
   declare_parameter<double>("tf_timeout", 1.0);
+  declare_parameter<double>("clock_stall_timeout", 30.0);
   declare_parameter<double>("status_rate", 2.0);
   declare_parameter<std::string>("behavior_tree", "");
 
@@ -73,6 +76,7 @@ MissionManager::MissionManager(const rclcpp::NodeOptions & options)
   nav_server_timeout_ = get_parameter("nav_server_timeout").as_double();
   nav_goal_timeout_ = get_parameter("nav_goal_timeout").as_double();
   tf_timeout_ = get_parameter("tf_timeout").as_double();
+  clock_stall_timeout_ = get_parameter("clock_stall_timeout").as_double();
   behavior_tree_ = get_parameter("behavior_tree").as_string();
   tracker_params_.max_retries = get_parameter("max_retries").as_int();
   tracker_params_.max_consecutive_failures = get_parameter("max_consecutive_failures").as_int();
@@ -101,12 +105,32 @@ MissionManager::MissionManager(const rclcpp::NodeOptions & options)
   publish_status();
   const double rate = get_parameter("status_rate").as_double();
   if (rate > 0.0) {
-    status_timer_ = create_wall_timer(
-      std::chrono::duration<double>(1.0 / rate), std::bind(&MissionManager::publish_status, this),
-      group_);
+    // Node-clock timer (like the Python twin): the status follows sim time when use_sim_time=true
+    status_timer_ = rclcpp::create_timer(
+      this, get_clock(), rclcpp::Duration::from_seconds(1.0 / rate),
+      std::bind(&MissionManager::publish_status, this), group_);
   }
 
   RCLCPP_INFO(get_logger(), "Mission manager ready (action: /execute_mission)");
+}
+
+MissionManager::~MissionManager()
+{
+  shutdown_mission();
+}
+
+bool MissionManager::running() const
+{
+  return rclcpp::ok() && !shutdown_;
+}
+
+void MissionManager::shutdown_mission()
+{
+  shutdown_ = true;
+  if (mission_thread_.joinable() && mission_thread_.get_id() != std::this_thread::get_id()) {
+    // The mission thread sees shutdown_, cancels the active Nav2 goal and returns
+    mission_thread_.join();
+  }
 }
 
 // ----- action server callbacks -----
@@ -137,8 +161,15 @@ rclcpp_action::CancelResponse MissionManager::cancel_callback(
 
 void MissionManager::accepted_callback(std::shared_ptr<MissionGoalHandle> goal_handle)
 {
-  // Run the mission in its own thread so the executor stays free
-  std::thread{std::bind(&MissionManager::execute, this, _1), goal_handle}.detach();
+  // Run the mission in its own thread so the executor stays free. The previous mission thread
+  // (if any) has already released active_, so joining it here only waits for its last lines.
+  if (mission_thread_.joinable()) {
+    mission_thread_.join();
+  }
+  if (shutdown_) {
+    return;
+  }
+  mission_thread_ = std::thread(std::bind(&MissionManager::execute, this, _1), goal_handle);
 }
 
 // ----- status -----
@@ -221,8 +252,28 @@ bool MissionManager::handle_cancel_if_pending()
 
 bool MissionManager::wait_clock(double seconds, bool interruptible)
 {
-  const rclcpp::Time end = get_clock()->now() + rclcpp::Duration::from_seconds(seconds);
-  while (rclcpp::ok() && get_clock()->now() < end) {
+  // Node clock: dwell and retry delays follow sim time. If /clock stalls (the node clock does not
+  // advance for clock_stall_timeout_ wall seconds) the wait counts as elapsed.
+  const auto clock = get_clock();
+  const rclcpp::Time end = clock->now() + rclcpp::Duration::from_seconds(seconds);
+  rclcpp::Time last = clock->now();
+  auto last_advance = SteadyClock::now();
+  while (running()) {
+    const rclcpp::Time now = clock->now();
+    if (now >= end) {
+      break;
+    }
+    if (now != last) {
+      last = now;
+      last_advance = SteadyClock::now();
+    } else if (clock_stall_timeout_ > 0.0 &&
+      SteadyClock::now() - last_advance >= std::chrono::duration<double>(clock_stall_timeout_))
+    {
+      RCLCPP_WARN(
+        get_logger(), "Node clock did not advance for %.1f s (wall), treating the wait as elapsed",
+        clock_stall_timeout_);
+      break;
+    }
     std::this_thread::sleep_for(20ms);
     handle_cancel_if_pending();
     if (interruptible && cancel_handled_) {
@@ -230,6 +281,21 @@ bool MissionManager::wait_clock(double seconds, bool interruptible)
     }
   }
   return false;
+}
+
+void MissionManager::cancel_nav_goal(
+  const NavGoalHandle::SharedPtr & nav_handle,
+  double wait_seconds)
+{
+  try {
+    auto cancel_future = nav_client_->async_cancel_goal(nav_handle);
+    cancel_future.wait_for(std::chrono::duration<double>(wait_seconds));
+  } catch (const std::exception & exc) {
+    // e.g. rclcpp_action::exceptions::UnknownGoalHandleError when the goal already ended
+    RCLCPP_WARN(get_logger(), "Could not cancel the Nav2 goal: %s", exc.what());
+  } catch (...) {
+    RCLCPP_WARN(get_logger(), "Could not cancel the Nav2 goal");
+  }
 }
 
 MissionManager::NavigateToPose::Goal MissionManager::make_goal(const Station & station)
@@ -292,6 +358,9 @@ bool MissionManager::navigate(const Step & step, bool & interrupted)
         return false;
       }
       std::this_thread::sleep_for(100ms);
+      if (!running()) {
+        return false;
+      }
       if (handle_cancel_if_pending() && !step.docking) {
         interrupted = true;
         return false;
@@ -299,11 +368,16 @@ bool MissionManager::navigate(const Step & step, bool & interrupted)
     }
 
     auto send_future = nav_client_->async_send_goal(make_goal(*station), options);
-    if (send_future.wait_for(std::chrono::duration<double>(nav_server_timeout_)) !=
-      std::future_status::ready)
-    {
-      RCLCPP_WARN(get_logger(), "Nav2 did not answer the goal request");
-      return false;
+    const auto answer_deadline =
+      SteadyClock::now() + std::chrono::duration<double>(nav_server_timeout_);
+    while (send_future.wait_for(50ms) != std::future_status::ready) {
+      if (!running()) {
+        return false;
+      }
+      if (SteadyClock::now() >= answer_deadline) {
+        RCLCPP_WARN(get_logger(), "Nav2 did not answer the goal request");
+        return false;
+      }
     }
     nav_handle = send_future.get();
     if (nav_handle) {
@@ -329,9 +403,14 @@ bool MissionManager::navigate(const Step & step, bool & interrupted)
   auto result_future = nav_client_->async_get_result(nav_handle);
   const auto goal_deadline = SteadyClock::now() + std::chrono::duration<double>(nav_goal_timeout_);
   bool timed_out = false;
+  bool shutting_down = false;
+  bool server_lost = false;
+  bool server_down = false;
+  SteadyClock::time_point server_down_since;
   while (result_future.wait_for(50ms) != std::future_status::ready) {
-    if (!rclcpp::ok()) {
-      return false;
+    if (!running()) {
+      shutting_down = true;
+      break;
     }
     if (cancel_signaled() && !cancel_handled_) {
       handle_cancel_if_pending();
@@ -345,16 +424,33 @@ bool MissionManager::navigate(const Step & step, bool & interrupted)
       timed_out = true;
       break;
     }
+    // Dead Nav2 mid-goal: fail the attempt early instead of waiting for nav_goal_timeout
+    if (nav_client_->action_server_is_ready()) {
+      server_down = false;
+    } else if (!server_down) {
+      server_down = true;
+      server_down_since = SteadyClock::now();
+    } else if (SteadyClock::now() - server_down_since >=
+      std::chrono::duration<double>(nav_server_timeout_))
+    {
+      RCLCPP_WARN(
+        get_logger(), "Nav2 action server disappeared during the navigation to '%s'",
+        step.station.c_str());
+      server_lost = true;
+      break;
+    }
   }
 
+  if (server_lost) {
+    // The server is gone: a cancel is not possible, the attempt simply failed
+    return false;
+  }
+  if (shutting_down) {
+    cancel_nav_goal(nav_handle, 1.0);
+    return false;
+  }
   if (interrupted || timed_out) {
-    try {
-      auto cancel_future = nav_client_->async_cancel_goal(nav_handle);
-      cancel_future.wait_for(5s);
-    } catch (const std::exception & exc) {
-      // e.g. rclcpp_action::exceptions::UnknownGoalHandleError when the goal already ended
-      RCLCPP_WARN(get_logger(), "Could not cancel the Nav2 goal: %s", exc.what());
-    }
+    cancel_nav_goal(nav_handle, 5.0);
     result_future.wait_for(5s);
     return false;
   }
@@ -418,7 +514,7 @@ void MissionManager::execute(std::shared_ptr<MissionGoalHandle> goal_handle)
       if (recovery_failed || !tracker_->finished()) {
         outcome = OUTCOME_ABORTED;
         state = STATE_ABORTED;
-        message = "internal error: " + error;
+        message = shutdown_ ? std::string("node shutting down") : "internal error: " + error;
         result->docked = false;
       }
       result->outcome = outcome;
@@ -453,7 +549,7 @@ void MissionManager::execute(std::shared_ptr<MissionGoalHandle> goal_handle)
 
 void MissionManager::run_mission()
 {
-  while (rclcpp::ok()) {
+  while (running()) {
     if (handle_cancel_if_pending()) {
       publish_all();
     }
@@ -504,13 +600,40 @@ void MissionManager::run_mission()
 
 }  // namespace bumperbot_navigation
 
+namespace
+{
+std::atomic<bool> g_stop_requested{false};
+
+void on_signal(int)
+{
+  g_stop_requested = true;
+}
+}  // namespace
+
 int main(int argc, char ** argv)
 {
-  rclcpp::init(argc, argv);
-  auto node = std::make_shared<bumperbot_navigation::MissionManager>();
-  rclcpp::executors::MultiThreadedExecutor executor(rclcpp::ExecutorOptions(), 6);
-  executor.add_node(node);
-  executor.spin();
+  // Own signal handling: the context must stay valid while the mission thread cancels the
+  // active Nav2 goal, so rclcpp's default shutdown-on-signal is disabled.
+  rclcpp::init(argc, argv, rclcpp::InitOptions(), rclcpp::SignalHandlerOptions::None);
+  std::signal(SIGINT, on_signal);
+  std::signal(SIGTERM, on_signal);
+  int status = 0;
+  try {
+    auto node = std::make_shared<bumperbot_navigation::MissionManager>();
+    rclcpp::executors::MultiThreadedExecutor executor(rclcpp::ExecutorOptions(), 6);
+    executor.add_node(node);
+    std::thread spin_thread([&executor]() {executor.spin();});
+    while (!g_stop_requested && rclcpp::ok()) {
+      std::this_thread::sleep_for(50ms);
+    }
+    // Stop the mission (cancels the Nav2 goal) while the executor still processes callbacks
+    node->shutdown_mission();
+    executor.cancel();
+    spin_thread.join();
+  } catch (const std::exception & exc) {
+    RCLCPP_FATAL(rclcpp::get_logger("mission_manager"), "%s", exc.what());
+    status = 1;
+  }
   rclcpp::shutdown();
-  return 0;
+  return status;
 }

@@ -20,7 +20,7 @@ from nav2_msgs.action import NavigateToPose
 from rclpy.action import ActionClient, ActionServer, CancelResponse, GoalResponse
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.duration import Duration
-from rclpy.executors import MultiThreadedExecutor
+from rclpy.executors import ExternalShutdownException, MultiThreadedExecutor
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from rclpy.time import Time
@@ -50,6 +50,7 @@ class MissionManager(Node):
         self.declare_parameter("nav_server_timeout", 10.0)
         self.declare_parameter("nav_goal_timeout", 300.0)
         self.declare_parameter("tf_timeout", 1.0)
+        self.declare_parameter("clock_stall_timeout", 30.0)
         self.declare_parameter("status_rate", 2.0)
         self.declare_parameter("behavior_tree", "")
 
@@ -71,6 +72,7 @@ class MissionManager(Node):
         self.nav_server_timeout = float(self.get_parameter("nav_server_timeout").value)
         self.nav_goal_timeout = float(self.get_parameter("nav_goal_timeout").value)
         self.tf_timeout = float(self.get_parameter("tf_timeout").value)
+        self.clock_stall_timeout = float(self.get_parameter("clock_stall_timeout").value)
         self.behavior_tree = self.get_parameter("behavior_tree").value
         self.tracker_params = TrackerParams(
             max_retries=int(self.get_parameter("max_retries").value),
@@ -88,6 +90,7 @@ class MissionManager(Node):
         self.goal_handle = None
         self.cancel_event = threading.Event()
         self.cancel_handled = False
+        self.shutdown_event = threading.Event()
 
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
@@ -112,6 +115,7 @@ class MissionManager(Node):
         self.publish_status()
         rate = float(self.get_parameter("status_rate").value)
         if rate > 0.0:
+            # Node-clock timer (like the C++ twin): follows sim time when use_sim_time=true
             self.status_timer = self.create_timer(
                 1.0 / rate, self.publish_status, callback_group=self.group)
 
@@ -184,6 +188,20 @@ class MissionManager(Node):
         self.publish_feedback()
 
     # ----- helpers -----
+    def running(self):
+        """Return True while the node is neither shut down nor asked to stop the mission."""
+        return rclpy.ok() and not self.shutdown_event.is_set()
+
+    def shutdown_mission(self):
+        """Stop the mission: the mission loop cancels the active Nav2 goal (best effort)."""
+        self.shutdown_event.set()
+        deadline = time.monotonic() + 3.0
+        while time.monotonic() < deadline:
+            with self.lock:
+                if not self.active:
+                    return
+            time.sleep(0.05)
+
     def cancel_signaled(self):
         """Return True when a cancel was requested (also if only the goal handle knows it)."""
         handle = self.goal_handle
@@ -203,13 +221,42 @@ class MissionManager(Node):
 
     def wait_clock(self, seconds, interruptible):
         """Wait on the node clock. Returns True when interrupted by a cancel request."""
-        end = self.get_clock().now() + Duration(seconds=seconds)
-        while rclpy.ok() and self.get_clock().now() < end:
+        # The node clock is sim time with use_sim_time. If it does not advance for
+        # clock_stall_timeout wall seconds (/clock stalled) the wait counts as elapsed.
+        clock = self.get_clock()
+        end = clock.now() + Duration(seconds=seconds)
+        last = clock.now()
+        last_advance = time.monotonic()
+        while self.running():
+            now = clock.now()
+            if now >= end:
+                break
+            if now != last:
+                last = now
+                last_advance = time.monotonic()
+            elif (self.clock_stall_timeout > 0.0
+                  and time.monotonic() - last_advance >= self.clock_stall_timeout):
+                self.get_logger().warn(
+                    "Node clock did not advance for {:.1f} s (wall), treating the wait as "
+                    "elapsed".format(self.clock_stall_timeout))
+                break
             time.sleep(0.02)
             self.handle_cancel_if_pending()
             if interruptible and self.cancel_handled:
                 return True
         return False
+
+    def cancel_nav_goal(self, nav_handle, wait_seconds):
+        """Best-effort cancel of a Nav2 goal; never raises."""
+        try:
+            cancel_done = threading.Event()
+            nav_handle.cancel_goal_async().add_done_callback(lambda _f: cancel_done.set())
+            cancel_done.wait(wait_seconds)
+        except Exception as exc:  # e.g. the goal already ended or the context is gone
+            try:
+                self.get_logger().warn("Could not cancel the Nav2 goal: {}".format(exc))
+            except Exception:
+                pass
 
     def make_goal(self, station):
         goal = NavigateToPose.Goal()
@@ -258,6 +305,8 @@ class MissionManager(Node):
                     self.get_logger().warn("Nav2 action server is not available")
                     return False, False
                 time.sleep(0.1)
+                if not self.running():
+                    return False, False
                 if self.handle_cancel_if_pending() and not step.docking:
                     return False, True
 
@@ -271,9 +320,13 @@ class MissionManager(Node):
             send_future = self.nav_client.send_goal_async(
                 self.make_goal(station), feedback_callback=self.nav_feedback_callback)
             send_future.add_done_callback(on_goal_response)
-            if not accepted.wait(self.nav_server_timeout):
-                self.get_logger().warn("Nav2 did not answer the goal request")
-                return False, False
+            answer_deadline = time.monotonic() + self.nav_server_timeout
+            while not accepted.wait(0.05):
+                if not self.running():
+                    return False, False
+                if time.monotonic() >= answer_deadline:
+                    self.get_logger().warn("Nav2 did not answer the goal request")
+                    return False, False
             nav_handle = holder["handle"]
             if nav_handle is not None and nav_handle.accepted:
                 break
@@ -300,9 +353,13 @@ class MissionManager(Node):
         goal_deadline = time.monotonic() + self.nav_goal_timeout
         interrupted = False
         timed_out = False
+        shutting_down = False
+        server_lost = False
+        server_down_since = None
         while not done.wait(0.05):
-            if not rclpy.ok():
-                return False, False
+            if not self.running():
+                shutting_down = True
+                break
             if self.cancel_signaled() and not self.cancel_handled:
                 self.handle_cancel_if_pending()
                 if not step.docking:
@@ -312,14 +369,26 @@ class MissionManager(Node):
                 self.get_logger().warn("Navigation to '{}' timed out".format(step.station))
                 timed_out = True
                 break
+            # Dead Nav2 mid-goal: fail the attempt early instead of waiting for nav_goal_timeout
+            if self.nav_client.server_is_ready():
+                server_down_since = None
+            elif server_down_since is None:
+                server_down_since = time.monotonic()
+            elif time.monotonic() - server_down_since >= self.nav_server_timeout:
+                self.get_logger().warn(
+                    "Nav2 action server disappeared during the navigation to '{}'".format(
+                        step.station))
+                server_lost = True
+                break
 
+        if server_lost:
+            # The server is gone: a cancel is not possible, the attempt simply failed
+            return False, False
+        if shutting_down:
+            self.cancel_nav_goal(nav_handle, 1.0)
+            return False, False
         if interrupted or timed_out:
-            cancel_done = threading.Event()
-            try:
-                nav_handle.cancel_goal_async().add_done_callback(lambda _f: cancel_done.set())
-                cancel_done.wait(5.0)
-            except Exception as exc:  # e.g. the goal already ended
-                self.get_logger().warn("Could not cancel the Nav2 goal: {}".format(exc))
+            self.cancel_nav_goal(nav_handle, 5.0)
             done.wait(5.0)
             return False, interrupted
 
@@ -371,7 +440,8 @@ class MissionManager(Node):
                 result.outcome = OUTCOME_ABORTED
                 result.docked = False
                 state = STATE_ABORTED
-                message = "internal error: {}".format(error)
+                message = ("node shutting down" if self.shutdown_event.is_set()
+                           else "internal error: {}".format(error))
             result.message = message
             try:
                 self.publish_all()
@@ -399,7 +469,7 @@ class MissionManager(Node):
 
     def run_mission(self):
         tracker = self.tracker
-        while rclpy.ok():
+        while self.running():
             if self.handle_cancel_if_pending():
                 self.publish_all()
             with self.lock:
@@ -441,8 +511,11 @@ def main(args=None):
     executor.add_node(node)
     try:
         executor.spin()
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, ExternalShutdownException):
         pass
+    # Cancel the active Nav2 goal and let the mission loop end before the node goes away
+    node.shutdown_mission()
+    executor.shutdown(timeout_sec=1.0)
     node.destroy_node()
     if rclpy.ok():
         rclpy.shutdown()

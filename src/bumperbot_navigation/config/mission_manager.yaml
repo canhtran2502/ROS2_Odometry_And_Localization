@@ -18,5 +18,8 @@ mission_manager:
     nav_server_timeout: 10.0
     nav_goal_timeout: 300.0
     tf_timeout: 1.0
+    # Node-clock waits (dwell, retry delay) end after this many wall seconds without the node
+    # clock advancing (stalled /clock); 0 disables the fallback
+    clock_stall_timeout: 30.0
     status_rate: 2.0
     behavior_tree: ""
