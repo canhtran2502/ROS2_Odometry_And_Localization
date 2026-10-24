@@ -172,3 +172,25 @@ test_mission_docs.py (suggestion: register a dedicated test file, e.g. test_miss
 - output: raw `Traceback ... ValueError: cannot read stations file ...`, exit code 1, no `[FATAL]` line (C++ prints FATAL and returns 1).
 - root cause: mission_manager.py main() does not wrap `MissionManager()` in try/except like mission_manager.cpp:632-636.
 - suggested fix: catch Exception around construction, `rclpy.logging.get_logger("mission_manager").fatal(str(exc))`, shut down rclpy and `sys.exit(1)`.
+
+# Test report: iteration 5 (comment reword, Python RCLError/FATAL handling, raised TIMEOUTs)
+Verdict: PASS  (19/19: AC1-AC16 pass; full-suite gate PASS; iteration-4 checks PASS)
+
+Build: clean rebuild (build/install of navigation and bringup removed), NO --symlink-install, `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1`,
+`--cmake-force-configure`. Registered ctest tests: 13 in bumperbot_navigation, 5 in bumperbot_bringup (none silently missing).
+Gate: `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 colcon test --packages-select bumperbot_navigation bumperbot_bringup`;
+`colcon test-result --verbose`: 192 tests, 0 errors, 0 failures, 8 skipped (5 cppcheck sub-checks skipped by ament, 1 AC16 and 2 slam
+opt-in tests skipped by design, without the opt-in env var). Lint (flake8, pep257, uncrustify, cppcheck, lint_cmake, xmllint) passes.
+AC13 (static) now passes after the comment rewording. AC15/AC16: `BUMPERBOT_MISSION_E2E=1 launch_test test_mission_sim_mujoco.launch.py`
+-> test_stack_up and test_full_mission OK, 2 tests in 112.5 s.
+
+| Item | Result | Evidence |
+|---|---|---|
+| AC1-AC16 | PASS | all registered tests passed |
+| 3c idle signal (cpp/py x SIGINT/SIGTERM) | PASS | test_signal_while_idle_exits_cleanly, 25 consecutive runs of all 4 variants: 0 failures (100/100), rc 0 |
+| 3c constructor error cpp/py | PASS | FATAL log, non-zero exit in both |
+| mid-mission signals, 3a/3b/3d, parity | PASS | unchanged, pass in the gate |
+
+Durations vs registered TIMEOUT: test_mission_manager 247.4 s / 420 s (59%); test_mission_review_fixes 202.0 s / 360 s (56%);
+pytest files: test_stations_on_map 54.8 s, test_mission_docs 12.0 s, test_interfaces_and_static 10.4 s (all well below 120 s).
+bringup: test_mission_sim_mujoco 5.2 s (E2E off), test_auto_explore_mujoco 23.2 s. No timeouts hit. No test files modified this iteration.
