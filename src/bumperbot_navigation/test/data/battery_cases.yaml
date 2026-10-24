@@ -1,0 +1,268 @@
+# AC15: BatteryModel and BatteryMonitorLogic cases (pure Python).
+# Model status values follow sensor_msgs/BatteryState: CHARGING 1, DISCHARGING 2, FULL 4.
+model:
+  # Each step: dt (s), linear (m/s), angular (rad/s), docked, expected percentage afterwards.
+  default_params: {idle_drain_rate: 0.0005, linear_drain_rate: 0.004, angular_drain_rate: 0.001,
+                   charge_rate: 0.01, empty_voltage: 10.5, full_voltage: 12.6}
+  cases:
+    - name: idle_drain
+      initial: 0.5
+      steps:
+        - {dt: 1.0, linear: 0.0, angular: 0.0, docked: false, pct: 0.4995}
+        - {dt: 2.0, linear: 0.0, angular: 0.0, docked: false, pct: 0.499}
+    - name: moving_drains_faster_linear
+      initial: 0.5
+      steps:
+        - {dt: 1.0, linear: 0.2, angular: 0.0, docked: false, pct: 0.4987}
+    - name: reverse_motion_drains_like_forward
+      initial: 0.5
+      steps:
+        - {dt: 1.0, linear: -0.2, angular: 0.0, docked: false, pct: 0.4987}
+    - name: rotating_drains_faster_angular
+      initial: 0.5
+      steps:
+        - {dt: 1.0, linear: 0.0, angular: 0.5, docked: false, pct: 0.499}
+        - {dt: 1.0, linear: 0.0, angular: -0.5, docked: false, pct: 0.498}
+    - name: combined_motion
+      initial: 0.8
+      steps:
+        - {dt: 1.0, linear: 0.1, angular: 0.2, docked: false, pct: 0.7989}
+    - name: charge_while_docked
+      initial: 0.5
+      steps:
+        - {dt: 1.0, linear: 0.0, angular: 0.0, docked: true, pct: 0.51}
+        - {dt: 5.0, linear: 0.0, angular: 0.0, docked: true, pct: 0.52}
+    - name: charge_clamped_at_one
+      initial: 0.995
+      steps:
+        - {dt: 1.0, linear: 0.0, angular: 0.0, docked: true, pct: 1.0}
+        - {dt: 1.0, linear: 0.0, angular: 0.0, docked: true, pct: 1.0}
+    - name: drain_clamped_at_zero
+      initial: 0.001
+      steps:
+        - {dt: 1.0, linear: 0.0, angular: 0.0, docked: false, pct: 0.0005}
+        - {dt: 1.0, linear: 0.0, angular: 0.0, docked: false, pct: 0.0}
+        - {dt: 1.0, linear: 0.5, angular: 0.5, docked: false, pct: 0.0}
+    - name: negative_dt_changes_nothing
+      initial: 0.5
+      steps:
+        - {dt: -5.0, linear: 0.0, angular: 0.0, docked: false, pct: 0.5}
+        - {dt: -5.0, linear: 0.0, angular: 0.0, docked: true, pct: 0.5}
+    - name: huge_dt_is_clamped_to_one_second
+      initial: 0.5
+      steps:
+        - {dt: 1000.0, linear: 0.0, angular: 0.0, docked: false, pct: 0.4995}
+        - {dt: 1000.0, linear: 0.0, angular: 0.0, docked: true, pct: 0.5095}
+    - name: zero_dt_changes_nothing
+      initial: 0.5
+      steps:
+        - {dt: 0.0, linear: 1.0, angular: 1.0, docked: false, pct: 0.5}
+    - name: initial_value_clamped
+      initial: 1.7
+      steps:
+        - {dt: 0.0, linear: 0.0, angular: 0.0, docked: false, pct: 1.0}
+    - name: initial_negative_clamped
+      initial: -0.3
+      steps:
+        - {dt: 0.0, linear: 0.0, angular: 0.0, docked: false, pct: 0.0}
+    - name: custom_rates
+      params: {idle_drain_rate: 0.01, linear_drain_rate: 0.0, angular_drain_rate: 0.0, charge_rate: 0.05}
+      initial: 0.5
+      steps:
+        - {dt: 1.0, linear: 3.0, angular: 3.0, docked: false, pct: 0.49}
+        - {dt: 2.0, linear: 0.0, angular: 0.0, docked: true, pct: 0.54}
+  status:
+    # percentage, docked, expected power_supply_status
+    - {pct: 0.5, docked: true, status: 1}
+    - {pct: 0.999, docked: true, status: 1}
+    - {pct: 1.0, docked: true, status: 4}
+    - {pct: 0.5, docked: false, status: 2}
+    - {pct: 1.0, docked: false, status: 2}
+    - {pct: 0.0, docked: false, status: 2}
+  voltage:
+    - {pct: 0.0, volts: 10.5}
+    - {pct: 1.0, volts: 12.6}
+    - {pct: 0.5, volts: 11.55}
+    - {pct: 0.25, volts: 11.025}
+  override:
+    - {value: 0.1, pct: 0.1}
+    - {value: 0.0, pct: 0.0}
+    - {value: 1.0, pct: 1.0}
+    - {value: 1.5, pct: 1.0}
+    - {value: -0.5, pct: 0.0}
+
+monitor:
+  # Each event: t (s), optional inputs (battery: [pct, charging], mission, dock_status, result,
+  # reset), update (default true), expected actions (default []), state and counters.
+  cases:
+    - name: low_without_mission_sends_dock_once
+      events:
+        - {t: 0.0, battery: [0.5, false], state: MONITORING}
+        - {t: 1.0, battery: [0.15, false], actions: [SEND_DOCK], state: DOCKING}
+        - {t: 2.0, battery: [0.15, false], state: DOCKING}
+        - {t: 3.0, battery: [0.14, false], state: DOCKING}
+    - name: not_low_does_not_trigger
+      events:
+        - {t: 0.0, battery: [0.5, false], state: MONITORING}
+        - {t: 1.0, battery: [0.2, false], state: MONITORING}
+        - {t: 2.0, battery: [0.21, false], state: MONITORING}
+    - name: low_with_mission_cancels_first
+      events:
+        - {t: 0.0, battery: [0.5, false], mission: true, state: MONITORING}
+        - {t: 1.0, battery: [0.15, false], actions: [CANCEL_MISSION], state: CANCELING_MISSION}
+        - {t: 2.0, battery: [0.14, false], state: CANCELING_MISSION}
+        - {t: 3.0, battery: [0.14, false], state: CANCELING_MISSION}
+        - {t: 4.0, battery: [0.14, false], mission: false, actions: [SEND_DOCK], state: DOCKING}
+    - name: mission_cancel_timeout_sends_dock_anyway
+      params: {mission_cancel_timeout: 10.0}
+      events:
+        - {t: 0.0, battery: [0.5, false], mission: true, state: MONITORING}
+        - {t: 1.0, battery: [0.15, false], actions: [CANCEL_MISSION], state: CANCELING_MISSION}
+        - {t: 5.0, battery: [0.15, false], state: CANCELING_MISSION}
+        - {t: 10.9, battery: [0.15, false], state: CANCELING_MISSION}
+        - {t: 11.0, battery: [0.15, false], actions: [SEND_DOCK], state: DOCKING}
+    - name: stale_battery_never_triggers
+      events:
+        - {t: 0.0, battery: [0.1, false], update: false}
+        - {t: 10.0, state: WAITING_FOR_BATTERY}
+        - {t: 11.0, state: WAITING_FOR_BATTERY}
+    - name: no_battery_message_never_triggers
+      events:
+        - {t: 0.0, state: WAITING_FOR_BATTERY}
+        - {t: 100.0, mission: true, state: WAITING_FOR_BATTERY}
+    - name: nan_battery_never_triggers
+      events:
+        - {t: 0.0, battery: [.nan, false], state: WAITING_FOR_BATTERY}
+        - {t: 1.0, battery: [.nan, false], state: WAITING_FOR_BATTERY}
+        - {t: 2.0, battery: [0.5, false], state: MONITORING}
+        - {t: 3.0, battery: [.nan, false], state: WAITING_FOR_BATTERY}
+    - name: battery_going_silent_after_low_value
+      params: {battery_timeout: 1.0}
+      events:
+        - {t: 0.0, battery: [0.5, false], state: MONITORING}
+        - {t: 5.0, state: WAITING_FOR_BATTERY}
+        - {t: 6.0, battery: [0.1, false], actions: [SEND_DOCK], state: DOCKING}
+    - name: charging_battery_does_not_trigger
+      events:
+        - {t: 0.0, battery: [0.1, true], state: MONITORING}
+        - {t: 1.0, battery: [0.05, true], state: MONITORING}
+    - name: rejected_retries_are_not_counted_then_error
+      params: {dock_retry_delay: 5.0, dock_request_timeout: 20.0, max_dock_attempts: 2}
+      events:
+        - {t: 0.0, battery: [0.1, false], actions: [SEND_DOCK], state: DOCKING}
+        - {t: 1.0, result: REJECTED, state: DOCKING, attempts: 0}
+        - {t: 3.0, battery: [0.1, false], state: DOCKING}
+        - {t: 5.9, battery: [0.1, false], state: DOCKING}
+        - {t: 6.0, battery: [0.1, false], actions: [SEND_DOCK], state: DOCKING}
+        - {t: 7.0, result: REJECTED, state: DOCKING, attempts: 0}
+        - {t: 12.0, actions: [SEND_DOCK], state: DOCKING}
+        - {t: 13.0, result: REJECTED, state: DOCKING, attempts: 0}
+        - {t: 18.0, actions: [SEND_DOCK], state: DOCKING}
+        - {t: 19.0, result: REJECTED, state: DOCKING, attempts: 0}
+        - {t: 21.0, state: ERROR, attempts: 0}
+    - name: failed_dock_goals_count_until_max_attempts
+      params: {dock_retry_delay: 5.0, max_dock_attempts: 3}
+      events:
+        - {t: 0.0, battery: [0.1, false], actions: [SEND_DOCK], state: DOCKING}
+        - {t: 1.0, result: FAILED, state: DOCKING, attempts: 1}
+        - {t: 3.0, state: DOCKING}
+        - {t: 6.0, actions: [SEND_DOCK], state: DOCKING}
+        - {t: 7.0, result: FAILED, state: DOCKING, attempts: 2}
+        - {t: 12.0, actions: [SEND_DOCK], state: DOCKING}
+        - {t: 13.0, result: FAILED, state: ERROR, attempts: 3}
+        - {t: 30.0, battery: [0.1, false], state: ERROR}
+    - name: failed_then_docked_resets_attempts
+      params: {dock_retry_delay: 5.0, max_dock_attempts: 3}
+      events:
+        - {t: 0.0, battery: [0.1, false], actions: [SEND_DOCK], state: DOCKING}
+        - {t: 1.0, result: FAILED, state: DOCKING, attempts: 1}
+        - {t: 6.0, actions: [SEND_DOCK], state: DOCKING}
+        - {t: 7.0, result: DOCKED, state: CHARGING, attempts: 0}
+    - name: docked_then_undock_when_full
+      events:
+        - {t: 0.0, battery: [0.1, false], actions: [SEND_DOCK], state: DOCKING}
+        - {t: 1.0, result: DOCKED, state: CHARGING}
+        - {t: 2.0, battery: [0.5, true], dock_status: true, state: CHARGING}
+        - {t: 3.0, battery: [0.94, true], state: CHARGING}
+        - {t: 4.0, battery: [0.95, true], actions: [SEND_UNDOCK], state: UNDOCKING}
+        - {t: 5.0, battery: [0.96, true], state: UNDOCKING}
+        - {t: 6.0, result: UNDOCKED, state: MONITORING}
+    - name: already_docked_result_goes_charging
+      events:
+        - {t: 0.0, battery: [0.1, false], actions: [SEND_DOCK], state: DOCKING}
+        - {t: 1.0, result: ALREADY_DOCKED, state: CHARGING}
+        - {t: 2.0, battery: [0.3, true], dock_status: true, state: CHARGING}
+    - name: undock_when_full_disabled_keeps_charging
+      params: {undock_when_full: false}
+      events:
+        - {t: 0.0, battery: [0.1, false], actions: [SEND_DOCK], state: DOCKING}
+        - {t: 1.0, result: DOCKED, state: CHARGING}
+        - {t: 2.0, battery: [1.0, true], dock_status: true, state: CHARGING}
+        - {t: 3.0, battery: [1.0, true], state: CHARGING}
+    - name: no_retrigger_before_rearm_threshold
+      params: {low_threshold: 0.2, full_threshold: 0.3, rearm_hysteresis: 0.5}
+      events:
+        - {t: 0.0, battery: [0.1, false], actions: [SEND_DOCK], state: DOCKING}
+        - {t: 1.0, result: DOCKED, state: CHARGING}
+        - {t: 2.0, battery: [0.3, true], dock_status: true, actions: [SEND_UNDOCK], state: UNDOCKING}
+        - {t: 3.0, battery: [0.3, false], result: UNDOCKED, state: MONITORING}
+        - {t: 4.0, battery: [0.19, false], state: MONITORING}
+        - {t: 5.0, battery: [0.5, false], state: MONITORING}
+        - {t: 6.0, battery: [0.19, false], state: MONITORING}
+        - {t: 7.0, battery: [0.69, false], state: MONITORING}
+        - {t: 8.0, battery: [0.19, false], state: MONITORING}
+        - {t: 9.0, battery: [0.71, false], state: MONITORING}
+        - {t: 10.0, battery: [0.19, false], actions: [SEND_DOCK], state: DOCKING}
+    - name: rearmed_at_once_when_undocked_with_high_charge
+      events:
+        - {t: 0.0, battery: [0.1, false], actions: [SEND_DOCK], state: DOCKING}
+        - {t: 1.0, result: DOCKED, state: CHARGING}
+        - {t: 2.0, battery: [0.96, true], dock_status: true, actions: [SEND_UNDOCK], state: UNDOCKING}
+        - {t: 3.0, battery: [0.96, false], result: UNDOCKED, state: MONITORING}
+        - {t: 4.0, battery: [0.19, false], actions: [SEND_DOCK], state: DOCKING}
+    - name: custom_thresholds
+      params: {low_threshold: 0.5, full_threshold: 0.6, rearm_hysteresis: 0.1}
+      events:
+        - {t: 0.0, battery: [0.51, false], state: MONITORING}
+        - {t: 1.0, battery: [0.49, false], actions: [SEND_DOCK], state: DOCKING}
+        - {t: 2.0, result: DOCKED, state: CHARGING}
+        - {t: 3.0, battery: [0.59, true], dock_status: true, state: CHARGING}
+        - {t: 4.0, battery: [0.6, true], actions: [SEND_UNDOCK], state: UNDOCKING}
+    - name: not_docked_while_charging_goes_monitoring
+      events:
+        - {t: 0.0, battery: [0.1, false], actions: [SEND_DOCK], state: DOCKING}
+        - {t: 1.0, result: DOCKED, state: CHARGING}
+        - {t: 2.0, battery: [0.3, true], dock_status: true, state: CHARGING}
+        - {t: 3.0, battery: [0.3, true], dock_status: false, state: MONITORING}
+        - {t: 4.0, battery: [0.15, false], actions: [SEND_DOCK], state: DOCKING}
+    - name: undock_failure_is_error_and_reset_recovers
+      events:
+        - {t: 0.0, battery: [0.1, false], actions: [SEND_DOCK], state: DOCKING}
+        - {t: 1.0, result: DOCKED, state: CHARGING}
+        - {t: 2.0, battery: [0.96, true], dock_status: true, actions: [SEND_UNDOCK], state: UNDOCKING}
+        - {t: 3.0, result: FAILED, state: ERROR}
+        - {t: 4.0, battery: [0.5, false], state: ERROR}
+        - {t: 5.0, reset: true, state: MONITORING}
+        - {t: 6.0, battery: [0.5, false], state: MONITORING}
+        - {t: 7.0, battery: [0.1, false], actions: [SEND_DOCK], state: DOCKING}
+    - name: undock_rejected_retries_then_error
+      params: {dock_retry_delay: 2.0, dock_request_timeout: 10.0}
+      events:
+        - {t: 0.0, battery: [0.1, false], actions: [SEND_DOCK], state: DOCKING}
+        - {t: 1.0, result: DOCKED, state: CHARGING}
+        - {t: 2.0, battery: [0.96, true], dock_status: true, actions: [SEND_UNDOCK], state: UNDOCKING}
+        - {t: 3.0, result: REJECTED, state: UNDOCKING}
+        - {t: 5.0, actions: [SEND_UNDOCK], state: UNDOCKING}
+        - {t: 6.0, result: REJECTED, state: UNDOCKING}
+        - {t: 13.0, state: ERROR}
+    - name: reset_from_docking_error
+      params: {max_dock_attempts: 1}
+      events:
+        - {t: 0.0, battery: [0.1, false], actions: [SEND_DOCK], state: DOCKING}
+        - {t: 1.0, result: FAILED, state: ERROR, attempts: 1}
+        - {t: 2.0, battery: [0.5, false], reset: true, state: MONITORING, attempts: 0}
+    - name: charging_with_low_battery_in_monitoring_does_not_send_dock
+      events:
+        - {t: 0.0, battery: [0.19, true], state: MONITORING}
+        - {t: 1.0, battery: [0.19, true], state: MONITORING}
+        - {t: 2.0, battery: [0.19, false], actions: [SEND_DOCK], state: DOCKING}
