@@ -5,6 +5,7 @@
 #   state.sh stage  <slug> <plan|implement|test|done|blocked>
 #   state.sh next   <slug>                       # iteration += 1, prints new value
 #   state.sh record <slug> <PASS|FAIL> <passed> <total>
+#   state.sh extend <slug> <n>                   # max_iterations += n (review round budget)
 #   state.sh get    <slug> [jq filter]
 set -euo pipefail
 
@@ -35,6 +36,9 @@ case "$cmd" in
   record)
     update --arg v "$1" --argjson p "$2" --argjson t "$3" \
       '.history += [{iteration:.iteration, verdict:$v, passed:$p, total:$t, at:(now|todate)}]' ;;
+  extend)
+    update --argjson n "$1" '.max_iterations += $n'
+    jq -r '.max_iterations' "$state" ;;
   get)
     jq -r "${1:-.}" "$state" ;;
   *)
