@@ -159,7 +159,7 @@ This document provides a comprehensive, verified catalog of every ROS 2 node, to
 #### `battery_monitor` (`battery_monitor.py`)
 - **Package**: `bumperbot_navigation` (Python only, simulator independent)
 - **Purpose**: below `low_threshold` cancels an active mission (cancel-all on `execute_mission/_action/cancel_goal`), sends `DockRobot` DOCK, stays in CHARGING until `full_threshold`, then sends UNDOCK. States: WAITING_FOR_BATTERY, MONITORING, CANCELING_MISSION, DOCKING, CHARGING, UNDOCKING, ERROR (`~/reset` leaves ERROR)
-- **Subscriptions**: `/battery_state`, `/dock/status`, `/mission/status`; **Action clients**: `dock_robot`, `execute_mission`; **Publications**: `battery_monitor/state` (`std_msgs/String`, transient_local)
+- **Subscriptions**: `/battery_state`, `/dock/status`, `/mission/status`; **Action client**: `dock_robot`; **Service client**: `execute_mission/_action/cancel_goal` (`action_msgs/srv/CancelGoal`); **Publications**: `battery_monitor/state` (`std_msgs/String`, transient_local)
 
 #### `battery_sim` (`battery_sim.py`) -- SIMULATION ONLY
 - **Package**: `bumperbot_navigation`; started only by `dock_sim.launch.py`

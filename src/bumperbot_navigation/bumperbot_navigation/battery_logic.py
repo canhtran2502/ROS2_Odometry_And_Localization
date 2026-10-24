@@ -33,6 +33,8 @@ MONITOR_ERROR = "ERROR"
 ACTION_CANCEL_MISSION = "CANCEL_MISSION"
 ACTION_SEND_DOCK = "SEND_DOCK"
 ACTION_SEND_UNDOCK = "SEND_UNDOCK"
+# The node forgets the pending dock/undock request (its handle and callbacks) and cancels it
+ACTION_ABANDON_DOCK = "ABANDON_DOCK"
 
 # Results reported with BatteryMonitorLogic.on_dock_result()
 RESULT_DOCKED = "DOCKED"
@@ -158,6 +160,10 @@ class BatteryMonitorLogic:
         self._next_send = 0.0
         self._request_start = 0.0
         self._cancel_start = 0.0
+        self._last_cancel = -math.inf
+        self._goal_start = 0.0
+        self._goal_accepted = False
+        self._server_lost_since = None
         self._message = ""
 
     # ----- read-only state -----
@@ -192,6 +198,10 @@ class BatteryMonitorLogic:
 
     def on_dock_status(self, docked: bool) -> None:
         self._docked = bool(docked)
+
+    def on_dock_accepted(self) -> None:
+        """Report that dock_manager accepted the pending DockRobot goal."""
+        self._goal_accepted = True
 
     def on_dock_result(self, now: float, result: str) -> None:
         """Report the end of the DockRobot goal (or its rejection)."""
@@ -232,7 +242,7 @@ class BatteryMonitorLogic:
         self._message = ""
 
     # ----- driving -----
-    def update(self, now: float) -> List[str]:
+    def update(self, now: float, server_ready: bool = True) -> List[str]:
         par = self._params
         actions: List[str] = []
         fresh = (self._battery_time is not None and math.isfinite(self._percentage)
@@ -250,33 +260,47 @@ class BatteryMonitorLogic:
                 if self._mission_active:
                     self._state = MONITOR_CANCELING_MISSION
                     self._cancel_start = now
-                    actions.append(ACTION_CANCEL_MISSION)
+                    self._request_cancel(now, actions)
                 else:
                     self._begin_docking(now, actions)
         elif self._state == MONITOR_CANCELING_MISSION:
             if not self._mission_active or now - self._cancel_start >= par.mission_cancel_timeout:
                 self._begin_docking(now, actions)
+            else:
+                # The cancel can get lost (service not ready, lost response): repeat it
+                self._resend_cancel(now, actions)
         elif self._state == MONITOR_DOCKING:
-            if not self._goal_active:
+            # A mission must not run while docking: cancel it again when one shows up
+            self._resend_cancel(now, actions)
+            if self._goal_active:
+                if self._request_hung(now, server_ready):
+                    actions.append(ACTION_ABANDON_DOCK)
+                    self.on_dock_result(now, RESULT_FAILED)
+            else:
                 if now - self._request_start >= par.dock_request_timeout:
                     self._fail("the dock request was not accepted in time")
                 elif now >= self._next_send:
-                    self._goal_active = True
+                    self._start_request(now)
                     actions.append(ACTION_SEND_DOCK)
         elif self._state == MONITOR_CHARGING:
+            self._resend_cancel(now, actions)
             if not self._docked:
                 self._state = MONITOR_MONITORING
             elif par.undock_when_full and fresh and self._percentage >= par.full_threshold:
                 self._state = MONITOR_UNDOCKING
                 self._request_start = now
-                self._goal_active = True
+                self._start_request(now)
                 actions.append(ACTION_SEND_UNDOCK)
         elif self._state == MONITOR_UNDOCKING:
-            if not self._goal_active:
+            if self._goal_active:
+                if self._request_hung(now, server_ready):
+                    actions.append(ACTION_ABANDON_DOCK)
+                    self.on_dock_result(now, RESULT_FAILED)
+            else:
                 if now - self._request_start >= par.dock_request_timeout:
                     self._fail("the undock request was not accepted in time")
                 elif now >= self._next_send:
-                    self._goal_active = True
+                    self._start_request(now)
                     actions.append(ACTION_SEND_UNDOCK)
         return actions
 
@@ -285,8 +309,35 @@ class BatteryMonitorLogic:
         self._state = MONITOR_DOCKING
         self._request_start = now
         self._next_send = now
-        self._goal_active = True
+        self._start_request(now)
         actions.append(ACTION_SEND_DOCK)
+
+    def _start_request(self, now: float) -> None:
+        self._goal_active = True
+        self._goal_start = now
+        self._goal_accepted = False
+        self._server_lost_since = None
+
+    def _request_hung(self, now: float, server_ready: bool) -> bool:
+        """Return True when a request got no answer or dock_manager is gone for too long."""
+        timeout = self._params.dock_request_timeout
+        if not self._goal_accepted and now - self._goal_start >= timeout:
+            return True
+        if server_ready:
+            self._server_lost_since = None
+        elif self._server_lost_since is None:
+            self._server_lost_since = now
+        elif now - self._server_lost_since >= timeout:
+            return True
+        return False
+
+    def _request_cancel(self, now: float, actions: List[str]) -> None:
+        self._last_cancel = now
+        actions.append(ACTION_CANCEL_MISSION)
+
+    def _resend_cancel(self, now: float, actions: List[str]) -> None:
+        if self._mission_active and now - self._last_cancel >= self._params.dock_retry_delay:
+            self._request_cancel(now, actions)
 
     def _fail(self, message: str) -> None:
         self._state = MONITOR_ERROR

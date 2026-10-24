@@ -97,6 +97,7 @@ private:
   // Nav2
   NavigateToPose::Goal make_goal();
   void cancel_nav_goal(double wait_seconds);
+  bool mission_running();
   void run_navigate();
   // Returns 1 (reached), 0 (failed) or -1 (the goal ended meanwhile)
   int navigate();
@@ -193,6 +194,8 @@ private:
   std::atomic<double> battery_percentage_{-1.0};
   std::atomic<bool> battery_charging_{false};
   std::atomic<bool> mission_active_{false};
+  // Set when a mission became active while a dock goal runs (guarded by mutex_)
+  bool mission_started_during_goal_ = false;
 
   rclcpp::CallbackGroup::SharedPtr group_;
   std::shared_ptr<tf2_ros::Buffer> tf_buffer_;

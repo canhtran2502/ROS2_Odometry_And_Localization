@@ -13,6 +13,8 @@ from dataclasses import dataclass
 import rclpy
 from geometry_msgs.msg import PoseStamped
 from nav_msgs.msg import Odometry
+from rclpy._rclpy_pybind11 import RCLError
+from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 
 # Below this distance the dock bearing is undefined and the dock counts as visible
@@ -142,10 +144,18 @@ def main(args=None):
     node = DockMarkerSim()
     try:
         rclpy.spin(node)
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, ExternalShutdownException, RCLError):
+        # A signal shuts the context down while spinning: this is a normal exit
         pass
-    node.destroy_node()
-    rclpy.shutdown()
+    try:
+        node.destroy_node()
+    except RCLError:
+        pass
+    try:
+        if rclpy.ok():
+            rclpy.shutdown()
+    except RCLError:
+        pass
 
 
 if __name__ == "__main__":

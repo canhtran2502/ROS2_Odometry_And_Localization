@@ -156,6 +156,8 @@ class DockManager(Node):
         self.battery_percentage = -1.0
         self.battery_charging = False
         self.mission_active = False
+        # Set when a mission became active while a dock goal runs (guarded by self.lock)
+        self.mission_started_during_goal = False
 
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
@@ -344,7 +346,16 @@ class DockManager(Node):
             msg.power_supply_status == BatteryState.POWER_SUPPLY_STATUS_CHARGING)
 
     def mission_callback(self, msg):
-        self.mission_active = msg.state in MISSION_ACTIVE_STATES
+        active = msg.state in MISSION_ACTIVE_STATES
+        with self.lock:
+            # A mission and a dock goal must not drive the robot at the same time
+            if active and not self.mission_active and self.active:
+                self.mission_started_during_goal = True
+            self.mission_active = active
+
+    def mission_running(self):
+        """Return True when a mission is active; a latched status without publisher is stale."""
+        return self.mission_active and self.count_publishers(self.mission_status_topic) > 0
 
     def detection_callback(self, msg):
         """Validate a dock detection, bring it to odom and feed the filter."""
@@ -493,7 +504,7 @@ class DockManager(Node):
             docked = self.docked
             if command == COMMAND_UNDOCK and not docked:
                 return self.reject("UNDOCK while the robot is not docked")
-            if command == COMMAND_DOCK and self.mission_active:
+            if command == COMMAND_DOCK and self.mission_running():
                 return self.reject("DOCK while a mission is active")
             if not self.can_transform(self.global_frame, self.robot_frame):
                 return self.reject("TF {} -> {} is not available".format(
@@ -593,11 +604,12 @@ class DockManager(Node):
         holder["result"] = result
         self.publish_status()
         try:
-            # A cancel in progress wins: the goal can only end CANCELED (or ABORTED) from there
-            if goal_handle.is_cancel_requested:
-                goal_handle.canceled()
-            elif result.outcome in (OUTCOME_DOCKED, OUTCOME_UNDOCKED, OUTCOME_ALREADY_DOCKED):
+            # A cancel after the terminal decision is ignored: a completed dock stays SUCCEEDED
+            # (rcl_action allows CANCELING -> SUCCEEDED). Otherwise a cancel in progress wins.
+            if result.outcome in (OUTCOME_DOCKED, OUTCOME_UNDOCKED, OUTCOME_ALREADY_DOCKED):
                 goal_handle.succeed()
+            elif goal_handle.is_cancel_requested:
+                goal_handle.canceled()
             else:
                 goal_handle.abort()
         except Exception as exc:
@@ -621,6 +633,7 @@ class DockManager(Node):
             self.live_yaw_error = -1.0
             self.tf_fail_since = None
             self.last_robot_odom = None
+            self.mission_started_during_goal = False
             self.controller.reset()
             self.goal_clock = PhaseTimer(1e12, self.clock_stall_timeout)
             self.goal_clock.start(self.node_now(), time.monotonic())
@@ -662,6 +675,8 @@ class DockManager(Node):
                 return True
             if self.shutdown_event.is_set():
                 tracker.abort("shutdown")
+            elif self.mission_started_during_goal:
+                tracker.abort("a mission became active during the dock goal")
             elif self.goal_clock.expired(self.node_now(), time.monotonic()) \
                     and self.goal_clock.stalled():
                 tracker.abort("the node clock stalled")
@@ -794,6 +809,30 @@ class DockManager(Node):
             except Exception:
                 pass
 
+    def cancel_handle_async(self, handle):
+        """Fire-and-forget cancel of an accepted Nav2 goal handle; never raises."""
+        if handle is None or not handle.accepted:
+            return
+        try:
+            handle.cancel_goal_async()
+        except Exception as exc:
+            try:
+                self.get_logger().warn("Could not cancel the Nav2 goal: {}".format(exc))
+            except Exception:
+                pass
+
+    def abandon_goal_request(self, holder, holder_lock, answered, wait_for_answer):
+        """Give up an unanswered Nav2 goal request; a goal accepted later is canceled."""
+        with holder_lock:
+            holder["abandoned"] = True
+            handle = holder["handle"]
+        if handle is not None:
+            # The answer arrived just before the abandon flag was set: cancel it here
+            self.cancel_handle_async(handle)
+        elif wait_for_answer:
+            # Bounded wait so that the late cancel is sent before the node shuts down
+            answered.wait(1.0)
+
     def run_navigate(self):
         result = self.navigate()
         if result is None:
@@ -819,19 +858,32 @@ class DockManager(Node):
                     return None
 
             accepted = threading.Event()
-            holder = {}
+            holder = {"handle": None, "abandoned": False}
+            holder_lock = threading.Lock()
 
-            def on_goal_response(future, accepted=accepted, holder=holder):
-                holder["handle"] = future.result()
+            def on_goal_response(future, accepted=accepted, holder=holder,
+                                 holder_lock=holder_lock):
+                try:
+                    late_handle = future.result()
+                except Exception:
+                    late_handle = None
+                with holder_lock:
+                    holder["handle"] = late_handle
+                    abandoned = holder["abandoned"]
+                if abandoned:
+                    # The attempt was given up while the request was in flight: undo the goal
+                    self.cancel_handle_async(late_handle)
                 accepted.set()
 
             self.nav_client.send_goal_async(self.make_goal()).add_done_callback(on_goal_response)
             answer_deadline = time.monotonic() + self.nav_server_timeout
             while not accepted.wait(0.05):
                 if self.check_interrupts():
+                    self.abandon_goal_request(holder, holder_lock, accepted, True)
                     return None
                 if time.monotonic() >= answer_deadline:
                     self.get_logger().warn("Nav2 did not answer the goal request")
+                    self.abandon_goal_request(holder, holder_lock, accepted, False)
                     return False
             handle = holder["handle"]
             if handle is not None and handle.accepted:

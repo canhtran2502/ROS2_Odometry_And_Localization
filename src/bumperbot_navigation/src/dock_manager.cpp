@@ -136,7 +136,13 @@ DockManager::DockManager(const rclcpp::NodeOptions & options)
   mission_sub_ = create_subscription<bumperbot_msgs::msg::MissionStatus>(
     mission_status_topic_, rclcpp::QoS(1).reliable().transient_local(),
     [this](bumperbot_msgs::msg::MissionStatus::ConstSharedPtr msg) {
-      mission_active_ = is_active_mission_state(msg->state);
+      const bool active = is_active_mission_state(msg->state);
+      std::lock_guard<std::mutex> lock(mutex_);
+      // A mission and a dock goal must not drive the robot at the same time
+      if (active && !mission_active_ && active_) {
+        mission_started_during_goal_ = true;
+      }
+      mission_active_ = active;
     }, sub_options);
 
   nav_client_ = rclcpp_action::create_client<NavigateToPose>(this, nav_action_name_, group_);
@@ -542,7 +548,7 @@ rclcpp_action::GoalResponse DockManager::goal_callback(
   if (command == COMMAND_UNDOCK && !docked) {
     return reject("UNDOCK while the robot is not docked");
   }
-  if (command == COMMAND_DOCK && mission_active_) {
+  if (command == COMMAND_DOCK && mission_running()) {
     return reject("DOCK while a mission is active");
   }
   if (!can_transform(global_frame_, robot_frame_)) {
@@ -660,13 +666,14 @@ void DockManager::finish_goal(const std::shared_ptr<DockGoalHandle> & goal_handl
   }
   publish_status();
   try {
-    // A cancel in progress wins: the goal can only end CANCELED (or ABORTED) from there
-    if (goal_handle->is_canceling()) {
-      goal_handle->canceled(result);
-    } else if (result->outcome == DOCK_OUTCOME_DOCKED || result->outcome == DOCK_OUTCOME_UNDOCKED ||
+    // A cancel after the terminal decision is ignored: a completed dock stays SUCCEEDED
+    // (rcl_action allows CANCELING -> SUCCEEDED). Otherwise a cancel in progress wins.
+    if (result->outcome == DOCK_OUTCOME_DOCKED || result->outcome == DOCK_OUTCOME_UNDOCKED ||
       result->outcome == DOCK_OUTCOME_ALREADY_DOCKED)
     {
       goal_handle->succeed(result);
+    } else if (goal_handle->is_canceling()) {
+      goal_handle->canceled(result);
     } else {
       goal_handle->abort(result);
     }
@@ -687,6 +694,7 @@ void DockManager::run_goal(const std::shared_ptr<DockGoalHandle> & goal_handle)
   {
     std::lock_guard<std::mutex> lock(mutex_);
     goal_handle_ = goal_handle;
+    mission_started_during_goal_ = false;
     has_estimate_ = false;
     accepting_ = false;
     detection_count_ = 0;
@@ -749,6 +757,8 @@ bool DockManager::check_interrupts()
     }
     if (shutdown_) {
       tracker_.abort("shutdown");
+    } else if (mission_started_during_goal_) {
+      tracker_.abort("a mission became active during the dock goal");
     } else if (goal_clock_.expired(node_now(), wall_now()) && goal_clock_.stalled()) {
       tracker_.abort("the node clock stalled");
     } else if (goal_handle_ && goal_handle_->is_canceling()) {
@@ -930,6 +940,12 @@ void DockManager::cancel_nav_goal(double wait_seconds)
   }
 }
 
+bool DockManager::mission_running()
+{
+  // A latched mission status without a publisher is stale
+  return mission_active_ && count_publishers(mission_status_topic_) > 0;
+}
+
 void DockManager::run_navigate()
 {
   const int result = navigate();
@@ -967,14 +983,63 @@ int DockManager::navigate()
       }
     }
 
-    auto send_future = nav_client_->async_send_goal(make_goal());
+    // Shared with the goal response callback: a goal accepted after the attempt was abandoned
+    // is canceled exactly once (by the callback, or here when the answer came first)
+    struct Request
+    {
+      std::mutex mutex;
+      bool abandoned = false;
+      std::shared_ptr<NavGoalHandle> handle;
+    };
+    auto request = std::make_shared<Request>();
+    auto cancel_late = [this](const std::shared_ptr<NavGoalHandle> & late) {
+        if (!late) {
+          return;
+        }
+        try {
+          nav_client_->async_cancel_goal(late);
+        } catch (const std::exception & exc) {
+          RCLCPP_WARN(get_logger(), "Could not cancel the Nav2 goal: %s", exc.what());
+        }
+      };
+    auto abandon = [request, cancel_late](bool wait_for_answer, auto & future) {
+        std::shared_ptr<NavGoalHandle> answered;
+        {
+          std::lock_guard<std::mutex> lock(request->mutex);
+          request->abandoned = true;
+          answered = request->handle;
+        }
+        if (answered) {
+          cancel_late(answered);
+        } else if (wait_for_answer) {
+          // Bounded wait so that the late cancel is sent before the node shuts down
+          future.wait_for(1s);
+        }
+      };
+    rclcpp_action::Client<NavigateToPose>::SendGoalOptions send_options;
+    send_options.goal_response_callback =
+      [request, cancel_late](std::shared_ptr<NavGoalHandle> response) {
+        bool abandoned;
+        {
+          std::lock_guard<std::mutex> lock(request->mutex);
+          request->handle = response;
+          abandoned = request->abandoned;
+        }
+        if (abandoned) {
+          // The attempt was given up while the request was in flight: undo the goal
+          cancel_late(response);
+        }
+      };
+    auto send_future = nav_client_->async_send_goal(make_goal(), send_options);
     const double answer_deadline = wall_now() + nav_server_timeout_;
     while (send_future.wait_for(50ms) != std::future_status::ready) {
       if (check_interrupts()) {
+        abandon(true, send_future);
         return -1;
       }
       if (wall_now() >= answer_deadline) {
         RCLCPP_WARN(get_logger(), "Nav2 did not answer the goal request");
+        abandon(false, send_future);
         return 0;
       }
     }

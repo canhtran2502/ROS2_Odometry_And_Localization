@@ -31,12 +31,14 @@ from std_msgs.msg import String
 from std_srvs.srv import Trigger
 
 from bumperbot_navigation.battery_logic import (
-    ACTION_CANCEL_MISSION, ACTION_SEND_DOCK, ACTION_SEND_UNDOCK,
+    ACTION_ABANDON_DOCK, ACTION_CANCEL_MISSION, ACTION_SEND_DOCK, ACTION_SEND_UNDOCK,
     RESULT_ALREADY_DOCKED, RESULT_DOCKED, RESULT_FAILED, RESULT_REJECTED, RESULT_UNDOCKED,
     BatteryMonitorLogic, FallbackClock, MonitorParams)
 
 # Seconds after a DOCKED result during which a stale "not docked" status is ignored
 DOCKED_GRACE = 1.0
+# Seconds without a /mission/status publisher after which a latched active mission is stale
+MISSION_STALE_TIMEOUT = 5.0
 MISSION_ACTIVE_STATES = (
     MissionStatus.STATE_NAVIGATING, MissionStatus.STATE_DWELLING,
     MissionStatus.STATE_RETURNING_TO_DOCK)
@@ -78,6 +80,11 @@ class BatteryMonitor(Node):
         self.logic = BatteryMonitorLogic(self.params)
         self.fallback_clock = FallbackClock(self.clock_stall_timeout)
         self.dock_handle = None
+        # Identifies the pending dock request: callbacks of an abandoned request are ignored
+        self.request_id = 0
+        self.mission_status_seen = False
+        self.mission_stale = False
+        self.mission_gone_since = None
         self.docked_result_time = -math.inf
         self.published_state = None
 
@@ -150,15 +157,42 @@ class BatteryMonitor(Node):
 
     def mission_callback(self, msg):
         with self.lock:
+            self.mission_stale = False
+            self.mission_status_seen = True
             self.logic.on_mission_status(msg.state in MISSION_ACTIVE_STATES)
+
+    def check_stale_mission(self):
+        """Treat a latched active mission as gone when mission_manager no longer publishes."""
+        has_publisher = self.count_publishers("mission/status") > 0
+        with self.lock:
+            if has_publisher or not self.mission_status_seen or self.mission_stale:
+                self.mission_gone_since = None
+                return
+            now = time.monotonic()
+            if self.mission_gone_since is None:
+                self.mission_gone_since = now
+            elif now - self.mission_gone_since >= MISSION_STALE_TIMEOUT:
+                self.mission_stale = True
+                self.logic.on_mission_status(False)
+                stale = True
+            else:
+                return
+        if stale:
+            self.get_logger().warn(
+                "mission_manager does not publish /mission/status any more: "
+                "the last mission status is treated as stale (no active mission)")
 
     # ----- periodic update -----
     def update(self):
+        self.check_stale_mission()
+        server_ready = self.dock_client.server_is_ready()
         with self.lock:
-            actions = self.logic.update(self.logic_now())
+            actions = self.logic.update(self.logic_now(), server_ready)
         for action in actions:
             if action == ACTION_CANCEL_MISSION:
                 self.cancel_missions()
+            elif action == ACTION_ABANDON_DOCK:
+                self.abandon_dock_request()
             elif action == ACTION_SEND_DOCK:
                 self.send_dock_goal(DockRobot.Goal.COMMAND_DOCK)
             elif action == ACTION_SEND_UNDOCK:
@@ -187,42 +221,86 @@ class BatteryMonitor(Node):
             self.get_logger().warn("The execute_mission cancel service is not available")
             return
         self.get_logger().info("Low battery: canceling the active mission")
-        self.cancel_client.call_async(CancelGoal.Request())
+        self.cancel_client.call_async(CancelGoal.Request()).add_done_callback(
+            self.cancel_response_callback)
+
+    def cancel_response_callback(self, future):
+        try:
+            response = future.result()
+        except Exception as exc:
+            self.get_logger().warn("The mission cancel request failed: {}".format(exc))
+            return
+        if response is not None and response.return_code != CancelGoal.Response.ERROR_NONE:
+            # The logic repeats the cancel while the mission stays active
+            self.get_logger().warn("The mission cancel was refused (code {})".format(
+                response.return_code))
+
+    def abandon_dock_request(self):
+        """Forget the pending dock request: late callbacks are ignored, a late goal canceled."""
+        with self.lock:
+            self.request_id += 1
+            handle = self.dock_handle
+            self.dock_handle = None
+        self.get_logger().warn("The DockRobot request got no answer in time: counted as failed")
+        if handle is not None:
+            try:
+                handle.cancel_goal_async()
+            except Exception as exc:
+                self.get_logger().warn("Could not cancel the DockRobot goal: {}".format(exc))
 
     def send_dock_goal(self, command):
         name = "DOCK" if command == DockRobot.Goal.COMMAND_DOCK else "UNDOCK"
         if not self.dock_client.server_is_ready():
             self.get_logger().warn("The dock_robot action server is not available")
-            self.report_result(RESULT_REJECTED)
+            with self.lock:
+                request_id = self.request_id
+            self.report_result(RESULT_REJECTED, request_id)
             return
         self.get_logger().info("Sending DockRobot {}".format(name))
         goal = DockRobot.Goal()
         goal.command = command
-        self.dock_client.send_goal_async(goal).add_done_callback(self.goal_response_callback)
+        with self.lock:
+            request_id = self.request_id
+        self.dock_client.send_goal_async(goal).add_done_callback(
+            lambda future: self.goal_response_callback(future, request_id))
 
-    def goal_response_callback(self, future):
+    def goal_response_callback(self, future, request_id):
         try:
             handle = future.result()
         except Exception as exc:
             self.get_logger().warn("DockRobot goal request failed: {}".format(exc))
-            self.report_result(RESULT_REJECTED)
+            self.report_result(RESULT_REJECTED, request_id)
+            return
+        with self.lock:
+            current = request_id == self.request_id
+            if current and handle is not None and handle.accepted:
+                self.dock_handle = handle
+                self.logic.on_dock_accepted()
+        if not current:
+            # The request was abandoned meanwhile: a goal accepted late must not keep running
+            if handle is not None and handle.accepted:
+                try:
+                    handle.cancel_goal_async()
+                except Exception as exc:
+                    self.get_logger().warn("Could not cancel the DockRobot goal: {}".format(exc))
             return
         if handle is None or not handle.accepted:
             self.get_logger().warn("DockRobot goal rejected")
-            self.report_result(RESULT_REJECTED)
+            self.report_result(RESULT_REJECTED, request_id)
             return
-        with self.lock:
-            self.dock_handle = handle
-        handle.get_result_async().add_done_callback(self.result_callback)
+        handle.get_result_async().add_done_callback(
+            lambda result_future: self.result_callback(result_future, request_id))
 
-    def result_callback(self, future):
+    def result_callback(self, future, request_id):
         with self.lock:
+            if request_id != self.request_id:
+                return
             self.dock_handle = None
         try:
             wrapped = future.result()
         except Exception as exc:
             self.get_logger().warn("DockRobot result failed: {}".format(exc))
-            self.report_result(RESULT_FAILED)
+            self.report_result(RESULT_FAILED, request_id)
             return
         result = wrapped.result
         succeeded = wrapped.status == GoalStatus.STATUS_SUCCEEDED
@@ -235,10 +313,12 @@ class BatteryMonitor(Node):
         else:
             outcome = RESULT_FAILED
         self.get_logger().info("DockRobot finished: {} ({})".format(outcome, result.message))
-        self.report_result(outcome)
+        self.report_result(outcome, request_id)
 
-    def report_result(self, outcome):
+    def report_result(self, outcome, request_id):
         with self.lock:
+            if request_id != self.request_id:
+                return
             if outcome in (RESULT_DOCKED, RESULT_ALREADY_DOCKED):
                 self.docked_result_time = time.monotonic()
             self.logic.on_dock_result(self.logic_now(), outcome)

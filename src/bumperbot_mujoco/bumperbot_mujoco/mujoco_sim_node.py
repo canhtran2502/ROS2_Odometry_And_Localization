@@ -13,6 +13,8 @@ import rclpy
 from ament_index_python.packages import get_package_share_directory
 from builtin_interfaces.msg import Time
 from nav_msgs.msg import Odometry
+from rclpy._rclpy_pybind11 import RCLError
+from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rosgraph_msgs.msg import Clock
 from sensor_msgs.msg import Imu, JointState, LaserScan
@@ -155,10 +157,18 @@ def main(args=None):
     node = MujocoSimNode()
     try:
         rclpy.spin(node)
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, ExternalShutdownException, RCLError):
+        # A signal shuts the context down while spinning: this is a normal exit
         pass
-    node.destroy_node()
-    rclpy.shutdown()
+    try:
+        node.destroy_node()
+    except RCLError:
+        pass
+    try:
+        if rclpy.ok():
+            rclpy.shutdown()
+    except RCLError:
+        pass
 
 
 if __name__ == "__main__":
