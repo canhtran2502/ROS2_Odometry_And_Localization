@@ -164,19 +164,19 @@ class BatteryMonitor(Node):
     def check_stale_mission(self):
         """Treat a latched active mission as gone when mission_manager no longer publishes."""
         has_publisher = self.count_publishers("mission/status") > 0
+        stale = False
         with self.lock:
             if has_publisher or not self.mission_status_seen or self.mission_stale:
                 self.mission_gone_since = None
-                return
-            now = time.monotonic()
-            if self.mission_gone_since is None:
-                self.mission_gone_since = now
-            elif now - self.mission_gone_since >= MISSION_STALE_TIMEOUT:
-                self.mission_stale = True
-                self.logic.on_mission_status(False)
-                stale = True
             else:
-                return
+                now = time.monotonic()
+                if self.mission_gone_since is None:
+                    # First tick without a publisher: only start the timeout
+                    self.mission_gone_since = now
+                elif now - self.mission_gone_since >= MISSION_STALE_TIMEOUT:
+                    self.mission_stale = True
+                    self.logic.on_mission_status(False)
+                    stale = True
         if stale:
             self.get_logger().warn(
                 "mission_manager does not publish /mission/status any more: "
@@ -184,7 +184,20 @@ class BatteryMonitor(Node):
 
     # ----- periodic update -----
     def update(self):
-        self.check_stale_mission()
+        """Run one tick; an unexpected error is logged and never ends the spin thread."""
+        try:
+            self.update_once()
+        except Exception as exc:  # noqa: BLE001 - keep the periodic loop alive
+            try:
+                self.get_logger().error("Battery monitor update failed: {}".format(exc))
+            except Exception:  # the context may already be gone during shutdown
+                pass
+
+    def update_once(self):
+        try:
+            self.check_stale_mission()
+        except Exception as exc:  # noqa: BLE001 - the stale check must not block the update
+            self.get_logger().error("Stale mission check failed: {}".format(exc))
         server_ready = self.dock_client.server_is_ready()
         with self.lock:
             actions = self.logic.update(self.logic_now(), server_ready)

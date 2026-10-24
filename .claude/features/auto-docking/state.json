@@ -1,8 +1,8 @@
 {
   "slug": "auto-docking",
   "title": "AGV auto-docking with battery monitor",
-  "stage": "test",
-  "iteration": 2,
+  "stage": "implement",
+  "iteration": 3,
   "max_iterations": 8,
   "history": [
     {
