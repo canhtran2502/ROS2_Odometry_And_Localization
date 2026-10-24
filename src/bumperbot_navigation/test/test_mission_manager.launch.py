@@ -1,4 +1,5 @@
-"""AC5-AC11 (+ AC13 parameter check): mission_manager (C++ and Python) against MockNav2.
+"""
+AC5-AC11 (+ AC13 parameter check): mission_manager (C++ and Python) against MockNav2.
 
 Each test method runs for both implementations (impl = cpp | py) with the same expectations.
 No simulator and no Nav2 are needed.
@@ -118,7 +119,24 @@ class TestMissionManager(unittest.TestCase):
                 cls.first_status = msg
             cls.statuses.append(msg)
 
+    def settle_status(self, quiet=0.5, timeout=10.0):
+        """Wait until no /mission/status message arrived for ``quiet`` seconds."""
+        end = time.monotonic() + timeout
+        last = -1
+        stable_since = time.monotonic()
+        while time.monotonic() < end:
+            with self.lock:
+                count = len(self.statuses)
+            if count != last:
+                last = count
+                stable_since = time.monotonic()
+            elif time.monotonic() - stable_since >= quiet:
+                return
+            time.sleep(0.05)
+
     def setUp(self):
+        # late status messages of the previous test must not leak into this one
+        self.settle_status()
         self.mock.reset()
         with self.lock:
             self.statuses.clear()

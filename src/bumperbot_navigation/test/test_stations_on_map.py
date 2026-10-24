@@ -1,5 +1,9 @@
-"""AC3: every shipped station lies on free space of the small_house map with enough clearance
-and in the free connected component of the dock."""
+"""
+AC3: stations lie on free space of the small_house map.
+
+Every shipped station needs enough clearance and must be in the free connected component of the
+dock.
+"""
 import os
 
 import numpy as np

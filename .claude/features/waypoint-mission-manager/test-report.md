@@ -1,3 +1,34 @@
+# Test report: iteration 2
+Verdict: PASS   (17/17: AC1-AC16 + full-suite gate)
+
+Build: `colcon build --packages-select bumperbot_msgs bumperbot_controller bumperbot_navigation bumperbot_bringup --cmake-force-configure` (no symlink-install).
+Gate: `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 ROS_LOCALHOST_ONLY=1 ROS_DOMAIN_ID=88 colcon test --packages-select bumperbot_navigation bumperbot_bringup`
+then `colcon test-result --verbose`: **139 tests, 0 errors, 0 failures, 8 skipped** (run twice, identical; 8 skips
+include the AC16 opt-in and pre-existing opt-in tests).
+
+Test-file fixes (tests only, no assertion weakened, no product change)
+- pep257 D213: module docstring summary moved to line 2 in `navigation/test/mock_nav2.py`,
+  `navigation/test/test_mission_manager.launch.py`, `bringup/test/test_mission_sim_mujoco.launch.py`.
+- `navigation/test/test_stations_on_map.py`: docstring rewritten (D205/D209/D213/D400/D415).
+- uncrustify: `navigation/test/test_mission_logic.cpp` reformatted (braces on separate lines).
+- Test flake found by the full run (1 failure in `test_status_topic[cpp]`, seq `[dock,a,b,c,dock]`): a late
+  `/mission/status` message of the previous test's mission arrived after `statuses.clear()`. Test isolation bug, not a
+  product defect. Added `settle_status()` in `TestMissionManager.setUp` (waits for 0.5 s of status silence); all
+  assertions unchanged. Passed in 2 consecutive full-gate runs plus a standalone `launch_test`.
+
+Regression runs of the individual AC commands
+- pytest (AC1-AC4, AC12-AC14): 55 passed.
+- `launch_test test_mission_manager.launch.py` (AC5-AC11, AC13, cpp+py): Ran 10 + 1 tests, OK.
+- AC15 + AC16 `BUMPERBOT_MISSION_E2E=1 ROS_DOMAIN_ID=89 launch_test test_mission_sim_mujoco.launch.py`: Ran 2 tests, OK (175 s).
+
+Lint outside this feature: `ament_flake8` E501 (lines 111, 136, 157) and pep257 D213 in
+`bumperbot_bringup/test/test_slam_map_quality_mujoco.launch.py` (auto-explore-slam feature). Not fixed; they do not
+appear as failures in the colcon gate.
+
+All AC1-AC16 results from iteration 1 below are unchanged (PASS).
+
+---
+
 # Test report: iteration 1
 Verdict: PASS   (16/16 AC; AC16 run opt-in and passed)
 

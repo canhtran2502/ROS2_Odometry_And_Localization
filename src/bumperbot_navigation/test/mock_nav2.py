@@ -1,4 +1,5 @@
-"""MockNav2: a navigate_to_pose action server with scripted outcomes plus a TF broadcaster.
+"""
+MockNav2: a navigate_to_pose action server with scripted outcomes plus a TF broadcaster.
 
 It stands in for the whole Nav2 + simulator stack in the mission_manager launch tests. Per
 station the behavior is a dict (set by each test through ``behaviors``):

@@ -1,4 +1,5 @@
-"""AC15 smoke test and AC16 opt-in E2E of mission_sim.launch.py on headless MuJoCo.
+"""
+AC15 smoke test and AC16 opt-in E2E of mission_sim.launch.py on headless MuJoCo.
 
 AC15 (default): within 120 s /navigate_to_pose and /execute_mission are available and
 /mission/status reports IDLE.

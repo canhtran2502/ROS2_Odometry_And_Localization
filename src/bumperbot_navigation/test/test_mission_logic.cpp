@@ -97,18 +97,27 @@ TEST(MissionCases, AllCases)
     if (c["params"]) {
       for (const auto & kv : c["params"]) {
         const std::string k = kv.first.as<std::string>();
-        if (k == "max_retries") {p.max_retries = kv.second.as<int>();}
-        else if (k == "max_consecutive_failures") {p.max_consecutive_failures = kv.second.as<int>();}
-        else if (k == "dock_max_retries") {p.dock_max_retries = kv.second.as<int>();}
-        else if (k == "return_to_dock") {p.return_to_dock = kv.second.as<bool>();}
-        else if (k == "goal_tolerance") {p.goal_tolerance = kv.second.as<double>();}
-        else {FAIL() << "unknown param " << k;}
+        if (k == "max_retries") {
+          p.max_retries = kv.second.as<int>();
+        } else if (k == "max_consecutive_failures") {
+          p.max_consecutive_failures = kv.second.as<int>();
+        } else if (k == "dock_max_retries") {
+          p.dock_max_retries = kv.second.as<int>();
+        } else if (k == "return_to_dock") {
+          p.return_to_dock = kv.second.as<bool>();
+        } else if (k == "goal_tolerance") {
+          p.goal_tolerance = kv.second.as<double>();
+        } else {
+          FAIL() << "unknown param " << k;
+        }
       }
     }
     std::vector<std::string> names = c["stations"].as<std::vector<std::string>>();
     MissionTracker tr(st, names, p);
     std::vector<YAML::Node> events;
-    for (const auto & e : c["events"]) {events.push_back(e);}
+    for (const auto & e : c["events"]) {
+      events.push_back(e);
+    }
     size_t ei = 0;
     std::vector<std::string> steps;
     double last_progress = -1.0;
