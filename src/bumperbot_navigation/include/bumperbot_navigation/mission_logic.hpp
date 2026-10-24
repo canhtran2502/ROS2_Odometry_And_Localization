@@ -52,7 +52,9 @@ struct StationSet
 StationSet load_stations(const std::string & path);
 
 // Returns an empty string when the mission is valid, otherwise the reason.
-std::string validate_mission(const std::vector<std::string> & names, const StationSet & station_set);
+std::string validate_mission(
+  const std::vector<std::string> & names,
+  const StationSet & station_set);
 
 // Returns (z, w) of a planar rotation.
 std::pair<double, double> yaw_to_quaternion(double yaw);

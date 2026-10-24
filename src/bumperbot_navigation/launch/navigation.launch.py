@@ -9,17 +9,17 @@ from ament_index_python.packages import get_package_share_directory
 def generate_launch_description():
     use_sim_time_arg = DeclareLaunchArgument(
         "use_sim_time",
-        default_value = "false",
-        description = "Use the simulation clock"
+        default_value="false",
+        description="Use the simulation clock"
     )
     nav2_params_arg = DeclareLaunchArgument(
         "nav2_params",
-        default_value = os.path.join(
+        default_value=os.path.join(
             get_package_share_directory("bumperbot_navigation"),
             "config",
             "nav2_params.yaml"
         ),
-        description = "Nav2 parameter file"
+        description="Nav2 parameter file"
     )
 
     use_sim_time = LaunchConfiguration("use_sim_time")

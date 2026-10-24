@@ -1,4 +1,5 @@
-"""Pure mission logic (no ROS dependency): station loading and the MissionTracker state machine.
+"""
+Pure mission logic (no ROS dependency): station loading and the MissionTracker state machine.
 
 The C++ twin lives in include/bumperbot_navigation/mission_logic.hpp and src/mission_logic.cpp.
 Both implementations expose the same API and are checked against test/data/mission_cases.yaml.
@@ -138,7 +139,8 @@ class Step:
 
 
 class MissionTracker:
-    """Mission state machine. No clock, no threads: the node drives it.
+    """
+    Mission state machine. No clock, no threads: the node drives it.
 
     next_step() is idempotent: it returns the current step until a report_* call advances it.
     """

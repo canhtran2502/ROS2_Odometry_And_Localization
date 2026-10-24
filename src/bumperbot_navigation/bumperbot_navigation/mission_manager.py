@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""AGV mission manager: ExecuteMission action server driving the Nav2 NavigateToPose action.
+"""
+AGV mission manager: ExecuteMission action server driving the Nav2 NavigateToPose action.
 
 The C++ twin is src/mission_manager.cpp (same parameters, interfaces and behavior). The state
 machine itself lives in mission_logic.py (MissionTracker); this node only does the ROS I/O.
@@ -353,7 +354,8 @@ class MissionManager(Node):
                 break
 
             if step.kind == STEP_DWELL:
-                self.get_logger().info("Dwelling {:.1f} s at '{}'".format(step.dwell, step.station))
+                self.get_logger().info(
+                    "Dwelling {:.1f} s at '{}'".format(step.dwell, step.station))
                 if not self.wait_clock(step.dwell, True):
                     with self.lock:
                         tracker.report_dwell_done()
