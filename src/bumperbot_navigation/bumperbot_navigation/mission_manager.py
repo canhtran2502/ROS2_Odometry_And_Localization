@@ -30,7 +30,7 @@ from bumperbot_navigation.mission_logic import (
     STEP_DWELL, STEP_FINISHED,
     MissionTracker, TrackerParams, load_stations, planar_distance, validate_mission,
     yaw_to_quaternion,
-    OUTCOME_ABORTED, OUTCOME_DOCK_FAILED)
+    OUTCOME_ABORTED, OUTCOME_DOCK_FAILED, STATE_ABORTED)
 
 
 class MissionManager(Node):
@@ -63,6 +63,10 @@ class MissionManager(Node):
 
         self.global_frame = self.get_parameter("global_frame").value
         self.robot_frame = self.get_parameter("robot_frame").value
+        if self.stations.frame_id != self.global_frame:
+            # The tolerance check compares station coordinates with the TF in global_frame
+            raise ValueError("stations frame_id '{}' differs from global_frame '{}'".format(
+                self.stations.frame_id, self.global_frame))
         self.retry_delay = float(self.get_parameter("retry_delay").value)
         self.nav_server_timeout = float(self.get_parameter("nav_server_timeout").value)
         self.nav_goal_timeout = float(self.get_parameter("nav_goal_timeout").value)
@@ -180,9 +184,17 @@ class MissionManager(Node):
         self.publish_feedback()
 
     # ----- helpers -----
+    def cancel_signaled(self):
+        """Return True when a cancel was requested (also if only the goal handle knows it)."""
+        handle = self.goal_handle
+        if (not self.cancel_event.is_set() and handle is not None
+                and handle.is_cancel_requested):
+            self.cancel_event.set()
+        return self.cancel_event.is_set()
+
     def handle_cancel_if_pending(self):
         """Forward a pending cancel request to the tracker. Returns True when it was new."""
-        if self.cancel_event.is_set() and not self.cancel_handled:
+        if self.cancel_signaled() and not self.cancel_handled:
             self.cancel_handled = True
             with self.lock:
                 self.tracker.request_cancel()
@@ -236,32 +248,45 @@ class MissionManager(Node):
         station = self.stations.find(step.station)
         self.distance_remaining = -1.0
 
-        deadline = time.monotonic() + self.nav_server_timeout
-        while not self.nav_client.server_is_ready():
-            if time.monotonic() >= deadline:
-                self.get_logger().warn("Nav2 action server is not available")
+        # A rejection means the Nav2 lifecycle is probably not active yet: keep re-sending
+        # without counting a failed attempt until nav_server_timeout of continuous rejection.
+        rejected_since = None
+        while True:
+            deadline = time.monotonic() + self.nav_server_timeout
+            while not self.nav_client.server_is_ready():
+                if time.monotonic() >= deadline:
+                    self.get_logger().warn("Nav2 action server is not available")
+                    return False, False
+                time.sleep(0.1)
+                if self.handle_cancel_if_pending() and not step.docking:
+                    return False, True
+
+            accepted = threading.Event()
+            holder = {}
+
+            def on_goal_response(future, accepted=accepted, holder=holder):
+                holder["handle"] = future.result()
+                accepted.set()
+
+            send_future = self.nav_client.send_goal_async(
+                self.make_goal(station), feedback_callback=self.nav_feedback_callback)
+            send_future.add_done_callback(on_goal_response)
+            if not accepted.wait(self.nav_server_timeout):
+                self.get_logger().warn("Nav2 did not answer the goal request")
                 return False, False
-            time.sleep(0.1)
-            if self.handle_cancel_if_pending() and not step.docking:
+            nav_handle = holder["handle"]
+            if nav_handle is not None and nav_handle.accepted:
+                break
+            if rejected_since is None:
+                rejected_since = time.monotonic()
+            if time.monotonic() - rejected_since >= self.nav_server_timeout:
+                self.get_logger().warn("Nav2 rejected the goal for '{}'".format(step.station))
+                return False, False
+            self.get_logger().info(
+                "Nav2 rejected the goal for '{}', retrying (server not ready?)".format(
+                    step.station))
+            if self.wait_clock(max(self.retry_delay, 0.1), not step.docking):
                 return False, True
-
-        accepted = threading.Event()
-        holder = {}
-
-        def on_goal_response(future):
-            holder["handle"] = future.result()
-            accepted.set()
-
-        send_future = self.nav_client.send_goal_async(
-            self.make_goal(station), feedback_callback=self.nav_feedback_callback)
-        send_future.add_done_callback(on_goal_response)
-        if not accepted.wait(self.nav_server_timeout):
-            self.get_logger().warn("Nav2 did not answer the goal request")
-            return False, False
-        nav_handle = holder["handle"]
-        if nav_handle is None or not nav_handle.accepted:
-            self.get_logger().warn("Nav2 rejected the goal for '{}'".format(step.station))
-            return False, False
 
         done = threading.Event()
         result_holder = {}
@@ -278,7 +303,7 @@ class MissionManager(Node):
         while not done.wait(0.05):
             if not rclpy.ok():
                 return False, False
-            if self.cancel_event.is_set() and not self.cancel_handled:
+            if self.cancel_signaled() and not self.cancel_handled:
                 self.handle_cancel_if_pending()
                 if not step.docking:
                     interrupted = True
@@ -290,8 +315,11 @@ class MissionManager(Node):
 
         if interrupted or timed_out:
             cancel_done = threading.Event()
-            nav_handle.cancel_goal_async().add_done_callback(lambda _f: cancel_done.set())
-            cancel_done.wait(5.0)
+            try:
+                nav_handle.cancel_goal_async().add_done_callback(lambda _f: cancel_done.set())
+                cancel_done.wait(5.0)
+            except Exception as exc:  # e.g. the goal already ended
+                self.get_logger().warn("Could not cancel the Nav2 goal: {}".format(exc))
             done.wait(5.0)
             return False, interrupted
 
@@ -304,42 +332,69 @@ class MissionManager(Node):
         self.get_logger().info("Mission started: [{}]".format(", ".join(names)))
         self.goal_handle = goal_handle
         self.cancel_handled = False
-        # A cancel that arrived before this point still counts
-        self.cancel_event.clear()
+        # cancel_event is not cleared here: a cancel that arrived right after the goal was
+        # accepted must still count. It is cleared at the end of the previous mission.
         if goal_handle.is_cancel_requested:
             self.cancel_event.set()
-        with self.lock:
-            self.mission_names = names
-            self.tracker = MissionTracker(self.stations, names, self.tracker_params)
-        self.publish_all()
-
-        try:
-            self.run_mission()
-        except Exception as exc:  # unexpected error: dock and report it
-            self.get_logger().error("Mission error: {}".format(exc))
-            with self.lock:
-                self.tracker.abort("internal error: {}".format(exc))
-            self.run_mission()
-
-        tracker = self.tracker
         result = ExecuteMission.Result()
-        result.outcome = int(tracker.outcome)
-        result.docked = bool(tracker.docked)
-        result.visited = tracker.visited
-        result.skipped = tracker.skipped
-        result.message = tracker.message
-        self.publish_all()
+        # Whatever happens below, the cleanup in finally must run
+        try:
+            with self.lock:
+                self.mission_names = names
+                self.tracker = MissionTracker(self.stations, names, self.tracker_params)
+            self.publish_all()
 
-        if goal_handle.is_cancel_requested:
-            goal_handle.canceled()
-        elif tracker.outcome in (OUTCOME_ABORTED, OUTCOME_DOCK_FAILED):
-            goal_handle.abort()
-        else:
-            goal_handle.succeed()
-        self.get_logger().info("Mission finished: {} ({})".format(tracker.state, tracker.message))
-        self.goal_handle = None
-        with self.lock:
-            self.active = False
+            error = None
+            try:
+                self.run_mission()
+            except Exception as exc:  # unexpected error: dock and report it
+                error = str(exc)
+            recovery_failed = False
+            if error is not None:
+                self.get_logger().error("Mission error: {}".format(error))
+                try:
+                    with self.lock:
+                        self.tracker.abort("internal error: {}".format(error))
+                    self.run_mission()
+                except Exception:
+                    recovery_failed = True
+                    self.get_logger().error("Mission recovery failed")
+
+            tracker = self.tracker
+            state = tracker.state
+            message = tracker.message
+            result.outcome = int(tracker.outcome)
+            result.docked = bool(tracker.docked)
+            result.visited = tracker.visited
+            result.skipped = tracker.skipped
+            if recovery_failed or not tracker.finished:
+                result.outcome = OUTCOME_ABORTED
+                result.docked = False
+                state = STATE_ABORTED
+                message = "internal error: {}".format(error)
+            result.message = message
+            try:
+                self.publish_all()
+            except Exception:
+                self.get_logger().warn("Could not publish the final status")
+
+            # A cancel in progress wins over the outcome: the action ends CANCELED even when
+            # the dock return then failed (the outcome field still carries DOCK_FAILED)
+            if goal_handle.is_cancel_requested:
+                goal_handle.canceled()
+            elif result.outcome in (OUTCOME_ABORTED, OUTCOME_DOCK_FAILED):
+                goal_handle.abort()
+            else:
+                goal_handle.succeed()
+            self.get_logger().info("Mission finished: {} ({})".format(state, message))
+        except Exception as exc:
+            self.get_logger().error("Could not report the mission result: {}".format(exc))
+        finally:
+            self.goal_handle = None
+            self.cancel_event.clear()
+            self.cancel_handled = False
+            with self.lock:
+                self.active = False
         return result
 
     def run_mission(self):

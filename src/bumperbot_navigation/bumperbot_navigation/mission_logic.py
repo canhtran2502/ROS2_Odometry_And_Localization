@@ -4,7 +4,9 @@ Pure mission logic (no ROS dependency): station loading and the MissionTracker s
 The C++ twin lives in include/bumperbot_navigation/mission_logic.hpp and src/mission_logic.cpp.
 Both implementations expose the same API and are checked against test/data/mission_cases.yaml.
 """
+import collections.abc
 import math
+import re
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
 
@@ -55,6 +57,41 @@ class StationSet:
         return None
 
 
+class _UniqueKeyLoader(yaml.SafeLoader):
+    """
+    SafeLoader that rejects duplicate mapping keys and also types exponent forms as floats.
+
+    PyYAML (YAML 1.1) types 1e3 as a string; the extra resolver below types it as a float, as
+    yaml-cpp does. Numeric rule (same in the C++ twin): a numeric field must be a plain
+    (unquoted) YAML number, int or float; quoted strings are rejected.
+    """
+
+    def construct_mapping(self, node, deep=False):
+        seen = set()
+        for key_node, _value_node in node.value:
+            key = self.construct_object(key_node, deep=True)
+            if isinstance(key, collections.abc.Hashable):
+                if key in seen:
+                    raise ValueError("duplicate key '{}'".format(key))
+                seen.add(key)
+        return super().construct_mapping(node, deep)
+
+
+_UniqueKeyLoader.add_implicit_resolver(
+    "tag:yaml.org,2002:float",
+    re.compile(r"^[-+]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)[eE][-+]?[0-9]+$"),
+    list("-+0123456789."))
+
+
+def _string(data: dict, key: str, default: str) -> str:
+    """Return an optional string field; when present it must be a non-null string."""
+    if key not in data:
+        return default
+    if not isinstance(data[key], str):
+        raise ValueError("'{}' is not a string".format(key))
+    return data[key]
+
+
 def _number(value, what: str) -> float:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise ValueError("{} is not a number".format(what))
@@ -68,15 +105,15 @@ def load_stations(path: str) -> StationSet:
     """Load and validate a stations file. Raises ValueError on any problem."""
     try:
         with open(path, "r") as stream:
-            data = yaml.safe_load(stream)
+            data = yaml.load(stream, Loader=_UniqueKeyLoader)
     except (OSError, yaml.YAMLError) as exc:
         raise ValueError("cannot read stations file '{}': {}".format(path, exc))
     if not isinstance(data, dict):
         raise ValueError("stations file '{}' is not a mapping".format(path))
 
     result = StationSet()
-    result.frame_id = str(data.get("frame_id", "map"))
-    result.dock_station = str(data.get("dock_station", "dock"))
+    result.frame_id = _string(data, "frame_id", "map")
+    result.dock_station = _string(data, "dock_station", "dock")
 
     stations = data.get("stations")
     if not isinstance(stations, dict) or not stations:
@@ -227,6 +264,9 @@ class MissionTracker:
             name = self._names[self._index]
             self._current_station = name
             self._state = STATE_NAVIGATING
+            # Driving to a station other than the dock: the robot leaves the dock
+            if name != self._set.dock_station:
+                self._at_dock = False
             return Step(STEP_NAVIGATE, name, self._attempt, False, 0.0)
         if self._phase == self._PHASE_DWELL:
             name = self._names[self._index]

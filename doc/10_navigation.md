@@ -57,16 +57,17 @@ stations:
   pickup:  {x: -1.5, y: 1.5,  yaw: 1.57, dwell: 3.0}
 ```
 
-`x`, `y` in m, `yaw` in rad, `dwell` in s. Loading fails (`ValueError` / `std::invalid_argument`) when the file is missing or not a mapping, `stations` is missing or empty, the dock is not defined, a field is missing, not a number or not finite, or `dwell < 0`. Every station of the shipped file has at least 0.30 m clearance on the `small_house` map and lies in the free area connected to the dock.
+`x`, `y` in m, `yaw` in rad, `dwell` in s. Loading fails (`ValueError` / `std::invalid_argument`) when the file is missing or not a mapping, `stations` is missing or empty, the dock is not defined, a field is missing, not a number or not finite, `dwell < 0`, a station name or any other mapping key is duplicated, or `frame_id` / `dock_station` is present but not a non-null string. Numeric fields must be plain YAML numbers (int or float, exponent forms such as `1e3` included); quoted strings like `"1.5"` are rejected in both implementations. `mission_manager` also refuses to start when `frame_id` differs from its `global_frame` parameter, because the tolerance check compares the station coordinates with the TF in `global_frame`. Every station of the shipped file has at least 0.30 m clearance on the `small_house` map and lies in the free area connected to the dock.
 
 ## A5. Mission Rules
 
 - Goal: an ordered list of station names. An empty list, an unknown station name or a second goal while a mission is active is rejected.
 - For each station: send a `NavigateToPose` goal (frame `map`, yaw to quaternion), wait for the Nav2 result, then check with TF `map -> base_footprint` that the planar distance to the station is at most `goal_tolerance` (0.2 m). A Nav2 SUCCEEDED with a larger distance (or an unavailable TF) counts as a failed attempt. After the check the robot dwells `dwell` seconds.
+- Nav2 not ready: a goal REJECTED by the `NavigateToPose` server is treated as "server not ready" (for example the lifecycle is not active yet). The goal is re-sent every `retry_delay` seconds without counting a failed attempt; only after `nav_server_timeout` of continuous rejection does it count as a failure.
 - Retries: a failed attempt is repeated after `retry_delay` seconds, up to `max_retries` extra attempts; then the station is skipped and the mission goes on.
 - Abort: `max_consecutive_failures` consecutive skipped stations abort the mission (the remaining stations are not tried; 0 disables this).
-- Dock: after the last station (`return_to_dock`), after an abort and after a cancel the robot navigates to the dock station (unless it just reached it), with up to `dock_max_retries` extra attempts. If the dock cannot be reached the outcome is `OUTCOME_DOCK_FAILED` and `docked` is false.
-- Cancel: the active Nav2 goal is canceled, the dwell is stopped and the robot returns to the dock; the action ends CANCELED. The action stays EXECUTING while the robot drives back (an AGV must not stop in the aisle); a second cancel is ignored.
+- Dock: after the last station (`return_to_dock`), after an abort and after a cancel the robot navigates to the dock station (skipped only when the robot is currently at the dock: it reached the dock and has not started driving to another station since), with up to `dock_max_retries` extra attempts. If the dock cannot be reached the outcome is `OUTCOME_DOCK_FAILED` and `docked` is false.
+- Cancel: the active Nav2 goal is canceled, the dwell is stopped and the robot returns to the dock; the action ends CANCELED. Terminal status precedence: a cancel that is in progress yields action status CANCELED even if the dock return then fails (the `outcome` field still carries `DOCK_FAILED`). The action stays EXECUTING while the robot drives back (an AGV must not stop in the aisle); a second cancel is ignored.
 - Result: `outcome` (COMPLETED 0, COMPLETED_WITH_SKIPS 1, ABORTED 2, CANCELED 3, DOCK_FAILED 4), `docked`, `visited`, `skipped`, `message`. Final action status: SUCCEEDED for outcomes 0 and 1, ABORTED for 2 and 4, CANCELED for 3.
 - `/mission/status` (`bumperbot_msgs/msg/MissionStatus`, reliable + transient_local): `IDLE`, `NAVIGATING`, `DWELLING`, `RETURNING_TO_DOCK`, `COMPLETED`, `ABORTED`, `CANCELED`, `DOCK_FAILED`, with the current station, index, attempt, progress and the visited/skipped lists; published at start, on every change and at `status_rate` Hz. Action feedback carries the same content plus `distance_remaining`.
 
@@ -74,7 +75,7 @@ Parameters (`config/mission_manager.yaml`): `stations_file` (empty = package def
 
 ## A6. Simulator Independence
 
-The mission manager depends only on the `navigate_to_pose` action, TF and its own interfaces; it does not reference Gazebo or MuJoCo. It runs on the node clock, so `use_sim_time` works unchanged.
+The mission manager depends only on the `navigate_to_pose` action, TF and its own interfaces; it does not reference Gazebo or MuJoCo. Clocks: the dwell and the `retry_delay` use the node clock (so `use_sim_time` works unchanged); `nav_goal_timeout`, `nav_server_timeout` and `tf_timeout` use wall (steady) time.
 
 ## A7. Tests
 

@@ -48,6 +48,7 @@ private:
   void publish_all();
 
   // Helpers
+  bool cancel_signaled();
   bool handle_cancel_if_pending();
   bool wait_clock(double seconds, bool interruptible);
   NavigateToPose::Goal make_goal(const Station & station);

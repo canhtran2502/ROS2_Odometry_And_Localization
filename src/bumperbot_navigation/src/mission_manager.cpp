@@ -1,9 +1,11 @@
 #include "bumperbot_navigation/mission_manager.hpp"
 
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <functional>
 #include <limits>
+#include <stdexcept>
 #include <thread>
 
 #include "ament_index_cpp/get_package_share_directory.hpp"
@@ -61,6 +63,12 @@ MissionManager::MissionManager(const rclcpp::NodeOptions & options)
 
   global_frame_ = get_parameter("global_frame").as_string();
   robot_frame_ = get_parameter("robot_frame").as_string();
+  if (stations_.frame_id != global_frame_) {
+    // The tolerance check compares station coordinates with the TF in global_frame
+    throw std::invalid_argument(
+            "stations frame_id '" + stations_.frame_id + "' differs from global_frame '" +
+            global_frame_ + "'");
+  }
   retry_delay_ = get_parameter("retry_delay").as_double();
   nav_server_timeout_ = get_parameter("nav_server_timeout").as_double();
   nav_goal_timeout_ = get_parameter("nav_goal_timeout").as_double();
@@ -191,9 +199,18 @@ void MissionManager::publish_all()
 }
 
 // ----- helpers -----
+bool MissionManager::cancel_signaled()
+{
+  // A cancel can also be pending on the goal handle before the cancel callback has run
+  if (!cancel_requested_ && goal_handle_ && goal_handle_->is_canceling()) {
+    cancel_requested_ = true;
+  }
+  return cancel_requested_;
+}
+
 bool MissionManager::handle_cancel_if_pending()
 {
-  if (cancel_requested_ && !cancel_handled_) {
+  if (cancel_signaled() && !cancel_handled_) {
     cancel_handled_ = true;
     std::lock_guard<std::mutex> lock(mutex_);
     tracker_->request_cancel();
@@ -254,37 +271,59 @@ bool MissionManager::navigate(const Step & step, bool & interrupted)
   const Station * station = stations_.find(step.station);
   distance_remaining_ = -1.0;
 
-  const auto server_deadline =
-    SteadyClock::now() + std::chrono::duration<double>(nav_server_timeout_);
-  while (!nav_client_->action_server_is_ready()) {
-    if (SteadyClock::now() >= server_deadline) {
-      RCLCPP_WARN(get_logger(), "Nav2 action server is not available");
-      return false;
-    }
-    std::this_thread::sleep_for(100ms);
-    if (handle_cancel_if_pending() && !step.docking) {
-      interrupted = true;
-      return false;
-    }
-  }
-
   rclcpp_action::Client<NavigateToPose>::SendGoalOptions options;
   options.feedback_callback =
     [this](NavGoalHandle::SharedPtr, const std::shared_ptr<const NavigateToPose::Feedback> fb) {
       distance_remaining_ = fb->distance_remaining;
       publish_feedback();
     };
-  auto send_future = nav_client_->async_send_goal(make_goal(*station), options);
-  if (send_future.wait_for(std::chrono::duration<double>(nav_server_timeout_)) !=
-    std::future_status::ready)
-  {
-    RCLCPP_WARN(get_logger(), "Nav2 did not answer the goal request");
-    return false;
-  }
-  auto nav_handle = send_future.get();
-  if (!nav_handle) {
-    RCLCPP_WARN(get_logger(), "Nav2 rejected the goal for '%s'", step.station.c_str());
-    return false;
+
+  // A rejection means the Nav2 lifecycle is probably not active yet: keep re-sending without
+  // counting a failed attempt until nav_server_timeout of continuous rejection has passed.
+  bool rejected_before = false;
+  SteadyClock::time_point rejected_since;
+  NavGoalHandle::SharedPtr nav_handle;
+  while (true) {
+    const auto server_deadline =
+      SteadyClock::now() + std::chrono::duration<double>(nav_server_timeout_);
+    while (!nav_client_->action_server_is_ready()) {
+      if (SteadyClock::now() >= server_deadline) {
+        RCLCPP_WARN(get_logger(), "Nav2 action server is not available");
+        return false;
+      }
+      std::this_thread::sleep_for(100ms);
+      if (handle_cancel_if_pending() && !step.docking) {
+        interrupted = true;
+        return false;
+      }
+    }
+
+    auto send_future = nav_client_->async_send_goal(make_goal(*station), options);
+    if (send_future.wait_for(std::chrono::duration<double>(nav_server_timeout_)) !=
+      std::future_status::ready)
+    {
+      RCLCPP_WARN(get_logger(), "Nav2 did not answer the goal request");
+      return false;
+    }
+    nav_handle = send_future.get();
+    if (nav_handle) {
+      break;
+    }
+    if (!rejected_before) {
+      rejected_before = true;
+      rejected_since = SteadyClock::now();
+    }
+    if (SteadyClock::now() - rejected_since >= std::chrono::duration<double>(nav_server_timeout_)) {
+      RCLCPP_WARN(get_logger(), "Nav2 rejected the goal for '%s'", step.station.c_str());
+      return false;
+    }
+    RCLCPP_INFO(
+      get_logger(), "Nav2 rejected the goal for '%s', retrying (server not ready?)",
+      step.station.c_str());
+    if (wait_clock(std::max(retry_delay_, 0.1), !step.docking)) {
+      interrupted = true;
+      return false;
+    }
   }
 
   auto result_future = nav_client_->async_get_result(nav_handle);
@@ -294,7 +333,7 @@ bool MissionManager::navigate(const Step & step, bool & interrupted)
     if (!rclcpp::ok()) {
       return false;
     }
-    if (cancel_requested_ && !cancel_handled_) {
+    if (cancel_signaled() && !cancel_handled_) {
       handle_cancel_if_pending();
       if (!step.docking) {
         interrupted = true;
@@ -309,8 +348,13 @@ bool MissionManager::navigate(const Step & step, bool & interrupted)
   }
 
   if (interrupted || timed_out) {
-    auto cancel_future = nav_client_->async_cancel_goal(nav_handle);
-    cancel_future.wait_for(5s);
+    try {
+      auto cancel_future = nav_client_->async_cancel_goal(nav_handle);
+      cancel_future.wait_for(5s);
+    } catch (const std::exception & exc) {
+      // e.g. rclcpp_action::exceptions::UnknownGoalHandleError when the goal already ended
+      RCLCPP_WARN(get_logger(), "Could not cancel the Nav2 goal: %s", exc.what());
+    }
     result_future.wait_for(5s);
     return false;
   }
@@ -324,54 +368,86 @@ void MissionManager::execute(std::shared_ptr<MissionGoalHandle> goal_handle)
   const std::vector<std::string> names = goal_handle->get_goal()->stations;
   RCLCPP_INFO(get_logger(), "Mission started: [%s]", join(names).c_str());
   cancel_handled_ = false;
-  // A cancel that arrived before this point still counts
-  cancel_requested_ = goal_handle->is_canceling();
+  // cancel_requested_ is not cleared here: a cancel that arrived right after the goal was
+  // accepted must still count. It is cleared at the end of the previous mission.
   {
     std::lock_guard<std::mutex> lock(mutex_);
     goal_handle_ = goal_handle;
     mission_names_ = names;
     tracker_ = std::make_unique<MissionTracker>(stations_, names, tracker_params_);
   }
-  publish_all();
 
+  // Whatever happens below, the cleanup at the end must run (like a finally)
   try {
-    run_mission();
-  } catch (const std::exception & exc) {
-    RCLCPP_ERROR(get_logger(), "Mission error: %s", exc.what());
+    publish_all();
+    std::string error;
+    try {
+      run_mission();
+    } catch (const std::exception & exc) {
+      error = exc.what();
+    } catch (...) {
+      error = "unknown error";
+    }
+    bool recovery_failed = false;
+    if (!error.empty()) {
+      RCLCPP_ERROR(get_logger(), "Mission error: %s", error.c_str());
+      try {
+        {
+          std::lock_guard<std::mutex> lock(mutex_);
+          tracker_->abort("internal error: " + error);
+        }
+        run_mission();
+      } catch (...) {
+        recovery_failed = true;
+        RCLCPP_ERROR(get_logger(), "Mission recovery failed");
+      }
+    }
+
+    auto result = std::make_shared<ExecuteMission::Result>();
+    std::string state;
+    std::string message;
+    int outcome;
     {
       std::lock_guard<std::mutex> lock(mutex_);
-      tracker_->abort(std::string("internal error: ") + exc.what());
+      outcome = tracker_->outcome();
+      state = tracker_->state();
+      message = tracker_->message();
+      result->docked = tracker_->docked();
+      result->visited = tracker_->visited();
+      result->skipped = tracker_->skipped();
+      if (recovery_failed || !tracker_->finished()) {
+        outcome = OUTCOME_ABORTED;
+        state = STATE_ABORTED;
+        message = "internal error: " + error;
+        result->docked = false;
+      }
+      result->outcome = outcome;
+      result->message = message;
     }
-    run_mission();
+    try {
+      publish_all();
+    } catch (...) {
+      RCLCPP_WARN(get_logger(), "Could not publish the final status");
+    }
+
+    // A cancel in progress wins over the outcome: the action ends CANCELED even when the dock
+    // return then failed (the outcome field still carries DOCK_FAILED)
+    if (goal_handle->is_canceling()) {
+      goal_handle->canceled(result);
+    } else if (outcome == OUTCOME_ABORTED || outcome == OUTCOME_DOCK_FAILED) {
+      goal_handle->abort(result);
+    } else {
+      goal_handle->succeed(result);
+    }
+    RCLCPP_INFO(get_logger(), "Mission finished: %s (%s)", state.c_str(), message.c_str());
+  } catch (...) {
+    RCLCPP_ERROR(get_logger(), "Could not report the mission result");
   }
 
-  auto result = std::make_shared<ExecuteMission::Result>();
-  std::string state;
-  std::string message;
-  int outcome;
-  {
-    std::lock_guard<std::mutex> lock(mutex_);
-    outcome = tracker_->outcome();
-    state = tracker_->state();
-    message = tracker_->message();
-    result->outcome = outcome;
-    result->docked = tracker_->docked();
-    result->visited = tracker_->visited();
-    result->skipped = tracker_->skipped();
-    result->message = message;
-  }
-  publish_all();
-
-  if (goal_handle->is_canceling()) {
-    goal_handle->canceled(result);
-  } else if (outcome == OUTCOME_ABORTED || outcome == OUTCOME_DOCK_FAILED) {
-    goal_handle->abort(result);
-  } else {
-    goal_handle->succeed(result);
-  }
-  RCLCPP_INFO(get_logger(), "Mission finished: %s (%s)", state.c_str(), message.c_str());
   std::lock_guard<std::mutex> lock(mutex_);
   goal_handle_.reset();
+  cancel_requested_ = false;
+  cancel_handled_ = false;
   active_ = false;
 }
 

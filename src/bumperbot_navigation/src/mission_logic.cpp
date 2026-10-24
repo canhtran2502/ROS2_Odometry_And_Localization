@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <set>
 #include <stdexcept>
 
 namespace bumperbot_navigation
@@ -31,9 +32,12 @@ const Station * StationSet::find(const std::string & name) const
 
 namespace
 {
+// Numeric rule (same in the Python twin): a numeric field must be a plain (unquoted) YAML
+// number, int or float, including exponent forms such as 1e3. Quoted strings are rejected.
 double read_number(const YAML::Node & node, const std::string & what)
 {
-  if (!node.IsScalar()) {
+  // yaml-cpp tags quoted scalars with "!"
+  if (!node.IsScalar() || node.Tag() == "!") {
     throw std::invalid_argument(what + " is not a number");
   }
   double value = 0.0;
@@ -46,6 +50,41 @@ double read_number(const YAML::Node & node, const std::string & what)
     throw std::invalid_argument(what + " is not finite");
   }
   return value;
+}
+
+// Read an optional string field: when present it must be a non-null string scalar.
+// Plain scalars that YAML types as numbers or booleans are not strings (same as in Python).
+std::string read_string(const YAML::Node & node, const std::string & what)
+{
+  if (!node.IsScalar()) {
+    throw std::invalid_argument(what + " is not a string");
+  }
+  if (node.Tag() != "!") {
+    double number = 0.0;
+    bool flag = false;
+    if (YAML::convert<double>::decode(node, number) || YAML::convert<bool>::decode(node, flag)) {
+      throw std::invalid_argument(what + " is not a string");
+    }
+  }
+  return node.Scalar();
+}
+
+// Reject duplicate keys in any mapping of the document (the Python loader does the same).
+void check_unique_keys(const YAML::Node & node)
+{
+  if (node.IsMap()) {
+    std::set<std::string> seen;
+    for (auto it = node.begin(); it != node.end(); ++it) {
+      if (it->first.IsScalar() && !seen.insert(it->first.Scalar()).second) {
+        throw std::invalid_argument("duplicate key '" + it->first.Scalar() + "'");
+      }
+      check_unique_keys(it->second);
+    }
+  } else if (node.IsSequence()) {
+    for (auto it = node.begin(); it != node.end(); ++it) {
+      check_unique_keys(*it);
+    }
+  }
 }
 }  // namespace
 
@@ -61,12 +100,14 @@ StationSet load_stations(const std::string & path)
     throw std::invalid_argument("stations file '" + path + "' is not a mapping");
   }
 
+  check_unique_keys(data);
+
   StationSet result;
   if (data["frame_id"]) {
-    result.frame_id = data["frame_id"].as<std::string>();
+    result.frame_id = read_string(data["frame_id"], "'frame_id'");
   }
   if (data["dock_station"]) {
-    result.dock_station = data["dock_station"].as<std::string>();
+    result.dock_station = read_string(data["dock_station"], "'dock_station'");
   }
 
   const YAML::Node stations = data["stations"];
@@ -75,7 +116,10 @@ StationSet load_stations(const std::string & path)
   }
 
   for (auto it = stations.begin(); it != stations.end(); ++it) {
-    const std::string name = it->first.as<std::string>();
+    if (!it->first.IsScalar()) {
+      throw std::invalid_argument("a station name is not a string");
+    }
+    const std::string name = it->first.Scalar();
     const YAML::Node entry = it->second;
     if (!entry.IsMap()) {
       throw std::invalid_argument("station '" + name + "' is not a mapping");
@@ -99,6 +143,9 @@ StationSet load_stations(const std::string & path)
     station.dwell = values[3];
     if (station.dwell < 0.0) {
       throw std::invalid_argument("station '" + name + "' has a negative dwell");
+    }
+    if (result.find(name) != nullptr) {
+      throw std::invalid_argument("duplicate station '" + name + "'");
     }
     result.stations.push_back(station);
   }
@@ -166,6 +213,10 @@ Step MissionTracker::next_step()
     step.kind = StepKind::NAVIGATE;
     step.station = current_station_;
     step.attempt = attempt_;
+    // Driving to a station other than the dock: the robot leaves the dock
+    if (current_station_ != set_.dock_station) {
+      at_dock_ = false;
+    }
   } else if (phase_ == Phase::DWELL) {
     current_station_ = names_[index_];
     state_ = STATE_DWELLING;

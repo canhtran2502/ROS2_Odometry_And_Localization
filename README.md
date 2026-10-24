@@ -58,8 +58,8 @@ BumperBot is designed for roboticists and embedded software engineers mastering 
 | **AMCL Localization** | Verified | `nav2_amcl` particle filter with map server lifecycle |
 | **Hardware Interface** | Verified | C++ `hardware_interface` over `/dev/ttyUSB0` + Arduino PID |
 | **Autonomous Exploration** | Verified | `frontier_explorer`: frontier detection, grid A*, pure pursuit on top of `slam_toolbox`, saves the map when done (`auto_explore.launch.py`) |
-| **Autonomous Navigation (Nav2)** | Verified (simulation) | Nav2 planner, controller, behaviors and `bt_navigator` configured in `bumperbot_navigation` (`navigation.launch.py`); velocity enters `twist_mux` as `nav_vel`. See [doc/10_navigation.md](doc/10_navigation.md) |
-| **AGV Waypoint Missions** | Verified (simulation) | `mission_manager` + `stations.yaml`: ordered stations, dwell, retry/skip, dock return (`mission_sim.launch.py`) |
+| **Autonomous Navigation (Nav2)** | Verified (MuJoCo simulation) | Nav2 planner, controller, behaviors and `bt_navigator` configured in `bumperbot_navigation` (`navigation.launch.py`); velocity enters `twist_mux` as `nav_vel`. See [doc/10_navigation.md](doc/10_navigation.md) |
+| **AGV Waypoint Missions** | Verified (MuJoCo simulation) | `mission_manager` + `stations.yaml`: ordered stations, dwell, retry/skip, dock return (`mission_sim.launch.py`) |
 
 ---
 
@@ -373,7 +373,7 @@ ros2 action send_goal /execute_mission bumperbot_msgs/action/ExecuteMission "{st
 ros2 topic echo /mission/status
 ```
 
-Stations (`x`, `y`, `yaw`, `dwell`, plus the `dock`) are defined in `bumperbot_navigation/config/stations.yaml`. After Nav2 reports success, `mission_manager` checks with TF (`map -> base_footprint`) that the robot is within `goal_tolerance` (0.2 m); a failed station is retried `max_retries` times and then skipped; too many consecutive failures abort the mission; the end of the mission, an error and a cancel all send the robot back to the dock. Nav2 velocity goes through `twist_mux` as `nav_vel` (priority 20: below joystick and keyboard, above exploration; the `safety_stop` lock still wins). See [doc/10_navigation.md](doc/10_navigation.md).
+Stations (`x`, `y`, `yaw`, `dwell`, plus the `dock`) are defined in `bumperbot_navigation/config/stations.yaml`. After Nav2 reports success, `mission_manager` checks with TF (`map -> base_footprint`) that the robot is within `goal_tolerance` (0.2 m); a failed station is retried `max_retries` times and then skipped; too many consecutive failures abort the mission; the end of the mission, an error and a cancel all send the robot back to the dock (skipped only when the robot is currently at the dock). `stations.yaml` must not contain duplicate names, numeric fields must be plain YAML numbers, and its `frame_id` must equal the `global_frame` parameter. A cancel in progress ends the action CANCELED even if the dock return fails (`outcome` stays `DOCK_FAILED`). Nav2 velocity goes through `twist_mux` as `nav_vel` (priority 20: below joystick and keyboard, above exploration; the `safety_stop` lock still wins). See [doc/10_navigation.md](doc/10_navigation.md).
 
 ### 4. Sensor Fusion with Extended Kalman Filter (EKF)
 
