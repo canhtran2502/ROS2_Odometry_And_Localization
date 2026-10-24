@@ -1,0 +1,4 @@
+frame_id:
+dock_station: dock
+stations:
+  dock: {x: 0.0, y: 0.0, yaw: 0.0, dwell: 0.0}

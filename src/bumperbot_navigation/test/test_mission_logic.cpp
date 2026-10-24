@@ -53,10 +53,29 @@ TEST(StationsTest, InvalidFixturesRejected)
   const std::vector<std::string> files = {
     "invalid_empty.yaml", "invalid_missing_field.yaml", "invalid_nan.yaml",
     "invalid_negative_dwell.yaml", "invalid_no_dock.yaml", "invalid_not_a_mapping.yaml",
-    "does_not_exist.yaml"};
+    "invalid_duplicate_station.yaml", "invalid_duplicate_key.yaml", "invalid_null_frame_id.yaml",
+    "invalid_null_dock_station.yaml", "invalid_quoted_number.yaml", "does_not_exist.yaml"};
   for (const auto & f : files) {
     EXPECT_THROW(load_stations(kData + "/" + f), std::invalid_argument) << f;
   }
+}
+
+TEST(StationsTest, ExponentNumbersAccepted)
+{
+  StationSet st = load_stations(kData + "/valid_exponent.yaml");
+  ASSERT_EQ(st.stations.size(), 3u);
+  const Station * far = st.find("far");
+  ASSERT_NE(far, nullptr);
+  EXPECT_DOUBLE_EQ(far->x, 1000.0);
+  EXPECT_DOUBLE_EQ(far->y, 1500.0);
+  EXPECT_DOUBLE_EQ(far->yaw, 0.1);
+  EXPECT_DOUBLE_EQ(far->dwell, 2.0);
+  const Station * neg = st.find("neg");
+  ASSERT_NE(neg, nullptr);
+  EXPECT_DOUBLE_EQ(neg->x, -0.25);
+  EXPECT_DOUBLE_EQ(neg->y, 100.0);
+  EXPECT_DOUBLE_EQ(neg->yaw, 0.0);
+  EXPECT_DOUBLE_EQ(neg->dwell, 0.0);
 }
 
 TEST(ValidateTest, EmptyAndUnknown)
@@ -130,7 +149,9 @@ TEST(MissionCases, AllCases)
       if (step.kind == StepKind::FINISHED) {finished = true; break;}
       ASSERT_LT(ei, events.size()) << "ran out of events";
       YAML::Node ev = events[ei++];
-      if (ev["cancel"]) {
+      if (ev["abort"]) {
+        tr.abort("internal error");
+      } else if (ev["cancel"]) {
         tr.request_cancel();
       } else if (ev["nav"]) {
         ASSERT_EQ(step.kind, StepKind::NAVIGATE);

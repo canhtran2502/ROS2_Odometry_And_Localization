@@ -49,7 +49,26 @@ def test_stations_missing_file_rejected():
 
 
 def test_stations_invalid_fixtures_exist():
-    assert len(glob.glob(os.path.join(DATA, "invalid_*.yaml"))) >= 6
+    names = {os.path.basename(p) for p in glob.glob(os.path.join(DATA, "invalid_*.yaml"))}
+    assert len(names) >= 11
+    for required in INVALID_REVIEW_FIXTURES:
+        assert required in names
+
+
+INVALID_REVIEW_FIXTURES = [
+    "invalid_duplicate_station.yaml", "invalid_duplicate_key.yaml",
+    "invalid_null_frame_id.yaml", "invalid_null_dock_station.yaml",
+    "invalid_quoted_number.yaml"]
+
+
+def test_stations_exponent_numbers_accepted():
+    st = load_stations(os.path.join(DATA, "valid_exponent.yaml"))
+    got = {s.name: (s.x, s.y, s.yaw, s.dwell) for s in st.stations}
+    assert got == {
+        "dock": (0.0, 0.0, 0.0, 0.0),
+        "far": (1000.0, 1500.0, 0.1, 2.0),
+        "neg": (-0.25, 100.0, 0.0, 0.0),
+    }
 
 
 def test_validate_mission():
@@ -100,6 +119,9 @@ def run_case(case):
             break
         assert events, "case '{}' ran out of events at step {}".format(case["name"], steps[-1])
         ev = events.pop(0)
+        if "abort" in ev:
+            tr.abort("internal error")
+            continue
         if "cancel" in ev:
             tr.request_cancel()
             # the cancel replaces the report: the current step is re-evaluated
@@ -138,5 +160,8 @@ def test_cases_cover_required_scenarios():
                      "cancel_during_navigation_then_dock", "cancel_during_dwell_then_dock",
                      "distance_error_too_large_counts_as_failure",
                      "abort_after_consecutive_skips_then_dock",
-                     "mission_ending_at_dock_sends_no_second_dock_goal"):
+                     "mission_ending_at_dock_sends_no_second_dock_goal",
+                     "dock_first_then_cancel_while_driving_to_a",
+                     "dock_first_then_internal_error_while_driving_to_a",
+                     "dock_first_then_station_fails_and_aborts"):
         assert required in names

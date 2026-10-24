@@ -313,6 +313,11 @@ class TestMissionManager(unittest.TestCase):
             statuses = list(self.statuses)
             feedback = list(self.feedback)
         self.assertTrue(statuses)
+        # A periodic (2 Hz) status of the previous, finished mission can still arrive after
+        # run_mission() cleared the list: the new mission starts at the first NAVIGATING status.
+        first = next((i for i, s in enumerate(statuses) if s.state == "NAVIGATING"), None)
+        self.assertIsNotNone(first, "no NAVIGATING status published")
+        statuses = statuses[first:]
         seq = []
         for s in statuses:
             if s.current_station and (not seq or seq[-1] != s.current_station):

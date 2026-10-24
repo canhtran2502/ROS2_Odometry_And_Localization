@@ -8,7 +8,10 @@ station the behavior is a dict (set by each test through ``behaviors``):
      "always_abort": bool,  # abort every goal for this station
      "offset": meters,      # robot ends this far from the station (along +x) when it succeeds
      "offsets": [m, ...],   # per-attempt offsets (overrides "offset" for the listed attempts)
-     "duration": seconds}   # time before the goal finishes (default 0.2); cancel is honored
+     "duration": seconds,   # time before the goal finishes (default 0.2); cancel is honored
+     "reject_for": seconds, # reject goals for this station until this long after its first goal
+     "succeed_on_cancel": bool,  # on a cancel request finish SUCCEEDED (cancel/result race)
+     "cancel_reject": bool}      # reject cancel requests for this station (goal already done)
 
 Before returning SUCCEEDED the mock moves its robot pose to station + offset and keeps broadcasting
 map -> base_footprint at 20 Hz; it waits 0.1 s after the move so the TF reaches the node.
@@ -37,6 +40,9 @@ class MockNav2(Node):
         self.goals = []        # dicts: name, frame_id, x, y, qx, qy, qz, qw, t
         self.cancels = []      # dicts: name, t
         self.reached = []      # dicts: name, x, y, t (robot pose when SUCCEEDED was returned)
+        self.rejected = []     # dicts: name, t (goals rejected by the goal callback)
+        self.first_goal_t = {}
+        self.cancel_requests = {}
         self.counts = {}
         self.robot = (0.0, 0.0)
         self.group = ReentrantCallbackGroup()
@@ -45,8 +51,8 @@ class MockNav2(Node):
         self.server = ActionServer(
             self, NavigateToPose, action_name,
             execute_callback=self.execute,
-            goal_callback=lambda _g: GoalResponse.ACCEPT,
-            cancel_callback=lambda _h: CancelResponse.ACCEPT,
+            goal_callback=self.on_goal,
+            cancel_callback=self.on_cancel,
             callback_group=self.group)
 
     def reset(self, behaviors=None):
@@ -55,8 +61,33 @@ class MockNav2(Node):
             self.goals = []
             self.cancels = []
             self.reached = []
+            self.rejected = []
+            self.first_goal_t = {}
+            self.cancel_requests = {}
             self.counts = {}
             self.robot = (0.0, 0.0)
+
+    def on_goal(self, request):
+        p = request.pose.pose.position
+        name = self.resolve(p.x, p.y)
+        with self.lock:
+            beh = self.behaviors.get(name, {})
+            window = float(beh.get("reject_for", 0.0))
+            now = time.monotonic()
+            first = self.first_goal_t.setdefault(name, now)
+            if window > 0.0 and now - first < window:
+                self.rejected.append({"name": name, "t": now})
+                return GoalResponse.REJECT
+        return GoalResponse.ACCEPT
+
+    def on_cancel(self, handle):
+        p = handle.request.pose.pose.position
+        name = self.resolve(p.x, p.y)
+        with self.lock:
+            self.cancel_requests[name] = self.cancel_requests.get(name, 0) + 1
+            if self.behaviors.get(name, {}).get("cancel_reject"):
+                return CancelResponse.REJECT
+        return CancelResponse.ACCEPT
 
     def snapshot(self):
         with self.lock:
@@ -95,6 +126,8 @@ class MockNav2(Node):
         end = time.monotonic() + float(beh.get("duration", 0.2))
         while time.monotonic() < end:
             if goal_handle.is_cancel_requested:
+                if beh.get("succeed_on_cancel"):
+                    break
                 with self.lock:
                     self.cancels.append({"name": name, "t": time.monotonic()})
                 goal_handle.canceled()
@@ -103,7 +136,7 @@ class MockNav2(Node):
             fb.distance_remaining = max(0.0, end - time.monotonic())
             goal_handle.publish_feedback(fb)
             time.sleep(0.05)
-        if goal_handle.is_cancel_requested:
+        if goal_handle.is_cancel_requested and not beh.get("succeed_on_cancel"):
             with self.lock:
                 self.cancels.append({"name": name, "t": time.monotonic()})
             goal_handle.canceled()

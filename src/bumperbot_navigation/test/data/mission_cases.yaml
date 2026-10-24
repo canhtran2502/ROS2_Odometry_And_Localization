@@ -7,6 +7,7 @@
 #   nav: {ok: bool, err: meters}  reported for a NAVIGATE step (err < 0 means NaN / TF unknown)
 #   dwell_done: true              reported for a DWELL step
 #   cancel: true                  request_cancel() instead of a report for the current step
+#   abort: true                   abort("internal error") instead of a report (node error path)
 # expect.steps: every step emitted by next_step(), formatted as
 #   NAVIGATE:<station>:<attempt>[:dock]  |  DWELL:<station>  |  FINISHED
 stations_file: stations_test.yaml
@@ -203,3 +204,81 @@ cases:
       docked: true
       visited: [c]
       skipped: [u1, u2]
+
+  # ---- iteration 3 review fixes: docked must reflect reality
+  - name: dock_first_then_cancel_while_driving_to_a
+    stations: [dock, a]
+    events:
+      - {nav: {ok: true, err: 0.0}}
+      - {cancel: true}
+      - {nav: {ok: true, err: 0.0}}
+    expect:
+      steps: ["NAVIGATE:dock:1", "NAVIGATE:a:1", "NAVIGATE:dock:1:dock",
+              "FINISHED"]
+      outcome: 3
+      docked: true
+      visited: [dock]
+      skipped: []
+      state: CANCELED
+
+  - name: dock_first_then_internal_error_while_driving_to_a
+    stations: [dock, a]
+    events:
+      - {nav: {ok: true, err: 0.0}}
+      - {abort: true}
+      - {nav: {ok: true, err: 0.0}}
+    expect:
+      steps: ["NAVIGATE:dock:1", "NAVIGATE:a:1", "NAVIGATE:dock:1:dock",
+              "FINISHED"]
+      outcome: 2
+      docked: true
+      visited: [dock]
+      skipped: []
+      state: ABORTED
+
+  - name: dock_first_then_internal_error_dock_unreachable
+    stations: [dock, a]
+    params: {dock_max_retries: 0}
+    events:
+      - {nav: {ok: true, err: 0.0}}
+      - {abort: true}
+      - {nav: {ok: false, err: 0.0}}
+    expect:
+      steps: ["NAVIGATE:dock:1", "NAVIGATE:a:1", "NAVIGATE:dock:1:dock",
+              "FINISHED"]
+      outcome: 4
+      docked: false
+      visited: [dock]
+      skipped: []
+      state: DOCK_FAILED
+
+  - name: dock_first_then_station_fails_and_aborts
+    stations: [dock, a]
+    params: {max_retries: 0, max_consecutive_failures: 1}
+    events:
+      - {nav: {ok: true, err: 0.0}}
+      - {nav: {ok: false, err: 0.0}}
+      - {nav: {ok: true, err: 0.0}}
+    expect:
+      steps: ["NAVIGATE:dock:1", "NAVIGATE:a:1", "NAVIGATE:dock:1:dock",
+              "FINISHED"]
+      outcome: 2
+      docked: true
+      visited: [dock]
+      skipped: [a]
+      state: ABORTED
+
+  - name: dock_first_then_station_skipped_still_drives_back
+    stations: [dock, a]
+    params: {max_retries: 0}
+    events:
+      - {nav: {ok: true, err: 0.0}}
+      - {nav: {ok: false, err: 0.0}}
+      - {nav: {ok: true, err: 0.0}}
+    expect:
+      steps: ["NAVIGATE:dock:1", "NAVIGATE:a:1", "NAVIGATE:dock:1:dock",
+              "FINISHED"]
+      outcome: 1
+      docked: true
+      visited: [dock]
+      skipped: [a]

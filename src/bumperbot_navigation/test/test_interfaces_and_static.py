@@ -2,6 +2,7 @@
 import glob
 import os
 import re
+import signal
 import subprocess
 
 import pytest
@@ -172,3 +173,36 @@ def test_ascii_comments():
                 except UnicodeDecodeError:
                     bad.append(f"{os.path.relpath(path, SRC)}:{n}")
     assert not bad, bad
+
+
+# ------------------------------------------------------------------ review fix: frame check
+@pytest.mark.parametrize("executable", ["mission_manager", "mission_manager.py"])
+def test_node_refuses_start_when_station_frame_differs_from_global_frame(executable):
+    fixture = os.path.join(HERE, "data", "stations_other_frame.yaml")
+    cmd = ["ros2", "run", "bumperbot_navigation", executable, "--ros-args",
+           "-p", "stations_file:=" + fixture, "-p", "global_frame:=map"]
+    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+    out = proc.stdout + proc.stderr
+    assert proc.returncode != 0, "node started although frame_id != global_frame\n" + out
+    assert "global_frame" in out and "odom" in out, out
+
+
+@pytest.mark.parametrize("executable", ["mission_manager", "mission_manager.py"])
+def test_node_starts_when_station_frame_matches_global_frame(executable):
+    """Control for the test above: with a matching global_frame the node keeps running."""
+    fixture = os.path.join(HERE, "data", "stations_other_frame.yaml")
+    cmd = ["ros2", "run", "bumperbot_navigation", executable, "--ros-args",
+           "-p", "stations_file:=" + fixture, "-p", "global_frame:=odom"]
+    # own process group: `ros2 run` does not forward the signal to the node it starts
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                            start_new_session=True)
+    try:
+        with pytest.raises(subprocess.TimeoutExpired):
+            proc.wait(timeout=4.0)
+    finally:
+        os.killpg(proc.pid, signal.SIGTERM)
+        try:
+            proc.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            os.killpg(proc.pid, signal.SIGKILL)
+            proc.wait(timeout=5)

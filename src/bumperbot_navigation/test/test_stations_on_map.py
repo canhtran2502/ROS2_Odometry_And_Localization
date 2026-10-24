@@ -95,3 +95,17 @@ def test_stations_free_clear_and_connected(world, stations):
         if labels[row, col] != dock_label:
             problems.append(f"{name}: not in the free component of the dock")
     assert not problems, "; ".join(problems)
+
+
+def test_review_fixes_launch_py():
+    """Review-fix launch tests (rejection, cancel races) for the Python mission_manager."""
+    import subprocess
+    env = dict(os.environ, REVIEW_IMPL="py")
+    proc = subprocess.run(
+        ["launch_test", os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                     "test_mission_review_fixes.launch.py")],
+        capture_output=True, text=True, timeout=110, env=env)
+    out = proc.stdout + proc.stderr
+    assert proc.returncode == 0, out[-6000:]
+    assert "FAILED" not in out, out[-6000:]
+    assert "Ran 6 tests" in out, "review-fix launch tests did not run\n" + out[-3000:]
