@@ -41,7 +41,7 @@ _ZONE_RANK = {ZONE_CLEAR: 0, ZONE_WARNING: 1, ZONE_STOP: 2, ZONE_CONTACT: 3}
 
 
 def _default_footprint():
-    return [0.10, 0.09, 0.10, -0.09, -0.10, -0.09, -0.10, 0.09]
+    return [0.10, 0.125, 0.10, -0.125, -0.10, -0.125, -0.10, 0.125]
 
 
 @dataclass
@@ -659,6 +659,10 @@ class SafetyCore:
         ev = inp.evaluation
         prev_front = self._prev_front
         prev_rear = self._prev_rear
+        if dock_active != self._last_dock_active:
+            # The rear margin changes with the profile: do not carry the old margin's STOP
+            # hysteresis over, evaluate the rear zone afresh against the new margin
+            prev_rear = ZONE_UNKNOWN
         if usable:
             front_zone = zone_for(ev.front_clearance, prev_front, cfg.stop_margin, cfg)
             if front_zone in (ZONE_STOP, ZONE_CONTACT):

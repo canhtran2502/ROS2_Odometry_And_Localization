@@ -56,7 +56,7 @@ struct Config
   std::string estop_topic = "safety/estop";
   std::string dock_status_topic = "dock/status";
   bool use_odom = true;
-  std::vector<double> footprint = {0.10, 0.09, 0.10, -0.09, -0.10, -0.09, -0.10, 0.09};
+  std::vector<double> footprint = {0.10, 0.125, 0.10, -0.125, -0.10, -0.125, -0.10, 0.125};
   double lateral_margin = 0.03;
   double stop_margin = 0.05;
   double stop_release_hysteresis = 0.02;

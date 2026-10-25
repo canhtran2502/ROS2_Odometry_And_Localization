@@ -9,10 +9,12 @@ from rclpy.action import ActionClient
 from twist_mux_msgs.action import JoyTurbo
 from visualization_msgs.msg import Marker, MarkerArray
 
+
 class State(Enum):
     FREE = 0
     WARNING = 1
     DANGER = 2
+
 
 class SafetyStop(Node):
     def __init__(self):
@@ -21,17 +23,22 @@ class SafetyStop(Node):
         self.declare_parameter("danger_distance", 0.2)
         self.declare_parameter("warning_distance", 0.6)
         self.declare_parameter("scan_topic", "scan")
-        self.declare_parameter("safety_stop_topic","safety_stop")
-        self.danger_distance = self.get_parameter("danger_distance").get_parameter_value().double_value
-        self.warning_distance = self.get_parameter("warning_distance").get_parameter_value().double_value
-        self.scan_topic = self.get_parameter("scan_topic").get_parameter_value().string_value
-        self.safety_stop_topic = self.get_parameter("safety_stop_topic").get_parameter_value().string_value
+        self.declare_parameter("safety_stop_topic", "safety_stop")
+        self.danger_distance = (
+            self.get_parameter("danger_distance").get_parameter_value().double_value)
+        self.warning_distance = (
+            self.get_parameter("warning_distance").get_parameter_value().double_value)
+        self.scan_topic = (
+            self.get_parameter("scan_topic").get_parameter_value().string_value)
+        self.safety_stop_topic = (
+            self.get_parameter("safety_stop_topic").get_parameter_value().string_value)
 
         self.state = State.FREE
         self.prev_state = State.FREE
         self.is_first_msg = True
 
-        self.laser_sub = self.create_subscription(LaserScan, self.scan_topic, self.laser_callback, 10)
+        self.laser_sub = self.create_subscription(
+            LaserScan, self.scan_topic, self.laser_callback, 10)
         self.safety_stop_pub = self.create_publisher(Bool, self.safety_stop_topic, 10)
         self.zones_pub = self.create_publisher(MarkerArray, "zones", 10)
 
@@ -62,7 +69,7 @@ class SafetyStop(Node):
         danger_zone.scale.z = 0.001
         danger_zone.scale.x = self.danger_distance * 2
         danger_zone.scale.y = self.danger_distance * 2
-        danger_zone.color.r = 1.0 
+        danger_zone.color.r = 1.0
         danger_zone.color.g = 0.0
         danger_zone.color.b = 0.0
         danger_zone.pose.position.z = 0.01
@@ -107,12 +114,14 @@ class SafetyStop(Node):
 
         self.zones_pub.publish(self.zones)
 
+
 def main():
     rclpy.init()
     node = SafetyStop()
     rclpy.spin(node)
     node.destroy_node()
     rclpy.shutdown()
-    
+
+
 if __name__ == "__main__":
     main()

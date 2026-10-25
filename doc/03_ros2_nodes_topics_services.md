@@ -57,7 +57,7 @@ This document provides a comprehensive, verified catalog of every ROS 2 node, to
 - **Publications**: `bumperbot_controller/cmd_vel_unstamped` (`Twist`, filter mode only), `safety_stop` (`std_msgs/Bool`, the `twist_mux` lock, every tick), `safety/status` (`bumperbot_msgs/msg/SafetyStatus`, transient_local)
 - **Services** (`std_srvs/srv/Trigger`): `/safety_supervisor/trigger_estop`, `/safety_supervisor/reset` (refused while the `safety/estop` input is true, a fault exists, or an obstacle is in the contact zone)
 - **TF**: reads `base_footprint <- laser_link` and, for the dock profile, `DockStatus.frame_id -> base_footprint`; publishes none
-- **Parameters**: `config/safety_supervisor.yaml` (`enforcement` filter/lock_only, `robot_frame`, `footprint`, `stop_margin`, `slowdown_distance`, `contact_margin`, `max_linear_speed`, timeouts, `latch_faults`, `dock_approach_enabled`, `dock_max_speed`, ...); configuration is ROS parameters only
+- **Parameters**: `config/safety_supervisor.yaml` (`enforcement` filter/lock_only, `robot_frame`, `footprint` (default rectangle x +-0.10 m, y +-0.125 m, includes the wheels), `stop_margin`, `slowdown_distance`, `contact_margin`, `max_linear_speed`, timeouts, `latch_faults`, `dock_approach_enabled`, `dock_max_speed`, ...); configuration is ROS parameters only
 
 #### `safety_stop_node` (`safety_stop.cpp` / `safety_stop.py`, legacy, `safety:=legacy`)
 - **Package**: `bumperbot_utils`

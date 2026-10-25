@@ -226,7 +226,7 @@ The node publishes no TF.
 | `scan_topic` / `odom_topic` / `cmd_vel_in_topic` / `cmd_vel_out_topic` | `scan` / `bumperbot_controller/odom` / `safety/cmd_vel_in` / `bumperbot_controller/cmd_vel_unstamped` | non-empty; in and out must differ |
 | `lock_topic` / `status_topic` / `estop_topic` / `dock_status_topic` | `safety_stop` / `safety/status` / `safety/estop` / `dock/status` | non-empty |
 | `use_odom` | true | odom required (INITIALIZING/FAULT without it) |
-| `footprint` | `[0.10, 0.09, 0.10, -0.09, -0.10, -0.09, -0.10, 0.09]` | flat x,y list in `robot_frame`: even length, >= 3 points, finite, simple polygon, area > 0, contains (0, 0) |
+| `footprint` | `[0.10, 0.125, 0.10, -0.125, -0.10, -0.125, -0.10, 0.125]` | flat x,y list in `robot_frame`: even length, >= 3 points, finite, simple polygon, area > 0, contains (0, 0) |
 | `lateral_margin` | 0.03 | m added to the footprint half width for the corridors |
 | `stop_margin` | 0.05 | m from the footprint edge (> `contact_margin`) |
 | `stop_release_hysteresis` | 0.02 | m, the STOP zone is left at `d > stop_margin + hysteresis` |
@@ -784,7 +784,7 @@ a case needs it.
 - **In-place rotation.** Zones limit only linear motion, so a rectangular footprint corner can touch
   a side obstacle while rotating. A swept-circle angular guard is a follow-up (open question:
   default margin vs Nav2 narrow passages in `small_house`).
-- **Footprint default.** `[+-0.10, +-0.09]` is chosen to contain the MuJoCo collision geoms (AC4).
+- **Footprint default.** `[+-0.10, +-0.125]` contains the MuJoCo collision geoms including the wheels (wheel extent 0.118 m, AC4). Iteration 1 used +-0.09, which the AC4 test showed to miss the wheels; corrected in iteration 2.
   If the coder finds the mesh AABB larger, the default grows and the existing MuJoCo
   explore/mission/dock smoke tests must be re-run (larger zones could slow Nav2 in doorways).
 - **Lock left engaged after supervisor exit** (twist_mux lock timeout 0.0). This is intended

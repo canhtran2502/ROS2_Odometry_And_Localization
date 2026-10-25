@@ -685,7 +685,9 @@ Outputs SafetyCore::update(double now, const Inputs & inp)
     inp.scan_age >= 0.0 && inp.scan_age <= cfg_.scan_timeout;
   const Evaluation & ev = inp.evaluation;
   const std::string prev_front = prev_front_;
-  const std::string prev_rear = prev_rear_;
+  // The rear margin changes with the dock profile: do not carry the old margin's STOP
+  // hysteresis over, evaluate the rear zone afresh against the new margin
+  const std::string prev_rear = (dock_active != last_dock_active_) ? ZONE_UNKNOWN : prev_rear_;
   std::string front_zone = ZONE_UNKNOWN;
   std::string rear_zone = ZONE_UNKNOWN;
   double fwd_limit = 0.0;

@@ -271,7 +271,7 @@ ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -r cmd_vel:=/key
 **What to expect:**
 1. **Ignition Gazebo**: Displays BumperBot inside the `small_house` world.
 2. **RViz2**: Visualizes the robot 3D model, laser scan (`/scan`), occupancy grid map, and the green AMCL particle cloud converging around the robot.
-3. **Teleop & Safety**: Control the robot using keys `i`, `j`, `k`, `l`, `,`. If you drive towards a wall, `safety_supervisor` progressively limits the forward speed from 0.40 m clearance (`stop_margin` 0.05 m + `slowdown_distance` 0.35 m, measured from the footprint edge) and stops the robot at 0.05 m; driving away from the wall is always possible. With `safety:=legacy` the old `safety_stop` behavior is used (slowdown within 0.40 m, emergency halt within 0.20 m).
+3. **Teleop & Safety**: Control the robot using keys `i`, `j`, `k`, `l`, `,`. If you drive towards a wall, `safety_supervisor` progressively limits the forward speed from 0.40 m clearance (`stop_margin` 0.05 m + `slowdown_distance` 0.35 m, measured from the footprint edge; the default footprint, 0.20 m long and 0.25 m wide, includes the wheels) and stops the robot at 0.05 m; driving away from the wall is always possible. With `safety:=legacy` the old `safety_stop` behavior is used (slowdown within 0.40 m, emergency halt within 0.20 m).
 
 ### Safety Supervisor (`safety_supervisor`)
 

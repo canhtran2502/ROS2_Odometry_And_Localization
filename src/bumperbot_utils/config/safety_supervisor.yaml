@@ -23,7 +23,7 @@ safety_supervisor:
     # true: odometry is required (INITIALIZING / FAULT without it)
     use_odom: true
     # Flat x,y list in robot_frame: simple polygon, area > 0, containing (0, 0)
-    footprint: [0.10, 0.09, 0.10, -0.09, -0.10, -0.09, -0.10, 0.09]
+    footprint: [0.10, 0.125, 0.10, -0.125, -0.10, -0.125, -0.10, 0.125]
     # Added to the footprint half width for the front/rear corridors (m)
     lateral_margin: 0.03
     # Distance from the footprint edge: hard stop zone (m), must be > contact_margin

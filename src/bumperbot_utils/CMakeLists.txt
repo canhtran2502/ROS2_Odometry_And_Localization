@@ -51,7 +51,7 @@ install(TARGETS
   DESTINATION lib/${PROJECT_NAME}
 )
 
-install (PROGRAMS
+install(PROGRAMS
   ${PROJECT_NAME}/safety_stop.py
   ${PROJECT_NAME}/safety_supervisor.py
   DESTINATION lib/${PROJECT_NAME}
