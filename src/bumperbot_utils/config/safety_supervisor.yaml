@@ -1,0 +1,75 @@
+# Parameters of the safety_supervisor node (C++ and Python versions use the same names/defaults).
+# Every value must keep its YAML type: floats need a decimal point (0.5, not 1), a quoted number
+# or an int for a float is a startup error (the node locks the robot and exits with code 1).
+safety_supervisor:
+  ros__parameters:
+    # filter: limit the speed of safety/cmd_vel_in (default, simulation stack)
+    # lock_only: never publish velocity, only drive the lock topic (hardware recipe)
+    enforcement: filter
+    # Must equal the Nav2 robot_base_frame and the dock_manager robot_frame
+    robot_frame: base_footprint
+    scan_topic: scan
+    odom_topic: bumperbot_controller/odom
+    # Input of the speed filter (the remapped twist_mux output) and its limited output
+    cmd_vel_in_topic: safety/cmd_vel_in
+    cmd_vel_out_topic: bumperbot_controller/cmd_vel_unstamped
+    # twist_mux lock "safety_stop" (priority 255). true on INITIALIZING, FAULT, ESTOP, SHUTDOWN
+    # and during a brake pulse. It stays true when the node exits or fails to start.
+    lock_topic: safety_stop
+    status_topic: safety/status
+    # std_msgs/Bool, true latches the e-stop (the reset is refused while it stays true)
+    estop_topic: safety/estop
+    dock_status_topic: dock/status
+    # true: odometry is required (INITIALIZING / FAULT without it)
+    use_odom: true
+    # Flat x,y list in robot_frame: simple polygon, area > 0, containing (0, 0)
+    footprint: [0.10, 0.09, 0.10, -0.09, -0.10, -0.09, -0.10, 0.09]
+    # Added to the footprint half width for the front/rear corridors (m)
+    lateral_margin: 0.03
+    # Distance from the footprint edge: hard stop zone (m), must be > contact_margin
+    stop_margin: 0.05
+    # The stop zone is left at d > stop_margin + stop_release_hysteresis (m)
+    stop_release_hysteresis: 0.02
+    # Length of the warning ramp behind the stop zone (m)
+    slowdown_distance: 0.35
+    # Contact zone (m): moving toward it latches the e-stop
+    contact_margin: 0.015
+    # Hard speed clamp and top of the ramp (m/s), joystick turbo maximum
+    max_linear_speed: 0.7
+    # Hard angular clamp (rad/s), joystick angular maximum
+    max_angular_speed: 5.0
+    # Braking-distance limit: scan period + tick + margin (s) and deceleration (m/s^2)
+    response_time: 0.3
+    max_decel: 0.5
+    # Speed under which the robot counts as stopped (m/s)
+    stopped_speed: 0.02
+    # Minimum length of a brake pulse (s)
+    brake_hold_time: 0.5
+    # Watchdog timeouts (s), steady clock; the MuJoCo scan runs at 5 Hz
+    scan_timeout: 0.6
+    odom_timeout: 0.5
+    cmd_timeout: 0.5
+    # Healthy time before FAULT returns to ACTIVE (s)
+    recovery_time: 0.5
+    # NaN beams / total beams above this makes a scan invalid (inf = no return is valid)
+    max_invalid_beam_ratio: 0.5
+    # true: a FAULT latches the e-stop
+    latch_faults: false
+    # true: a contact-zone violation while moving toward it latches the e-stop
+    latch_on_contact: true
+    # Steady timer rates (Hz)
+    rate: 20.0
+    status_rate: 5.0
+    # Bounded rear dock-approach profile (filter mode only, needs /dock/status DOCKING)
+    dock_approach_enabled: true
+    # Reverse speed cap in the profile (m/s), <= max_linear_speed
+    dock_max_speed: 0.06
+    # Rear stop margin in the profile (m), <= stop_margin
+    dock_stop_margin: 0.01
+    # Profile only within this distance (m) of DockStatus.dock_pose and for this long (s)
+    dock_approach_radius: 0.8
+    dock_approach_max_time: 30.0
+    # Maximum age of /dock/status (s); dock_manager publishes at 2 Hz
+    dock_status_timeout: 2.0
+    # Test hook: the first N ticks raise an exception on purpose (0 = off)
+    debug_inject_tick_exceptions: 0

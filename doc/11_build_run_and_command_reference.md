@@ -96,11 +96,11 @@ colcon build --symlink-install --packages-select bumperbot_firmware bumperbot_br
 | `ros2 launch bumperbot_navigation navigation.launch.py` | `use_sim_time:=false`<br>`nav2_params:=` (package default) | `controller_server`, `planner_server`, `behavior_server`, `bt_navigator`, `lifecycle_manager_navigation` (velocity on `nav_vel`) | Nav2 lifecycle nodes active; needs a map, AMCL and TF |
 | `ros2 launch bumperbot_bringup real_robot.launch.py` | N/A | `ros2_control_node` (`BumperbotInterface`), `diff_drive_controller`, `mpu6050_driver.py`, `twist_mux` | Robot drives via serial commands to Arduino; IMU publishes at 100 Hz |
 | `ros2 launch bumperbot_description display.launch.py` | `model:=bumperbot.urdf.xacro` | `robot_state_publisher`, `joint_state_publisher_gui`, RViz2 | Interactive joint slider GUI and 3D visual robot model |
-| `ros2 launch bumperbot_bringup simulated_robot.launch.py simulator:=mujoco` | `world_name:=small_house`<br>`use_slam:=false` | MuJoCo viewer + `mujoco_sim_node`, `ros2_control_node`, `diff_drive_controller`, `twist_mux`, `safety_stop`, `nav2_amcl`, RViz2 | Same behaviour as the Gazebo launch, physics by MuJoCo |
+| `ros2 launch bumperbot_bringup simulated_robot.launch.py simulator:=mujoco` | `safety:=supervisor` (or `legacy`)<br>`safety_use_python:=false`<br>`world_name:=small_house`<br>`use_slam:=false` | MuJoCo viewer + `mujoco_sim_node`, `ros2_control_node`, `diff_drive_controller`, `twist_mux`, `safety_stop`, `nav2_amcl`, RViz2 | Same behaviour as the Gazebo launch, physics by MuJoCo |
 | `ros2 launch bumperbot_mujoco mujoco.launch.py` | `world_name:=small_house`<br>`viewer:=True` | MuJoCo viewer, `robot_state_publisher`, `ros2_control_node`, `mujoco_sim_node` | Robot spawned in the chosen MuJoCo world |
 | `ros2 launch bumperbot_description gazebo.launch.py` | `world_name:=empty` | Ignition Gazebo, `robot_state_publisher`, `create` spawner, `parameter_bridge` | Robot spawned on flat ground plane in Gazebo |
 | `ros2 launch bumperbot_controller controller.launch.py` | `use_simple_controller:=False`<br>`use_python:=False` | `joint_state_broadcaster`, `wheel_controller_spawner`, `noisy_controller` | `/bumperbot_controller/odom` and `odom_noisy` active |
-| `ros2 launch bumperbot_controller joystick_teleop.launch.py` | `use_sim_time:=True` | `joy_node`, `joy_teleop`, `twist_mux`, `twist_relay` | Gamepad controls robot velocity via priority channels |
+| `ros2 launch bumperbot_controller joystick_teleop.launch.py` | `use_sim_time:=True`<br>`cmd_vel_out:=bumperbot_controller/cmd_vel_unstamped` (the simulation stack sets `safety/cmd_vel_in`) | `joy_node`, `joy_teleop`, `twist_mux`, `twist_relay` | Gamepad controls robot velocity via priority channels |
 | `ros2 launch bumperbot_localization local_localization.launch.py` | `use_python:=False` | `ekf_node` (`robot_localization`), `imu_republisher`, `static_transform_publisher` | Publishes fused odometry on `/odometry/filtered` |
 | `ros2 launch bumperbot_localization global_localization.launch.py` | `map_name:=small_house`<br>`use_sim_time:=true` | `nav2_map_server`, `nav2_amcl`, `lifecycle_manager_localization` | Map broadcast on `/map`, particle filter active |
 | `ros2 launch bumperbot_mapping slam.launch.py` | `use_sim_time:=true` | `sync_slam_toolbox_node`, `map_saver_server`, `lifecycle_manager` | Live SLAM graph optimization active on `/map` |
@@ -175,6 +175,29 @@ ros2 run bumperbot_utils safety_stop
 
 # Run 2-tier reactive LiDAR safety supervisor (Python)
 ros2 run bumperbot_utils safety_stop.py
+
+# Run the safety supervisor (C++ / Python); the simulation launch starts it already
+ros2 launch bumperbot_utils safety_supervisor.launch.py use_sim_time:=true
+ros2 launch bumperbot_utils safety_supervisor.launch.py use_python:=true
+# Hardware recipe: lock only, no velocity output
+ros2 launch bumperbot_utils safety_supervisor.launch.py enforcement:=lock_only
+
+# Simulation: supervisor (default), Python node, or the legacy safety_stop node and wiring
+ros2 launch bumperbot_bringup simulated_robot.launch.py simulator:=mujoco
+ros2 launch bumperbot_bringup simulated_robot.launch.py safety_use_python:=true
+ros2 launch bumperbot_bringup simulated_robot.launch.py safety:=legacy
+
+# Inspect and operate the safety supervisor
+ros2 topic echo /safety/status
+ros2 service call /safety_supervisor/trigger_estop std_srvs/srv/Trigger
+ros2 service call /safety_supervisor/reset std_srvs/srv/Trigger
+ros2 topic pub --once /safety/estop std_msgs/msg/Bool "{data: true}"
+# Release a lock left engaged by an exited supervisor (intentional removal only)
+ros2 topic pub --once /safety_stop std_msgs/msg/Bool "{data: false}"
+
+# Safety tests (own domain; PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 for pytest)
+ROS_DOMAIN_ID=92 ROS_LOCALHOST_ONLY=1 colcon test --packages-select bumperbot_utils bumperbot_bringup
+colcon test-result --verbose
 
 # Run custom known-pose occupancy grid mapper (C++)
 ros2 run bumperbot_mapping mapping_with_known_poses

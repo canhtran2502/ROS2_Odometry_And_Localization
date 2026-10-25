@@ -35,7 +35,21 @@ def generate_launch_description():
         description = "Open the MuJoCo viewer window (simulator:=mujoco only)"
     )
 
+    safety_arg = DeclareLaunchArgument(
+        "safety",
+        default_value = "supervisor",
+        description = "Safety layer: supervisor (safety_supervisor speed filter + lock) "
+                      "or legacy (safety_stop lock only)"
+    )
+    safety_use_python_arg = DeclareLaunchArgument(
+        "safety_use_python",
+        default_value = "false",
+        description = "Start the Python safety_supervisor instead of the C++ one"
+    )
+
     use_slam = LaunchConfiguration("use_slam")
+    safety = LaunchConfiguration("safety")
+    safety_use_python = LaunchConfiguration("safety_use_python")
     use_rviz = LaunchConfiguration("use_rviz")
     viewer = LaunchConfiguration("viewer")
     simulator = LaunchConfiguration("simulator")
@@ -78,7 +92,23 @@ def generate_launch_description():
         }.items(),
     )
     
-    joystick = IncludeLaunchDescription(
+    # safety:=supervisor: twist_mux output goes to the supervisor, which publishes the limited
+    # command on bumperbot_controller/cmd_vel_unstamped (consumed by twist_relay)
+    joystick_supervisor = IncludeLaunchDescription(
+        os.path.join(
+            get_package_share_directory("bumperbot_controller"),
+            "launch",
+            "joystick_teleop.launch.py"
+        ),
+        launch_arguments={
+            "use_sim_time": "True",
+            "cmd_vel_out": "safety/cmd_vel_in"
+        }.items(),
+        condition=IfCondition(PythonExpression(["'", safety, "' == 'supervisor'"]))
+    )
+
+    # safety:=legacy: twist_mux output goes straight to twist_relay (default cmd_vel_out)
+    joystick_legacy = IncludeLaunchDescription(
         os.path.join(
             get_package_share_directory("bumperbot_controller"),
             "launch",
@@ -86,7 +116,8 @@ def generate_launch_description():
         ),
         launch_arguments={
             "use_sim_time": "True"
-        }.items()
+        }.items(),
+        condition=IfCondition(PythonExpression(["'", safety, "' == 'legacy'"]))
     )
 
     localization = IncludeLaunchDescription(
@@ -107,10 +138,25 @@ def generate_launch_description():
         condition=IfCondition(use_slam)
     )
 
+    safety_supervisor = IncludeLaunchDescription(
+        os.path.join(
+            get_package_share_directory("bumperbot_utils"),
+            "launch",
+            "safety_supervisor.launch.py"
+        ),
+        launch_arguments={
+            "use_sim_time": "True",
+            "use_python": safety_use_python,
+            "enforcement": "filter"
+        }.items(),
+        condition=IfCondition(PythonExpression(["'", safety, "' == 'supervisor'"]))
+    )
+
     safety_stop = Node(
         package="bumperbot_utils",
         executable="safety_stop",
-        output="screen"
+        output="screen",
+        condition=IfCondition(PythonExpression(["'", safety, "' == 'legacy'"]))
     )
 
     rviz_localization = Node(
@@ -143,6 +189,8 @@ def generate_launch_description():
     
     return LaunchDescription([
         use_slam_arg,
+        safety_arg,
+        safety_use_python_arg,
         use_rviz_arg,
         viewer_arg,
         simulator_arg,
@@ -150,10 +198,12 @@ def generate_launch_description():
         gazebo,
         mujoco,
         controller,
-        joystick,
+        joystick_supervisor,
+        joystick_legacy,
+        safety_supervisor,
         safety_stop,
         localization,
         slam,
         rviz_localization,
         rviz_slam
-    ])
+    ])

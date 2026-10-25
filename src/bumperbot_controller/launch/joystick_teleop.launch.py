@@ -16,6 +16,12 @@ def generate_launch_description():
                                       description="Use simulated time"
     )
 
+    # Output topic of twist_mux; the simulation stack remaps it to the safety supervisor input
+    cmd_vel_out_arg = DeclareLaunchArgument(name="cmd_vel_out",
+                                            default_value="bumperbot_controller/cmd_vel_unstamped",
+                                            description="Output topic of twist_mux"
+    )
+
     joy_teleop = Node(
         package="joy_teleop",
         executable="joy_teleop",
@@ -38,7 +44,7 @@ def generate_launch_description():
             "twist_mux_launch.py"
         ),
         launch_arguments={
-            "cmd_vel_out": "bumperbot_controller/cmd_vel_unstamped",
+            "cmd_vel_out": LaunchConfiguration("cmd_vel_out"),
             "config_topics": os.path.join(bumperbot_controller_pkg, "config", "twist_mux_topics.yaml"),
             "config_locks": os.path.join(bumperbot_controller_pkg, "config", "twist_mux_locks.yaml"),
             "config_joy":  os.path.join(bumperbot_controller_pkg, "config", "twist_mux_joy.yaml"),
@@ -56,6 +62,7 @@ def generate_launch_description():
     return LaunchDescription(
         [
             use_sim_time_arg,
+            cmd_vel_out_arg,
             joy_teleop,
             joy_node,
             twist_mux_launch,

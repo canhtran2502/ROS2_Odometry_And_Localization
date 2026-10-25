@@ -16,6 +16,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "action/Fibonacci.action"
   "msg/DockStatus.msg"
   "msg/MissionStatus.msg"
+  "msg/SafetyStatus.msg"
   "srv/AddTwoInts.srv"
   "srv/GetTransform.srv"
   DEPENDENCIES geometry_msgs builtin_interfaces

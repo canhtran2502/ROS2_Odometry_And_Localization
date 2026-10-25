@@ -22,7 +22,7 @@ This document provides a systematic debugging guide and root-cause analysis for 
 | `rclcpp::exceptions::ParameterNotDeclaredException` | Parameter name mismatch between `declare_parameter()` and `get_parameter()` | Ensure identical spelling in both declaration and getter |
 | `Permission denied: /dev/ttyUSB0` | Linux user lacks permissions for serial communication devices | `sudo usermod -aG dialout $USER` (log out and back in) |
 | `Permission denied: /dev/i2c-1` | Linux user lacks permissions for I2C devices | `sudo usermod -aG i2c $USER` |
-| Robot not moving despite `/cmd_vel` being published | Emergency brake active via `/safety_stop` (Lock 255 on `twist_mux`), or deadman button not held | Echo `/safety_stop` to check if obstacle is within 0.20m; verify `twist_mux` locks |
+| Robot not moving despite `/cmd_vel` being published | Emergency brake active via `/safety_stop` (Lock 255 on `twist_mux`), or deadman button not held | Echo `/safety_stop` and `/safety/status` (`reason`) to see why the supervisor locks (INITIALIZING, FAULT, ESTOP, brake pulse; section 3d) or, with `safety:=legacy`, whether an obstacle is within 0.20m; verify `twist_mux` locks |
 | Diagonal or slanted "walls" in the MuJoCo lidar scan and in every SLAM map (`small_house`), tiles rotated by ~16 deg against `maps/small_house/map.pgm` | The collision geometry of the outer house wall was decomposed into only 8 convex hulls, so some hulls filled whole strips of the house | Regenerate the world with the current `tools/sdf_to_mjcf.py` (large thin concave models use box footprints instead of CoACD hulls), see doc/05. Check with a ground-truth raycast that no wall geom is a wide slab |
 
 ---
@@ -103,6 +103,18 @@ Cause: `topic_based_ros2_control/TopicBasedSystem::write()` only publishes when 
 - **DOCK rejected.** The reply says why: mission active, `map -> base_footprint` or `odom -> base_footprint` missing, Nav2 `navigate_to_pose` not ready, or the state is not DOCKED for UNDOCK.
 
 ---
+
+### 3d. Safety supervisor: locked at startup, FAULT, lock kept after exit, reset refusals
+
+- **Robot does not move right after start (INITIALIZING).** The supervisor locks the robot (`/safety_stop` true, zero output) until it has a valid scan, the TF `base_footprint <- laser_link` and odometry. `ros2 topic echo /safety/status` shows the missing input in `reason` (`waiting for scan`, `waiting for TF ...`, `waiting for odom`). It resolves itself once the input arrives; start the simulator / LiDAR driver first.
+- **FAULT `scan timeout` / `odom timeout`.** A scan older than `scan_timeout` (0.6 s; the MuJoCo scan runs at 5 Hz) or odometry older than `odom_timeout` (0.5 s) locks the robot; it recovers after `recovery_time` (0.5 s) of healthy data. With `latch_faults: true` it becomes an ESTOP that needs `/safety_supervisor/reset`. Other FAULT reasons: `invalid scan: nan ratio`, `invalid scan: empty ranges`, `invalid scan: angle_increment <= 0`, `scan frame changed`, `internal error: ...`.
+- **Zone says CLEAR but the robot is slow.** WARNING means the speed limit is below `max_linear_speed`, so `max_forward_speed` in `/safety/status` can already be below the maximum while `front_zone` still reads CLEAR (the braking-distance limit starts earlier than the ramp). Read the speed fields.
+- **Lock stays engaged after the supervisor exits.** The `twist_mux` lock timeout is 0.0, so the last value (`true` on exit or on a startup error) stays in force and the robot stays stopped, and the joystick is disabled too. This is the fail-safe behavior. Start a new supervisor, or for an intentional removal release it: `ros2 topic pub --once /safety_stop std_msgs/msg/Bool "{data: false}"`.
+- **`/safety_supervisor/reset` refused.** `estop input active`: the `safety/estop` topic is still true. `fault: <reason>`: a scan/odom/TF fault exists. `obstacle in contact zone (front)` / `(rear)`: back away manually first (the rear is exempt during the dock profile). An obstacle in the STOP zone does not block the reset; the filter then still blocks motion toward it and lets you reverse out. `not latched` is a success reply.
+- **Supervisor refuses to start.** A wrong parameter type (quoted number, int for a double) or an invalid value (`footprint`, margins, `enforcement`) makes the node publish `safety_stop: true`, log the reason and exit with code 1. Fix the parameter file.
+- **Legacy node kept.** `ros2 launch bumperbot_bringup simulated_robot.launch.py safety:=legacy` restores the old `safety_stop` node and wiring (see the matrix and section 3c).
+- **Real robot.** `real_robot.launch.py` does not start `safety_supervisor` (nor `safety_stop`), because no LiDAR driver is started and a fail-safe supervisor would sit in INITIALIZING with the lock engaged forever. Start your LiDAR driver and `ros2 launch bumperbot_utils safety_supervisor.launch.py enforcement:=lock_only`; without it nothing provides the lock.
+- **Known limitation.** Returns closer than the LiDAR `range_min` (0.12 m from the laser) are invisible, so an obstacle hugging the front edge can be missed. Zones limit linear motion only; a corner can touch a side obstacle during in-place rotation.
 
 ### 4. Cleaning Zombie Background Processes
 (MuJoCo: an old `mujoco_sim_node`, `ros2_control_node` or `twist_mux` from an earlier launch keeps publishing `/clock`, `/scan` and TF on the same domain and corrupts a new run. Check with `ros2 topic info /clock`; clean up with `pkill -f mujoco_sim_node`, `pkill -f ros2_control_node`, `pkill -f twist_mux`.)

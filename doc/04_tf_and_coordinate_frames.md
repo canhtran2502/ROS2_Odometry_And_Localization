@@ -71,6 +71,10 @@ graph TD
 
 `dock_manager` publishes no TF. It reads `map -> base_footprint`, `map -> odom` and `odom -> base_footprint` and runs the final approach in `odom` (smooth, no AMCL jumps). The charger pose is the `base_footprint` pose when docked: `staging_distance` (0.5 m) behind the staging pose (the `dock` station of `stations.yaml`), on the staging heading. Detections on `/dock/detected_pose` may be in any TF-resolvable frame (simulation: `base_footprint`; real robot: e.g. a camera frame) and are transformed into `odom` at their stamp (fallback: latest transform). The three frame names must be distinct, and `global_frame` must equal the `frame_id` of `stations.yaml`. In MuJoCo the world frame equals `map` because the robot spawns at (0, 0, 0) and AMCL starts there; `/mujoco/ground_truth` carries the frame id `world` only inside that message (it is not in TF) and is used by the simulation-only `dock_marker_sim` and the tests.
 
+## C3. Frames Used by the Safety Supervisor
+
+`safety_supervisor` publishes no TF. It reads the static transform `base_footprint <- laser_link` (URDF, yaw about pi) once per scan until found and caches it, and transforms every scan point into `base_footprint` with it; the front/rear corridors and clearances are defined in `base_footprint` (`robot_frame`, equal to Nav2 `robot_base_frame` and `dock_manager` `robot_frame`). While the transform is missing the state is INITIALIZING with reason `waiting for TF base_footprint <- laser_link`. For the dock-approach profile it also reads `DockStatus.frame_id -> base_footprint` (normally `map -> base_footprint`); when that is missing the profile is off (`dock TF unavailable`) and normal protection stays active.
+
 ## D. Detailed Joint & Transform Offsets Table
 
 | Parent Frame | Child Frame | Transform Type | Source Broadcaster | Translation $(x, y, z)$ [m] | Rotation $(R, P, Y)$ [rad] |

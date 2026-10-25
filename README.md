@@ -51,7 +51,7 @@ BumperBot is designed for roboticists and embedded software engineers mastering 
 | **URDF / Xacro Modeling** | Verified | Visual/collision meshes, inertia tensors, sensor frames |
 | **Gazebo Physics Simulation** | Verified | Ignition Fortress 6 world, `ros_gz_bridge`, sensor topics |
 | **Differential Drive Control** | Verified | `diff_drive_controller`, custom C++/Python kinematics nodes |
-| **Safety Supervisor & Mux** | Verified | 2-tier range check (`/safety_stop`), priority arbitration |
+| **Safety Supervisor & Mux** | Verified | `safety_supervisor` (direction-aware speed limiting, e-stop latch, watchdog, `/safety/status`), legacy 2-tier `safety_stop` (`safety:=legacy`), priority arbitration |
 | **Sensor Fusion (EKF)** | Verified | `robot_localization` fusing noisy wheel odometry & IMU |
 | **Known-Pose Mapping** | Verified | Custom occupancy grid generator (`mapping_with_known_poses`) |
 | **2D Graph SLAM** | Verified | `slam_toolbox` asynchronous cartographic mapping |
@@ -163,7 +163,7 @@ bumperbot_ws/
 │   ├── bumperbot_msgs/                 # Custom ROS 2 IDL messages, services, actions
 │   ├── bumperbot_navigation/           # Nav2 config + AGV mission manager (C++ and Python)
 │   ├── bumperbot_mujoco/               # MuJoCo robot/world models, ROS 2 bridge node, converters
-│   ├── bumperbot_utils/                # Reactive LiDAR safety supervisor
+│   ├── bumperbot_utils/                # Safety supervisor (+ legacy safety_stop)
 │   ├── bumperbot_cpp_examples/         # C++ (rclcpp) tutorials & API patterns
 │   └── bumperbot_py_examples/          # Python (rclpy) tutorials & API patterns
 ├── CLAUDE.md                           # Project guidance for Claude Code
@@ -183,7 +183,7 @@ bumperbot_ws/
 | **`bumperbot_firmware`** | `ament_cmake` + Python | Hardware interface plugin, serial transceiver, Arduino PID | `bumperbot_interface` (plugin), `mpu6050_driver` | [doc/06_odometry_and_motion_control.md](doc/06_odometry_and_motion_control.md) |
 | **`bumperbot_localization`** | `ament_cmake` + Python | 1D Kalman filter, particle sampling, EKF & AMCL configs | `kalman_filter`, `odometry_motion_model`, `imu_republisher` | [doc/09_localization.md](doc/09_localization.md) |
 | **`bumperbot_mapping`** | `ament_cmake` + Python | Known-pose occupancy grid generation & Graph SLAM | `mapping_with_known_poses`, `frontier_explorer`, `slam.launch.py` | [doc/08_mapping_and_slam.md](doc/08_mapping_and_slam.md) |
-| **`bumperbot_utils`** | `ament_cmake` + Python | 2-tier reactive LiDAR safety supervisor with RViz markers | `safety_stop` (.cpp/.py) | [doc/07_lidar_and_sensor_processing.md](doc/07_lidar_and_sensor_processing.md) |
+| **`bumperbot_utils`** | `ament_cmake` + Python | `safety_supervisor` (zones, speed filter, e-stop, watchdog) and the legacy 2-tier `safety_stop` with RViz markers | `safety_supervisor` (.cpp/.py), `safety_stop` (.cpp/.py) | [doc/07_lidar_and_sensor_processing.md](doc/07_lidar_and_sensor_processing.md) |
 | **`bumperbot_navigation`** | `ament_cmake` + Python | Nav2 configuration for BumperBot and the AGV waypoint mission manager (stations, dwell, retries, dock return) | `mission_manager` (.cpp/.py), `navigation.launch.py`, `stations.yaml` | [doc/10_navigation.md](doc/10_navigation.md) |
 | **`bumperbot_msgs`** | `ament_cmake` | Custom IDL definitions (`AddTwoInts`, `GetTransform`, `Fibonacci`, `ExecuteMission`, `MissionStatus`) | Interfaces generation | [doc/03_ros2_nodes_topics_services.md](doc/03_ros2_nodes_topics_services.md) |
 | **`bumperbot_cpp_examples`** | `ament_cmake` | C++ (`rclcpp`) reference implementations | 12 tutorial nodes (Pub/Sub, Service, Action, TF2, QoS) | [doc/03_ros2_nodes_topics_services.md](doc/03_ros2_nodes_topics_services.md) |
@@ -271,7 +271,34 @@ ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -r cmd_vel:=/key
 **What to expect:**
 1. **Ignition Gazebo**: Displays BumperBot inside the `small_house` world.
 2. **RViz2**: Visualizes the robot 3D model, laser scan (`/scan`), occupancy grid map, and the green AMCL particle cloud converging around the robot.
-3. **Teleop & Safety**: Control the robot using keys `i`, `j`, `k`, `l`, `,`. If you drive towards a wall, the robot automatically slows down within 0.40m (warning zone) and comes to an emergency halt within 0.20m (danger zone).
+3. **Teleop & Safety**: Control the robot using keys `i`, `j`, `k`, `l`, `,`. If you drive towards a wall, `safety_supervisor` progressively limits the forward speed from 0.40 m clearance (`stop_margin` 0.05 m + `slowdown_distance` 0.35 m, measured from the footprint edge) and stops the robot at 0.05 m; driving away from the wall is always possible. With `safety:=legacy` the old `safety_stop` behavior is used (slowdown within 0.40 m, emergency halt within 0.20 m).
+
+### Safety Supervisor (`safety_supervisor`)
+
+`bumperbot_utils` provides `safety_supervisor` (C++ and Python, same behavior and parameters). It protects the robot independent of Nav2 using only `/scan`, odometry, TF and the velocity stream:
+- **Zones around the footprint, direction aware.** Front obstacles limit only forward motion, rear obstacles only reverse motion. Clearance `d` from the footprint edge: CONTACT `d <= 0.015 m`, STOP `d <= stop_margin` (0.05 m), WARNING below `stop_margin + slowdown_distance` (speed limit that never grows as `d` shrinks), otherwise CLEAR (0.7 m/s). The WARNING label means the speed limit is below `max_linear_speed`, so `max_forward_speed` in the status can be below the maximum while the zone still reads CLEAR.
+- **Speed filter + lock.** In `simulated_robot.launch.py` the `twist_mux` output is remapped to `safety/cmd_vel_in`; the supervisor publishes the limited command on `bumperbot_controller/cmd_vel_unstamped` and is the only publisher of the `twist_mux` `safety_stop` lock (255, file unchanged). Joystick, keyboard, Nav2, docking and exploration are all limited. Moving into a STOP zone raises a short brake pulse; afterwards motion away from the obstacle passes.
+- **Latched e-stop** (`/safety_supervisor/trigger_estop`, the `safety/estop` topic, or contact while moving) until `/safety_supervisor/reset` succeeds; the reset is refused while `safety/estop` is true, a fault exists, or an obstacle is in the contact zone.
+- **Fail-safe watchdog.** No scan/TF/odom yet: INITIALIZING (locked). Stale or invalid scan/odom or an internal error: FAULT (locked, zero output, auto-recovery after `recovery_time`). The lock stays engaged when the supervisor exits.
+- **Dock-approach profile.** While `dock_manager` reports DOCKING near the dock, only the rear direction changes: `dock_stop_margin` 0.01 m and a reverse cap `dock_max_speed` 0.06 m/s. The lock and the e-stop still win.
+- `/safety/status` (`bumperbot_msgs/msg/SafetyStatus`) reports state, zones, clearances, allowed speeds, lock, latch, reason and input ages.
+
+```bash
+ros2 launch bumperbot_bringup simulated_robot.launch.py simulator:=mujoco   # supervisor (C++) by default
+ros2 launch bumperbot_bringup simulated_robot.launch.py safety_use_python:=true   # Python node
+ros2 launch bumperbot_bringup simulated_robot.launch.py safety:=legacy        # old safety_stop node and wiring
+ros2 topic echo /safety/status
+ros2 service call /safety_supervisor/trigger_estop std_srvs/srv/Trigger
+ros2 service call /safety_supervisor/reset std_srvs/srv/Trigger
+```
+
+**Real robot.** `real_robot.launch.py` is not modified and does not start `safety_supervisor` (nor `safety_stop`): it starts no LiDAR driver, so a fail-safe supervisor would sit in INITIALIZING with the 255 lock engaged forever (which also disables the joystick), and the speed filter needs a `twist_mux` rewiring that is your decision. On hardware start your LiDAR driver and the supervisor separately in lock-only mode (no slowdown, no dock profile; it only drives the lock):
+
+```bash
+ros2 launch bumperbot_utils safety_supervisor.launch.py enforcement:=lock_only
+```
+
+Without this, nothing provides the lock on the robot (unchanged from before). Release a lock left by an exited supervisor with `ros2 topic pub --once /safety_stop std_msgs/msg/Bool "{data: false}"`. Details: [doc/07](doc/07_lidar_and_sensor_processing.md), [doc/12](doc/12_troubleshooting.md).
 
 ### Simulation on MuJoCo (Alternative to Gazebo)
 

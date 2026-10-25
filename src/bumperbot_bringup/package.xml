@@ -27,6 +27,7 @@
   <test_depend>nav2_msgs</test_depend>
   <test_depend>twist_mux</test_depend>
   <test_depend>bumperbot_msgs</test_depend>
+  <test_depend>std_srvs</test_depend>
   <test_depend>python3-scipy</test_depend>
   <test_depend>python3-yaml</test_depend>
 

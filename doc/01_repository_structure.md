@@ -161,11 +161,20 @@ bumperbot_ws/
     ├── bumperbot_utils/                               # Autonomous supervisory & safety utilities
     │   ├── CMakeLists.txt
     │   ├── package.xml
+    │   ├── include/bumperbot_utils/
+    │   │   ├── safety_logic.hpp                       # Pure (no ROS) safety logic API: zones, limits, SafetyCore, DockGate
+    │   │   └── safety_supervisor.hpp                  # C++ safety_supervisor node class
     │   ├── src/
-    │   │   └── safety_stop.cpp                        # C++ 2-tier reactive safety supervisor node
+    │   │   ├── safety_stop.cpp                        # C++ legacy 2-tier reactive safety node (safety:=legacy)
+    │   │   ├── safety_logic.cpp                       # C++ pure safety logic
+    │   │   └── safety_supervisor.cpp                  # C++ safety_supervisor node (speed filter, lock, e-stop, watchdog)
+    │   ├── config/safety_supervisor.yaml              # safety_supervisor parameters (enforcement, zones, dock_max_speed, ...)
+    │   ├── launch/safety_supervisor.launch.py         # Simulator-independent launch (enforcement:=lock_only for hardware)
     │   └── bumperbot_utils/
     │       ├── __init__.py
-    │       └── safety_stop.py                         # Python 2-tier reactive safety supervisor node
+    │       ├── safety_stop.py                         # Python legacy 2-tier reactive safety node
+    │       ├── safety_logic.py                        # Python pure safety logic (same API as the C++ library)
+    │       └── safety_supervisor.py                   # Python safety_supervisor node (same behavior as C++)
     │
     ├── bumperbot_navigation/                          # Nav2 configuration + AGV waypoint mission manager
     │   ├── CMakeLists.txt

@@ -50,6 +50,20 @@ if(BUILD_TESTING)
     add_launch_test(test/test_dock_sim_mujoco.launch.py
       TARGET test_dock_sim_mujoco TIMEOUT 1200)
   endif()
+  # Safety supervisor: launch/config checks, real twist_mux + supervisor, headless MuJoCo stack
+  # (the closed-loop E2E needs BUMPERBOT_SAFETY_E2E=1)
+  if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test/test_safety_launch_config.py)
+    ament_add_pytest_test(test_safety_launch_config test/test_safety_launch_config.py
+      TIMEOUT 180)
+  endif()
+  if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test/test_safety_twist_mux.launch.py)
+    add_launch_test(test/test_safety_twist_mux.launch.py
+      TARGET test_safety_twist_mux TIMEOUT 300)
+  endif()
+  if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test/test_safety_sim_mujoco.launch.py)
+    add_launch_test(test/test_safety_sim_mujoco.launch.py
+      TARGET test_safety_sim_mujoco TIMEOUT 900)
+  endif()
 endif()
 
 ament_package()
