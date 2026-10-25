@@ -156,6 +156,8 @@ PLAN_DEFAULTS = {
     "dock_max_speed": 0.06, "dock_stop_margin": 0.01, "dock_approach_radius": 0.8,
     "dock_approach_max_time": 30.0, "dock_status_timeout": 2.0,
     "debug_inject_tick_exceptions": 0,
+    # Iteration 3 amendments (M6 contact debounce, M5 restart latch)
+    "contact_debounce_scans": 3, "require_reset_after_restart": False,
 }
 
 

@@ -169,6 +169,25 @@ def test_legacy_simulated_robot_restores_the_old_node_and_wiring():
     assert twist_mux_output(records) == "bumperbot_controller/cmd_vel_unstamped"
 
 
+def test_invalid_safety_value_fails_the_launch_with_a_clear_error():
+    """L4: an unknown `safety` value must not silently start no supervisor and no lock."""
+    for bogus in ("bogus", "Supervisor"):
+        res = subprocess.run(
+            ["ros2", "launch", "bumperbot_bringup", "simulated_robot.launch.py",
+             "safety:=" + bogus, "simulator:=mujoco", "use_rviz:=false", "viewer:=false"],
+            capture_output=True, text=True, timeout=60)
+        output = res.stdout + res.stderr
+        assert res.returncode != 0, "safety:='{}' was accepted\n{}".format(bogus, output[-1500:])
+        assert "Invalid launch argument safety:='{}'".format(bogus) in output, output[-1500:]
+        assert "allowed: supervisor, legacy" in output, output[-1500:]
+        assert "process started with pid" not in output, "a node was started: " + output[-1500:]
+    # the expansion helper sees no process at all for a bad value, and both valid values work
+    for good in ("supervisor", "legacy"):
+        records = expand("bumperbot_bringup", "simulated_robot.launch.py",
+                         SIM_ARGS + ["safety:=" + good])
+        assert records, good
+
+
 def test_real_robot_starts_neither_supervisor_nor_safety_stop():
     records = expand("bumperbot_bringup", "real_robot.launch.py")
     assert supervisors(records) == [] and legacy_nodes(records) == []

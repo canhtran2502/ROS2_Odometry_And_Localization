@@ -81,6 +81,7 @@ class MockSafetyWorld:
                                      durability=DurabilityPolicy.TRANSIENT_LOCAL)
         self.static_pub = None
         self.obs_pub = None
+        self.latched_estop_pub = None
 
     def _build_subscribers(self):
         n = self.node
@@ -107,6 +108,9 @@ class MockSafetyWorld:
             self._estop = None
             self._dock_state = None
             self._dock_pose = (0.0, 0.0)
+            self._range_min = RANGE_MIN
+            self._raw = {}                  # beam index -> raw range (overrides the obstacles)
+            self._nan_fraction = 0.0
             self._map_tf = None
             self._clock_mode = "off"
             self._clock_t = 0.0
@@ -261,6 +265,40 @@ class MockSafetyWorld:
             if mode == "scripted":
                 self._odom_v = float(v)
 
+    def set_range_min(self, value):
+        with self.lock:
+            self._range_min = float(value)
+
+    def set_raw_ranges(self, raw):
+        """Beam index -> raw range, applied after the obstacles (inf, 0.0, NaN allowed)."""
+        with self.lock:
+            self._raw = dict(raw)
+
+    def set_nan_fraction(self, fraction):
+        """Make the first `fraction` of the beams NaN (below 0.8 the scan stays valid)."""
+        with self.lock:
+            self._nan_fraction = float(fraction)
+
+    @staticmethod
+    def beam_index(x, y):
+        """Index of the beam that points at (x, y) of base_footprint."""
+        angle = math.atan2(y - LASER_Y, x - LASER_X) - LASER_YAW
+        return int(round((angle % (2.0 * math.pi)) / ANGLE_INC)) % BEAMS
+
+    def publish_latched_estop(self, value):
+        """Publish the e-stop input with a transient_local publisher (kept alive, replayed)."""
+        if self.latched_estop_pub is None:
+            self.latched_estop_pub = self.node.create_publisher(
+                Bool, "safety/estop",
+                QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
+                           durability=DurabilityPolicy.TRANSIENT_LOCAL))
+        self.latched_estop_pub.publish(Bool(data=bool(value)))
+
+    def drop_latched_estop(self):
+        if self.latched_estop_pub is not None:
+            self.node.destroy_publisher(self.latched_estop_pub)
+            self.latched_estop_pub = None
+
     def set_scan_mode(self, mode):
         assert mode in SCAN_MODES
         with self.lock:
@@ -336,6 +374,7 @@ class MockSafetyWorld:
     def _scan_tick(self):
         with self.lock:
             mode, obstacles, version = self.scan_mode, list(self._obstacles), self._version
+            range_min, raw, nan_fraction = self._range_min, dict(self._raw), self._nan_fraction
         if mode == "stop":
             return
         msg = LaserScan()
@@ -345,9 +384,13 @@ class MockSafetyWorld:
         msg.angle_max = ANGLE_INC * (BEAMS - 1)
         msg.angle_increment = ANGLE_INC
         msg.scan_time = SCAN_PERIOD
-        msg.range_min = RANGE_MIN
+        msg.range_min = range_min
         msg.range_max = RANGE_MAX
         ranges = self.build_ranges(obstacles)
+        for index, value in raw.items():
+            ranges[index] = value
+        for i in range(int(nan_fraction * BEAMS)):
+            ranges[i] = float("nan")
         if mode == "nan":
             for i in range(int(0.8 * BEAMS)):
                 ranges[i] = float("nan")

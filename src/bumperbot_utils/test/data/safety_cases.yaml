@@ -65,8 +65,40 @@ cases:
     range_min: 0.1
     range_max: 10.0
     tf: [0.0, 0.0, 0.0]
-    expect_points: [[1.0, 0.0], [0.0, 2.0]]
+    # iteration 3 (M3): the finite 0.05 m return below range_min is an obstacle at range_min
+    # (0.1 m) along its beam (angle 3 pi / 2); inf, NaN and 20 m (> range_max) are unchanged
+    expect_points: [[1.0, 0.0], [0.0, -0.1], [0.0, 2.0]]
     expect_ratio: 0.16666666666666666
+  - name: scan_sub_range_min_and_zero_become_obstacles_at_range_min
+    fn: scan_to_points
+    ranges: [0.0, 0.05, 0.1, .inf, .nan]
+    angle_min: 0.0
+    angle_increment: 1.5707963267948966
+    range_min: 0.1
+    range_max: 10.0
+    tf: [0.0, 0.0, 0.0]
+    expect_points: [[0.1, 0.0], [0.0, 0.1], [-0.1, 0.0]]
+    expect_ratio: 0.2
+  - name: scan_sub_range_min_point_uses_the_sensor_transform
+    fn: scan_to_points
+    ranges: [0.0]
+    angle_min: 0.0
+    angle_increment: 0.01
+    range_min: 0.12
+    range_max: 10.0
+    tf: [0.04, 0.0, 3.141592653589793]
+    expect_points: [[-0.08, 0.0]]
+    expect_ratio: 0.0
+  - name: scan_inf_is_free_and_nan_counts_invalid_only
+    fn: scan_to_points
+    ranges: [.inf, .inf, .nan, .nan]
+    angle_min: 0.0
+    angle_increment: 0.1
+    range_min: 0.1
+    range_max: 10.0
+    tf: [0.0, 0.0, 0.0]
+    expect_points: []
+    expect_ratio: 0.5
   - name: scan_urdf_yaw_and_offset
     fn: scan_to_points
     ranges: [1.0]
@@ -165,6 +197,30 @@ cases:
     fn: evaluate_points
     points: [[-0.11, 0.0]]
     expect: {rear_clearance: 0.01, contact_front: false, contact_rear: true}
+  # Iteration 3 (H1): the contact flags use only the swept path (|y| <= footprint half width
+  # 0.125); the STOP/WARNING clearance still uses the lateral margin (band 0.155).
+  - name: eval_parallel_wall_outside_the_footprint_is_stop_not_contact
+    fn: evaluate_points
+    points: [[0.105, 0.145], [0.0, 0.145], [-0.105, 0.145]]
+    expect: {front_clearance: 0.005, rear_clearance: 0.005, contact_front: false,
+             contact_rear: false}
+  - name: eval_parallel_wall_on_the_other_side_is_not_contact
+    fn: evaluate_points
+    points: [[0.105, -0.145], [-0.105, -0.145]]
+    expect: {front_clearance: 0.005, rear_clearance: 0.005, contact_front: false,
+             contact_rear: false}
+  - name: eval_point_exactly_at_the_half_width_is_in_the_swept_path
+    fn: evaluate_points
+    points: [[0.11, 0.125]]
+    expect: {front_clearance: 0.01, contact_front: true}
+  - name: eval_point_just_outside_the_half_width_is_not_contact
+    fn: evaluate_points
+    points: [[0.11, 0.126]]
+    expect: {front_clearance: 0.01, contact_front: false}
+  - name: eval_contact_needs_a_point_in_the_path_even_with_wall_points_in_the_margin
+    fn: evaluate_points
+    points: [[0.105, 0.145], [0.11, 0.0]]
+    expect: {front_clearance: 0.005, contact_front: true}
   - name: eval_boundary_point_is_a_hit_not_a_self_hit
     fn: evaluate_points
     points: [[0.10, 0.0]]
@@ -538,34 +594,97 @@ cases:
          expect: {front_zone: STOP, max_forward: 0.0}}
       - {t: 0.2, set: {evaluation: {front_clearance: 0.08}},
          expect: {front_zone: WARNING}}
+  # Iteration 3 (M6): a contact latches the e-stop only after contact_debounce_scans (3)
+  # consecutive evaluated scans (scan_seq increments); until then it is a STOP with the same
+  # limits and brake pulse. The full step set is kept, only the expectations on scans 1-2 are new.
   - name: core_contact_latches_when_moving
     fn: core
     start: healthy
     steps:
       - t: 0.0
-        set: {v_odom: 0.1, v_cmd: 0.1, evaluation: {front_clearance: 0.01, contact_front: true}}
+        set: {scan_seq: 1, v_odom: 0.1, v_cmd: 0.1,
+              evaluation: {front_clearance: 0.01, contact_front: true}}
+        expect: {state: ACTIVE, estop_latched: false, front_zone: STOP, braking: true,
+                 locked: true, max_forward: 0.0}
+      - t: 0.05
+        set: {scan_seq: 2}
+        expect: {state: ACTIVE, estop_latched: false, front_zone: STOP, max_forward: 0.0}
+      - t: 0.1
+        set: {scan_seq: 3}
         expect: {state: ESTOP, estop_latched: true, locked: true, reason: contact zone (front),
                  max_forward: 0.0, max_reverse: 0.0}
       - t: 5.0
-        set: {v_odom: 0.0, v_cmd: 0.0, evaluation: {front_clearance: .inf, contact_front: false}}
+        set: {scan_seq: 4, v_odom: 0.0, v_cmd: 0.0,
+              evaluation: {front_clearance: .inf, contact_front: false}}
         expect: {state: ESTOP, estop_latched: true, locked: true}
   - name: core_contact_latches_rear_when_reversing
     fn: core
     start: healthy
     steps:
       - t: 0.0
-        set: {v_odom: -0.1, v_cmd: -0.1, evaluation: {rear_clearance: 0.01, contact_rear: true}}
+        set: {scan_seq: 1, v_odom: -0.1, v_cmd: -0.1,
+              evaluation: {rear_clearance: 0.01, contact_rear: true}}
+        expect: {state: ACTIVE, estop_latched: false, rear_zone: STOP, max_reverse: 0.0,
+                 braking: true, locked: true}
+      - t: 0.05
+        set: {scan_seq: 2}
+        expect: {state: ACTIVE, estop_latched: false, rear_zone: STOP, max_reverse: 0.0}
+      - t: 0.1
+        set: {scan_seq: 3}
         expect: {state: ESTOP, estop_latched: true, reason: contact zone (rear)}
+  - name: core_contact_debounce_counts_scans_not_ticks
+    fn: core
+    start: healthy
+    steps:
+      # many ticks on the same scan (same scan_seq) never confirm the contact
+      - {t: 0.0, set: {scan_seq: 1, v_odom: 0.1, v_cmd: 0.1,
+                       evaluation: {front_clearance: 0.01, contact_front: true}},
+         expect: {estop_latched: false, front_zone: STOP}}
+      - {t: 0.05, expect: {estop_latched: false, front_zone: STOP}}
+      - {t: 0.1, expect: {estop_latched: false, front_zone: STOP}}
+      - {t: 0.15, expect: {estop_latched: false, front_zone: STOP}}
+      - {t: 0.2, set: {scan_seq: 2}, expect: {estop_latched: false, front_zone: STOP}}
+      - {t: 0.25, expect: {estop_latched: false, front_zone: STOP}}
+      - {t: 0.3, set: {scan_seq: 3}, expect: {state: ESTOP, estop_latched: true}}
+  - name: core_contact_debounce_resets_when_the_contact_disappears
+    fn: core
+    start: healthy
+    steps:
+      - {t: 0.0, set: {scan_seq: 1, v_odom: 0.1, v_cmd: 0.1,
+                       evaluation: {front_clearance: 0.01, contact_front: true}},
+         expect: {estop_latched: false}}
+      - {t: 0.05, set: {scan_seq: 2}, expect: {estop_latched: false}}
+      - {t: 0.1, set: {scan_seq: 3, evaluation: {front_clearance: 0.04, contact_front: false}},
+         expect: {estop_latched: false, front_zone: STOP}}
+      - {t: 0.15, set: {scan_seq: 4, evaluation: {front_clearance: 0.01, contact_front: true}},
+         expect: {estop_latched: false}}
+      - {t: 0.2, set: {scan_seq: 5}, expect: {estop_latched: false}}
+      - {t: 0.25, set: {scan_seq: 6}, expect: {state: ESTOP, estop_latched: true}}
+  - name: core_contact_debounce_one_scan_with_setting_one
+    fn: core
+    start: healthy
+    cfg: {contact_debounce_scans: 1}
+    steps:
+      - {t: 0.0, set: {scan_seq: 1, v_odom: 0.1, v_cmd: 0.1,
+                       evaluation: {front_clearance: 0.01, contact_front: true}},
+         expect: {state: ESTOP, estop_latched: true, reason: contact zone (front)}}
   - name: core_contact_does_not_latch_when_stationary
     fn: core
     start: healthy
     steps:
+      # stationary: a confirmed contact (scan 3) is CONTACT but never latches or brakes
       - t: 0.0
-        set: {v_odom: 0.0, v_cmd: 0.0, evaluation: {front_clearance: 0.01, contact_front: true}}
+        set: {scan_seq: 1, v_odom: 0.0, v_cmd: 0.0,
+              evaluation: {front_clearance: 0.01, contact_front: true}}
+        expect: {state: ACTIVE, estop_latched: false, front_zone: STOP, braking: false,
+                 locked: false, max_forward: 0.0}
+      - {t: 0.05, set: {scan_seq: 2}, expect: {state: ACTIVE, estop_latched: false, braking: false}}
+      - t: 0.1
+        set: {scan_seq: 3}
         expect: {state: ACTIVE, estop_latched: false, front_zone: CONTACT, braking: false,
                  locked: false, max_forward: 0.0}
-      - t: 0.1
-        set: {v_cmd: 0.3}
+      - t: 0.15
+        set: {scan_seq: 4, v_cmd: 0.3}
         expect: {state: ACTIVE, estop_latched: false, braking: false, locked: false}
   - name: core_contact_without_latch_on_contact_only_brakes
     fn: core
@@ -573,7 +692,13 @@ cases:
     cfg: {latch_on_contact: false}
     steps:
       - t: 0.0
-        set: {v_odom: 0.1, v_cmd: 0.1, evaluation: {front_clearance: 0.01, contact_front: true}}
+        set: {scan_seq: 1, v_odom: 0.1, v_cmd: 0.1,
+              evaluation: {front_clearance: 0.01, contact_front: true}}
+        expect: {state: ACTIVE, estop_latched: false, braking: true, locked: true,
+                 front_zone: STOP}
+      - {t: 0.05, set: {scan_seq: 2}, expect: {state: ACTIVE, estop_latched: false}}
+      - t: 0.1
+        set: {scan_seq: 3}
         expect: {state: ACTIVE, estop_latched: false, braking: true, locked: true,
                  front_zone: CONTACT}
   - name: core_estop_by_request_and_reset
@@ -630,17 +755,99 @@ cases:
       - {t: 0.1, set: {scan_ok: false, scan_invalid_reason: "invalid scan: empty ranges"},
          expect: {state: ESTOP}, action: reset,
          expect_reset: [false, "fault: invalid scan: empty ranges"]}
-  - name: core_reset_refused_in_front_contact
+  # Iteration 3 (H1): a one-sided contact allows a reset when nothing moves or is commanded toward
+  # it (the speed filter keeps blocking that direction); refused when moving or commanded toward
+  # it, with contact on both sides and in lock_only.
+  - name: core_reset_refused_in_front_contact_when_moving_toward_it
+    fn: core
+    start: healthy
+    steps:
+      - {t: 0.0, action: trigger_estop}
+      - {t: 0.1, set: {v_odom: 0.1, v_cmd: 0.0,
+                       evaluation: {front_clearance: 0.01, contact_front: true}},
+         expect: {state: ESTOP}, action: reset,
+         expect_reset: [false, obstacle in contact zone (front)]}
+  - name: core_reset_refused_in_front_contact_when_commanded_toward_it
+    fn: core
+    start: healthy
+    steps:
+      - {t: 0.0, action: trigger_estop}
+      - {t: 0.1, set: {v_odom: 0.0, v_cmd: 0.2,
+                       evaluation: {front_clearance: 0.01, contact_front: true}},
+         expect: {state: ESTOP}, action: reset,
+         expect_reset: [false, obstacle in contact zone (front)]}
+  - name: core_reset_accepted_in_front_contact_when_stopped
     fn: core
     start: healthy
     steps:
       - {t: 0.0, action: trigger_estop}
       - {t: 0.1, set: {evaluation: {front_clearance: 0.01, contact_front: true}},
-         expect: {state: ESTOP}, action: reset,
-         expect_reset: [false, obstacle in contact zone (front)]}
-  - name: core_reset_refused_in_rear_contact
+         expect: {state: ESTOP}, action: reset, expect_reset: [true, reset]}
+      - t: 0.2
+        expect: {state: ACTIVE, estop_latched: false, locked: false, front_zone: STOP,
+                 max_forward: 0.0, max_reverse: 0.7}
+        limit: {v: 0.3, w: 0.0, expect: [0.0, 0.0]}
+      - t: 0.3
+        limit: {v: -0.1, w: 0.0, expect: [-0.1, 0.0]}
+  - name: core_reset_accepted_in_front_contact_when_moving_away
     fn: core
     start: healthy
+    steps:
+      - {t: 0.0, action: trigger_estop}
+      - {t: 0.1, set: {v_odom: -0.1, v_cmd: -0.1,
+                       evaluation: {front_clearance: 0.01, contact_front: true}},
+         expect: {state: ESTOP}, action: reset, expect_reset: [true, reset]}
+  - name: core_reset_refused_in_rear_contact_when_moving_toward_it
+    fn: core
+    start: healthy
+    steps:
+      - {t: 0.0, action: trigger_estop}
+      - {t: 0.1, set: {v_odom: -0.1, v_cmd: 0.0,
+                       evaluation: {rear_clearance: 0.01, contact_rear: true}},
+         expect: {state: ESTOP}, action: reset,
+         expect_reset: [false, obstacle in contact zone (rear)]}
+  - name: core_reset_refused_in_rear_contact_when_commanded_toward_it
+    fn: core
+    start: healthy
+    steps:
+      - {t: 0.0, action: trigger_estop}
+      - {t: 0.1, set: {v_odom: 0.0, v_cmd: -0.2,
+                       evaluation: {rear_clearance: 0.01, contact_rear: true}},
+         expect: {state: ESTOP}, action: reset,
+         expect_reset: [false, obstacle in contact zone (rear)]}
+  - name: core_reset_accepted_in_rear_contact_when_stopped
+    fn: core
+    start: healthy
+    steps:
+      - {t: 0.0, action: trigger_estop}
+      - {t: 0.1, set: {evaluation: {rear_clearance: 0.01, contact_rear: true}},
+         expect: {state: ESTOP}, action: reset, expect_reset: [true, reset]}
+      - t: 0.2
+        expect: {state: ACTIVE, estop_latched: false, rear_zone: STOP, max_reverse: 0.0,
+                 max_forward: 0.7}
+        limit: {v: -0.3, w: 0.0, expect: [0.0, 0.0]}
+  - name: core_reset_refused_with_contact_on_both_sides
+    fn: core
+    start: healthy
+    steps:
+      - {t: 0.0, action: trigger_estop}
+      - {t: 0.1, set: {evaluation: {front_clearance: 0.01, contact_front: true,
+                                    rear_clearance: 0.01, contact_rear: true}},
+         expect: {state: ESTOP}, action: reset,
+         expect_reset: [false, obstacle in contact zone (front)]}
+  - name: core_reset_refused_in_front_contact_in_lock_only
+    fn: core
+    start: healthy
+    cfg: {enforcement: lock_only}
+    steps:
+      - {t: 0.0, action: trigger_estop}
+      - {t: 0.1, set: {evaluation: {front_clearance: 0.01, contact_front: true}},
+         expect: {state: ESTOP}, action: reset,
+         expect_reset: [false, obstacle in contact zone (front)]}
+  - name: core_reset_refused_in_rear_contact_in_lock_only
+    fn: core
+    start: healthy
+    cfg: {enforcement: lock_only}
     steps:
       - {t: 0.0, action: trigger_estop}
       - {t: 0.1, set: {evaluation: {rear_clearance: 0.01, contact_rear: true}},
@@ -673,11 +880,31 @@ cases:
     fn: core
     start: healthy
     steps:
+      # the dock exemption covers the rear only: a front contact with motion toward it is refused
       - {t: 0.0, action: trigger_estop}
-      - {t: 0.1, set: {dock_active: true, dock_reason: dock approach,
+      - {t: 0.1, set: {dock_active: true, dock_reason: dock approach, v_odom: 0.05, v_cmd: 0.05,
                        evaluation: {front_clearance: 0.005, contact_front: true}},
          expect: {state: ESTOP}, action: reset,
          expect_reset: [false, obstacle in contact zone (front)]}
+  - name: core_reset_front_contact_in_dock_profile_accepted_when_stopped
+    fn: core
+    start: healthy
+    steps:
+      - {t: 0.0, action: trigger_estop}
+      - {t: 0.1, set: {dock_active: true, dock_reason: dock approach,
+                       evaluation: {front_clearance: 0.005, contact_front: true}},
+         expect: {state: ESTOP}, action: reset, expect_reset: [true, reset]}
+      - {t: 0.2, expect: {state: DOCK_APPROACH, estop_latched: false, front_zone: STOP,
+                          max_forward: 0.0}}
+  - name: core_reset_dock_profile_rear_contact_is_exempt_so_front_contact_counts_one_sided
+    fn: core
+    start: healthy
+    steps:
+      - {t: 0.0, action: trigger_estop}
+      - {t: 0.1, set: {dock_active: true, dock_reason: dock approach,
+                       evaluation: {front_clearance: 0.005, contact_front: true,
+                                    rear_clearance: 0.005, contact_rear: true}},
+         expect: {state: ESTOP}, action: reset, expect_reset: [true, reset]}
   - name: core_fault_scan_timeout_and_recovery
     fn: core
     start: healthy
@@ -762,17 +989,49 @@ cases:
     fn: core
     start: healthy
     steps:
-      - {t: 0.0, set: {v_odom: 0.3, v_cmd: 0.3, evaluation: {front_clearance: 0.03}},
+      - {t: 0.0, set: {scan_seq: 1, v_odom: 0.3, v_cmd: 0.3, evaluation: {front_clearance: 0.03}},
          expect: {braking: true, locked: true}}
-      - {t: 0.1, set: {v_odom: 0.1, evaluation: {front_clearance: 0.01, contact_front: true}},
+      # contact on scans 1-3 (debounce): STOP first, the e-stop latches on the third scan
+      - {t: 0.1, set: {scan_seq: 2, v_odom: 0.1,
+                       evaluation: {front_clearance: 0.01, contact_front: true}},
+         expect: {estop_latched: false, front_zone: STOP}}
+      - {t: 0.15, set: {scan_seq: 3}, expect: {estop_latched: false, front_zone: STOP}}
+      - {t: 0.2, set: {scan_seq: 4},
          expect: {state: ESTOP, reason: contact zone (front), braking: false}}
-      - {t: 0.2, set: {v_odom: 0.0, v_cmd: 0.0, evaluation: {front_clearance: .inf,
+      - {t: 0.25, set: {scan_seq: 5, v_odom: 0.0, v_cmd: 0.0, evaluation: {front_clearance: .inf,
                                                               contact_front: false}},
          expect: {state: ESTOP}, action: reset, expect_reset: [true, reset]}
       - {t: 0.3, expect: {state: ACTIVE, locked: false, braking: false, estop_latched: false,
                           reason: "", front_zone: CLEAR, max_forward: 0.7}}
       - {t: 0.4, action: trigger_estop, expect: {state: ACTIVE}}
       - {t: 0.5, expect: {state: ESTOP, reason: e-stop requested by service}}
+  - name: core_restart_latch_requires_reset_when_configured
+    fn: core
+    start: healthy
+    cfg: {require_reset_after_restart: true}
+    steps:
+      - t: 0.0
+        expect: {state: ESTOP, estop_latched: true, locked: true,
+                 reason: "restart: reset required", max_forward: 0.0, max_reverse: 0.0}
+        limit: {v: 0.3, w: 0.2, expect: [0.0, 0.0]}
+      - {t: 5.0, expect: {state: ESTOP, estop_latched: true, locked: true}}
+      - {t: 5.05, expect: {state: ESTOP}, action: reset, expect_reset: [true, reset]}
+      - {t: 5.1, expect: {state: ACTIVE, estop_latched: false, locked: false, reason: "",
+                          max_forward: 0.7}}
+  - name: core_restart_latch_reset_refused_with_a_fault_then_accepted
+    fn: core
+    start: healthy
+    cfg: {require_reset_after_restart: true}
+    steps:
+      - {t: 0.0, set: {scan_age: 1.0}, expect: {state: ESTOP, estop_latched: true},
+         action: reset, expect_reset: [false, "fault: scan timeout"]}
+      - {t: 0.1, set: {scan_age: 0.05}, expect: {state: ESTOP}, action: reset,
+         expect_reset: [true, reset]}
+  - name: core_default_has_no_restart_latch
+    fn: core
+    start: healthy
+    steps:
+      - {t: 0.0, expect: {state: ACTIVE, estop_latched: false, locked: false}}
   - name: core_no_brake_for_commanded_but_stationary_robot
     fn: core
     start: healthy
@@ -799,11 +1058,25 @@ cases:
       - t: 0.0
         set: {dock_active: true, dock_reason: dock approach, evaluation: {rear_clearance: 0.03}}
         expect: {state: DOCK_APPROACH, dock_profile_active: true, rear_zone: WARNING,
-                 max_reverse: 0.06, max_forward: 0.7, locked: false}
-        limit: {v: -0.15, w: 0.0, expect: [-0.06, 0.0]}
+                 max_reverse: 0.04, max_forward: 0.7, locked: false}
+        limit: {v: -0.15, w: 0.0, expect: [-0.04, 0.0]}
       - t: 0.1
         set: {evaluation: {rear_clearance: 0.005, contact_rear: true}}
         expect: {state: DOCK_APPROACH, rear_zone: STOP, max_reverse: 0.0, estop_latched: false}
+  # Iteration 3 (M4): max_reverse = min(dock_max_speed, speed_limit(d_rear, dock_stop_margin)).
+  # speed_limit(d, 0.01) = min(0.7, 0.7 * (d - 0.01) / 0.35, brake): the ramp binds at 0.03
+  # (0.04), the dock cap binds from d = 0.04 on (ramp 0.06), the brake term never binds here.
+  - name: core_dock_profile_rear_cap_follows_the_braking_ramp
+    fn: core
+    start: healthy
+    steps:
+      - t: 0.0
+        set: {dock_active: true, dock_reason: dock approach, evaluation: {rear_clearance: 0.03}}
+        expect: {max_reverse: 0.04}
+      - {t: 0.1, set: {evaluation: {rear_clearance: 0.02}}, expect: {max_reverse: 0.02}}
+      - {t: 0.2, set: {evaluation: {rear_clearance: 0.04}}, expect: {max_reverse: 0.06}}
+      - {t: 0.3, set: {evaluation: {rear_clearance: 0.5}}, expect: {max_reverse: 0.06}}
+      - {t: 0.4, set: {evaluation: {rear_clearance: .inf}}, expect: {max_reverse: 0.06}}
   - name: core_dock_profile_rear_contact_while_reversing_does_not_latch
     fn: core
     start: healthy
@@ -818,11 +1091,19 @@ cases:
     start: healthy
     steps:
       - t: 0.0
-        set: {dock_active: true, dock_reason: dock approach, evaluation: {front_clearance: 0.03}}
+        set: {scan_seq: 1, dock_active: true, dock_reason: dock approach,
+              evaluation: {front_clearance: 0.03}}
         expect: {state: DOCK_APPROACH, front_zone: STOP, max_forward: 0.0, rear_zone: CLEAR,
                  max_reverse: 0.06}
       - t: 0.1
-        set: {v_odom: 0.1, v_cmd: 0.1, evaluation: {front_clearance: 0.01, contact_front: true}}
+        set: {scan_seq: 2, v_odom: 0.1, v_cmd: 0.1,
+              evaluation: {front_clearance: 0.01, contact_front: true}}
+        expect: {state: DOCK_APPROACH, estop_latched: false, front_zone: STOP, max_forward: 0.0}
+      - t: 0.15
+        set: {scan_seq: 3}
+        expect: {state: DOCK_APPROACH, estop_latched: false, front_zone: STOP}
+      - t: 0.2
+        set: {scan_seq: 4}
         expect: {state: ESTOP, estop_latched: true, reason: contact zone (front)}
   - name: core_dock_profile_falls_back_in_the_same_tick
     fn: core
@@ -830,7 +1111,7 @@ cases:
     steps:
       - t: 0.0
         set: {dock_active: true, dock_reason: dock approach, evaluation: {rear_clearance: 0.03}}
-        expect: {state: DOCK_APPROACH, max_reverse: 0.06}
+        expect: {state: DOCK_APPROACH, max_reverse: 0.04}
       - t: 0.05
         set: {dock_active: false, dock_reason: dock approach time limit}
         expect: {state: ACTIVE, dock_profile_active: false, rear_zone: STOP, max_reverse: 0.0,

@@ -4,10 +4,12 @@
 #include <gtest/gtest.h>
 #include <yaml-cpp/yaml.h>
 
+#include <algorithm>
 #include <cmath>
 #include <functional>
 #include <limits>
 #include <map>
+#include <random>
 #include <set>
 #include <string>
 #include <utility>
@@ -43,7 +45,8 @@ const std::map<std::string, BoolMember> & bool_fields()
   static const std::map<std::string, BoolMember> m = {
     {"use_odom", &sf::Config::use_odom}, {"latch_faults", &sf::Config::latch_faults},
     {"latch_on_contact", &sf::Config::latch_on_contact},
-    {"dock_approach_enabled", &sf::Config::dock_approach_enabled}};
+    {"dock_approach_enabled", &sf::Config::dock_approach_enabled},
+    {"require_reset_after_restart", &sf::Config::require_reset_after_restart}};
   return m;
 }
 
@@ -87,6 +90,8 @@ sf::Config make_config(const YAML::Node & overrides)
       cfg.*(double_fields().at(key)) = kv.second.as<double>();
     } else if (key == "footprint") {
       cfg.footprint = kv.second.as<std::vector<double>>();
+    } else if (key == "contact_debounce_scans") {
+      cfg.contact_debounce_scans = kv.second.as<int64_t>();
     } else if (key == "debug_inject_tick_exceptions") {
       cfg.debug_inject_tick_exceptions = kv.second.as<int64_t>();
     } else {
@@ -279,6 +284,8 @@ void apply_set(sf::Inputs & inp, const YAML::Node & set)
       inp.cmd_age = v.as<double>();
     } else if (key == "v_cmd") {
       inp.v_cmd = v.as<double>();
+    } else if (key == "scan_seq") {
+      inp.scan_seq = v.as<int64_t>();
     } else if (key == "estop_input") {
       inp.estop_input = v.as<bool>();
     } else if (key == "dock_active") {
@@ -450,6 +457,33 @@ TEST(SafetyLogicCases, DefaultConfigIsValid)
   EXPECT_EQ(sf::validate_config(cfg), "");
   const std::vector<double> fp = {0.10, 0.125, 0.10, -0.125, -0.10, -0.125, -0.10, 0.125};
   EXPECT_EQ(cfg.footprint, fp);
+  // Iteration 3: new parameters and their defaults
+  EXPECT_EQ(cfg.contact_debounce_scans, 3);
+  EXPECT_FALSE(cfg.require_reset_after_restart);
+}
+
+TEST(SafetyLogicCases, ContactDebounceScansBelowOneIsInvalid)
+{
+  sf::Config cfg;
+  cfg.contact_debounce_scans = 0;
+  EXPECT_EQ(sf::validate_config(cfg), "contact_debounce_scans must be >= 1");
+  cfg.contact_debounce_scans = -2;
+  EXPECT_NE(sf::validate_config(cfg), "");
+  cfg.contact_debounce_scans = 1;
+  EXPECT_EQ(sf::validate_config(cfg), "");
+}
+
+TEST(SafetyLogicCases, BlindZoneWarningWhenRangeMinOverlapsTheStopCorridor)
+{
+  const sf::Config cfg;
+  // Shipped geometry: laser at x=0.0, y=0 with range_min 0.12 reaches into the rear dock corridor
+  // (x from -0.11 to -0.10) and the front corridor (0.10 .. 0.15)
+  const std::string both = sf::blind_zone_warning(cfg, 0.0, 0.0, 0.12);
+  EXPECT_NE(both.find("front"), std::string::npos) << both;
+  EXPECT_NE(both.find("rear"), std::string::npos) << both;
+  EXPECT_NE(both.find("blind"), std::string::npos) << both;
+  // A tiny range_min does not reach any stop corridor: no warning
+  EXPECT_EQ(sf::blind_zone_warning(cfg, 0.0, 0.0, 0.05), "");
 }
 
 TEST(SafetyLogicCases, ShippedConfigYamlEqualsCompiledDefaults)
@@ -469,6 +503,8 @@ TEST(SafetyLogicCases, ShippedConfigYamlEqualsCompiledDefaults)
       EXPECT_DOUBLE_EQ(kv.second.as<double>(), defaults.*(double_fields().at(key))) << key;
     } else if (key == "footprint") {
       EXPECT_EQ(kv.second.as<std::vector<double>>(), defaults.footprint);
+    } else if (key == "contact_debounce_scans") {
+      EXPECT_EQ(kv.second.as<int64_t>(), defaults.contact_debounce_scans);
     } else if (key == "debug_inject_tick_exceptions") {
       EXPECT_EQ(kv.second.as<int64_t>(), defaults.debug_inject_tick_exceptions);
     } else {
@@ -476,6 +512,104 @@ TEST(SafetyLogicCases, ShippedConfigYamlEqualsCompiledDefaults)
     }
   }
   EXPECT_EQ(
-    seen, string_fields().size() + bool_fields().size() + double_fields().size() + 2)
+    seen, string_fields().size() + bool_fields().size() + double_fields().size() + 3)
     << "the YAML must list every parameter";
+}
+
+// ---------------------------------------------------------------------------------------------
+// Iteration 3 (M6): Monte Carlo of the contact debounce with range noise (sigma 0.01 m)
+// ---------------------------------------------------------------------------------------------
+namespace
+{
+struct MonteCarlo
+{
+  int latched = 0;
+  int worst_first = 0;
+  int contact_scans = 0;
+  int total_scans = 0;
+  int resets = 0;
+};
+
+MonteCarlo mc_run(
+  double clearance, double v, int64_t debounce, int scans, bool manual_reset = false,
+  unsigned seed = 12345, int runs = 200)
+{
+  std::mt19937 gen(seed);
+  std::normal_distribution<double> noise(0.0, 0.01);
+  std::vector<double> angles;
+  for (int a = -60; a <= 60; ++a) {
+    angles.push_back(a * M_PI / 180.0);
+  }
+  MonteCarlo result;
+  for (int run = 0; run < runs; ++run) {
+    sf::Config cfg;
+    cfg.contact_debounce_scans = debounce;
+    sf::SafetyCore core(cfg);
+    int first = 0;
+    sf::Inputs inp;
+    for (int scan = 1; scan <= scans; ++scan) {
+      std::vector<double> ranges;
+      for (const double angle : angles) {
+        ranges.push_back((0.10 + clearance) / std::cos(angle) + noise(gen));
+      }
+      const auto sp = sf::scan_to_points(
+        ranges, angles.front(), M_PI / 180.0, 0.05, 12.0, 0.0, 0.0, 0.0);
+      const sf::Evaluation ev = sf::evaluate_points(sp.points, cfg);
+      result.contact_scans += ev.contact_front ? 1 : 0;
+      ++result.total_scans;
+      inp = sf::Inputs();
+      inp.scan_ok = true;
+      inp.scan_age = 0.05;
+      inp.tf_ok = true;
+      inp.odom_age = 0.05;
+      inp.v_odom = v;
+      inp.cmd_age = 0.05;
+      inp.v_cmd = v;
+      inp.evaluation = ev;
+      inp.scan_seq = scan;
+      const sf::Outputs out = core.update(0.2 * scan, inp);
+      if (out.estop_latched && first == 0) {
+        first = scan;
+      }
+    }
+    if (first != 0) {
+      ++result.latched;
+      result.worst_first = std::max(result.worst_first, first);
+    }
+    if (manual_reset) {
+      core.trigger_estop("e-stop requested by service");
+      inp.scan_seq = scans + 1;
+      core.update(0.2 * (scans + 1), inp);
+      result.resets += core.request_reset().first ? 1 : 0;
+    }
+  }
+  return result;
+}
+}  // namespace
+
+TEST(SafetyLogicMonteCarlo, RestDistanceNeverLatchesAndResetIsReliable)
+{
+  const MonteCarlo r = mc_run(0.035, 0.0, 3, 10, true);
+  EXPECT_GT(static_cast<double>(r.contact_scans) / r.total_scans, 0.2);
+  EXPECT_EQ(r.latched, 0);
+  EXPECT_EQ(r.resets, 200);
+}
+
+TEST(SafetyLogicMonteCarlo, DebounceKeepsFalseLatchesNearZeroWhileCreeping)
+{
+  const MonteCarlo with = mc_run(0.04, 0.03, 3, 3);
+  const MonteCarlo without = mc_run(0.04, 0.03, 1, 3);
+  EXPECT_LE(with.latched, 6) << "debounce 3: " << with.latched << " of 200";
+  EXPECT_GE(without.latched, 80) << "debounce 1: " << without.latched << " of 200";
+  EXPECT_GE(without.latched, 10 * std::max(with.latched, 1));
+  EXPECT_EQ(mc_run(0.05, 0.03, 3, 3).latched, 0);
+}
+
+TEST(SafetyLogicMonteCarlo, TrueContactStillLatchesWithinThreeScans)
+{
+  for (const double clearance : {0.005, 0.0}) {
+    const MonteCarlo r = mc_run(clearance, 0.1, 3, 5);
+    EXPECT_EQ(r.latched, 200) << clearance;
+    EXPECT_EQ(r.worst_first, 3) << clearance;
+  }
 }

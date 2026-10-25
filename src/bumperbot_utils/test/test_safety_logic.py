@@ -1,6 +1,7 @@
 """AC2 (Python): the safety_logic case table in test/data/safety_cases.yaml."""
 import math
 import os
+import random
 
 import pytest
 import yaml
@@ -204,3 +205,115 @@ def test_default_config_is_valid_and_matches_the_plan_defaults():
     assert cfg.footprint == [0.10, 0.125, 0.10, -0.125, -0.10, -0.125, -0.10, 0.125]
     assert (cfg.stop_margin, cfg.slowdown_distance, cfg.contact_margin) == (0.05, 0.35, 0.015)
     assert (cfg.dock_max_speed, cfg.dock_stop_margin) == (0.06, 0.01)
+    # Iteration 3: new parameters and their defaults
+    assert cfg.contact_debounce_scans == 3
+    assert cfg.require_reset_after_restart is False
+
+
+def test_contact_debounce_scans_below_one_is_invalid():
+    cfg = sl.Config()
+    cfg.contact_debounce_scans = 0
+    assert sl.validate_config(cfg) == "contact_debounce_scans must be >= 1"
+    cfg.contact_debounce_scans = -2
+    assert sl.validate_config(cfg) != ""
+    cfg.contact_debounce_scans = 1
+    assert sl.validate_config(cfg) == ""
+
+
+def test_blind_zone_warning_when_range_min_overlaps_the_stop_corridor():
+    cfg = sl.Config()
+    # Laser at x=0, y=0, range_min 0.12: reaches the front corridor (x 0.10..0.15) and the rear
+    # dock corridor (x -0.11..-0.10)
+    text = sl.blind_zone_warning(cfg, 0.0, 0.0, 0.12)
+    assert "front" in text and "rear" in text and "blind" in text, text
+    # range_min 0.05 reaches no stop corridor: no warning
+    assert sl.blind_zone_warning(cfg, 0.0, 0.0, 0.05) == ""
+    # Only the front corridor: sensor near the rear edge is far from the front corridor
+    cfg2 = sl.Config()
+    text2 = sl.blind_zone_warning(cfg2, 0.09, 0.0, 0.02)
+    assert "front" in text2 and "rear" not in text2, text2
+
+
+# ---------------------------------------------------------------------------------------------
+# Iteration 3 (M6): Monte Carlo of the contact debounce with range noise
+# ---------------------------------------------------------------------------------------------
+
+MC_SIGMA = 0.01             # range noise of both simulators (MuJoCo and Gazebo)
+MC_RUNS = 200
+MC_SEED = 12345
+MC_BEAMS = [math.radians(a) for a in range(-60, 61)]   # 1 degree beams, all inside the corridor
+
+
+def mc_run(clearance, v, debounce, scans, seed=MC_SEED, runs=MC_RUNS, manual_reset=False):
+    """
+    Drive a SafetyCore with noisy scans of a flat wall at a true clearance.
+
+    Returns (runs that latched, last scan index of the first latch, contact scans, total scans,
+    accepted resets). `v` is the (constant) odometry and command speed of the robot.
+    """
+    rng = random.Random(seed)
+    latched = 0
+    worst_first = 0
+    contact_scans = 0
+    total_scans = 0
+    resets = 0
+    for _ in range(runs):
+        cfg = sl.Config()
+        cfg.contact_debounce_scans = debounce
+        core = sl.SafetyCore(cfg)
+        first = None
+        for scan in range(1, scans + 1):
+            ranges = [(0.10 + clearance) / math.cos(a) + rng.gauss(0.0, MC_SIGMA)
+                      for a in MC_BEAMS]
+            points, _ = sl.scan_to_points(ranges, MC_BEAMS[0], math.radians(1.0), 0.05, 12.0,
+                                          0.0, 0.0, 0.0)
+            ev = sl.evaluate_points(points, cfg)
+            contact_scans += int(ev.contact_front)
+            total_scans += 1
+            inp = sl.Inputs()
+            inp.scan_ok, inp.scan_age, inp.tf_ok, inp.odom_age = True, 0.05, True, 0.05
+            inp.v_odom, inp.cmd_age, inp.v_cmd = v, 0.05, v
+            inp.evaluation, inp.scan_seq = ev, scan
+            out = core.update(0.2 * scan, inp)
+            if out.estop_latched and first is None:
+                first = scan
+        if first is not None:
+            latched += 1
+            worst_first = max(worst_first, first)
+        if manual_reset:
+            core.trigger_estop("e-stop requested by service")
+            inp.scan_seq += 1
+            core.update(0.2 * (scans + 1), inp)
+            ok, _ = core.request_reset()
+            resets += int(ok)
+    return latched, worst_first, contact_scans, total_scans, resets
+
+
+def test_monte_carlo_noise_at_rest_distance_never_latches_and_reset_is_reliable():
+    """A stopped robot at the E2E rest distance (0.035 m) sees contact flags but never latches."""
+    latched, _, contact, total, resets = mc_run(0.035, 0.0, 3, 10, manual_reset=True)
+    # the noise really produces contact flags in a large share of the scans (min over ~120 beams)
+    assert contact / total > 0.2, (contact, total)
+    assert latched == 0
+    # every manual reset is accepted although the contact flag flickers (review M6: was ~40 %)
+    assert resets == MC_RUNS
+
+
+def test_monte_carlo_debounce_keeps_false_latches_near_zero_while_creeping():
+    """Robot still above stopped_speed at a true 0.04 m: debounce 3 vs the old per-scan latch."""
+    with_debounce, _, _, _, _ = mc_run(0.04, 0.03, 3, 3)
+    without, _, _, _, _ = mc_run(0.04, 0.03, 1, 3)
+    # measured with the fixed seed: 3 and 121 of 200 (the review estimated 13 % per scan)
+    assert with_debounce <= 0.03 * MC_RUNS, with_debounce
+    assert without >= 0.40 * MC_RUNS, without
+    assert without >= 10 * max(with_debounce, 1)
+    # farther away the debounced node latches never
+    assert mc_run(0.05, 0.03, 3, 3)[0] == 0
+
+
+def test_monte_carlo_true_contact_still_latches_within_three_scans():
+    latched, worst_first, _, _, _ = mc_run(0.005, 0.1, 3, 5)
+    assert latched == MC_RUNS
+    assert worst_first == 3, "latched later than the third scan in one run"
+    latched, worst_first, _, _, _ = mc_run(0.0, 0.1, 3, 5)
+    assert latched == MC_RUNS and worst_first == 3

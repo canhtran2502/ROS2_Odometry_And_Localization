@@ -83,6 +83,8 @@ class Loop:
         self.evaluation = sl.Evaluation()
         self.scan_ok = False
         self.feed_scans = True
+        self.scan_seq = 0              # id of the evaluated scan (the node's counter)
+        self.bypass = None             # wheel speed (m/s) that ignores the filter (external push)
         self.cmd = (0.0, 0.0)
         self.virtual = None            # ("robot", dx) or ("world", (wx, wy)) point to inject
         self.out = sl.Outputs()
@@ -121,6 +123,7 @@ class Loop:
         if extra is not None:
             points.append(extra)
         self.evaluation = sl.evaluate_points(points, self.cfg)
+        self.scan_seq += 1
         self.scan_ok = ratio <= self.cfg.max_invalid_beam_ratio
         self.t_scan = self.now
 
@@ -133,12 +136,15 @@ class Loop:
         inp.tf_ok = True
         inp.tf_description = "base_footprint <- laser_link"
         inp.evaluation = self.evaluation
+        inp.scan_seq = self.scan_seq
         inp.odom_age = 0.0
         inp.v_odom = self.odom_speed()
         inp.cmd_age = 0.0
         inp.v_cmd = self.cmd[0]
         self.out = self.core.update(self.now, inp)
         v, w = self.core.limit_command(self.cmd[0], self.cmd[1], self.out)
+        if self.bypass is not None:
+            v, w = self.bypass, 0.0       # a rolling robot that ignores the brake
         self.applied = (v, w)
         self.lock_seen = self.lock_seen or self.out.locked
         self.sim.set_wheel_velocities((v - w * B / 2.0) / R, (v + w * B / 2.0) / R)
@@ -362,22 +368,95 @@ def test_d_scan_dropout_while_moving_faults_and_stops():
     assert loop.now - t_fault >= 1.0 - 1e-9
 
 
-def test_e_contact_latch_and_reset():
-    """AC16 (e): a point at 0.01 m while moving latches ESTOP; reset refused until removed."""
+def test_e_brake_pulse_beats_the_contact_debounce_and_reset_when_stopped():
+    """
+    AC16 (e), iteration 3: a contact needs three consecutive scans (0.4 s at 5 Hz), the brake
+    pulse stops the 0.3 m/s robot before the third scan: no latch, no touch, the reset works.
+
+    Before the debounce this scenario latched the e-stop. The point appears 0.02 m ahead (an
+    obstacle closer than the stopping travel of about 0.01 m cannot be avoided by any filter).
+    """
     loop = Loop(0.0, 0.0, 0.0)
     loop.cmd = (0.3, 0.0)
     loop.run(3.0)
-    loop.virtual = ("robot", 0.01)
-    ok = loop.run(1.0, stop=lambda l: l.out.state == "ESTOP")
-    assert ok, "no ESTOP: {}".format(loop.out)
-    assert loop.out.estop_latched and loop.out.locked
+    assert abs(loop.speed - 0.3) < 0.05, loop.speed
+    x, y, yaw = loop.pose()
+    ahead = X_FRONT + 0.02
+    loop.virtual = ("world", (x + ahead * math.cos(yaw), y + ahead * math.sin(yaw)))
+    min_clearance = math.inf
+    states = set()
+    for _ in range(60):                              # 3 s: well past three scans
+        loop.tick()
+        point = loop.virtual_point()
+        min_clearance = min(min_clearance, point[0] - X_FRONT)
+        states.add(loop.out.state)
+    assert "ESTOP" not in states, "latched although the robot stopped: {}".format(states)
+    assert not loop.out.estop_latched
+    assert min_clearance > 0.0, "the robot touched the obstacle ({:.4f})".format(min_clearance)
+    assert abs(loop.speed) < 0.01
+    assert any(locked for _, _, locked, _ in loop.history), "no brake pulse"
+    # three evaluated scans have seen the contact: CONTACT, stationary, never a latch
+    assert loop.out.front_zone in ("STOP", "CONTACT")
+    # reset rule (iteration 3): stopped and nothing commanded toward the obstacle, one side only
+    loop.cmd = (0.3, 0.0)
+    assert loop.core.request_reset() == (True, "not latched")
+    loop.core.trigger_estop("e-stop requested by service")
+    loop.run(0.2)
+    assert loop.out.estop_latched
+    assert loop.core.request_reset() == (False, "obstacle in contact zone (front)"), \
+        "commanded toward the obstacle: the reset must be refused"
     loop.cmd = (0.0, 0.0)
     loop.run(1.0)
-    assert abs(loop.speed) < 0.02
-    accepted, message = loop.core.request_reset()
-    assert (accepted, message) == (False, "obstacle in contact zone (front)")
-    loop.virtual = None
-    loop.run(0.5)
     assert loop.core.request_reset() == (True, "reset")
     loop.run(0.5)
     assert loop.out.state == "ACTIVE" and not loop.out.estop_latched
+    loop.cmd = (0.3, 0.0)
+    loop.run(1.0)
+    assert loop.applied[0] == 0.0, "forward must stay blocked after the reset"
+    assert loop.virtual_point()[0] - X_FRONT > 0.0, "the robot touched the obstacle"
+
+
+def test_e_rolling_robot_really_latches_at_scan_three_and_reset_rules():
+    """
+    AC16 (e) variant that really produces a latch: a robot that keeps rolling (external push,
+    the filter output is bypassed) with a point 0.01 m ahead of the bumper. The contact is
+    confirmed by the third evaluated scan, the e-stop latches, the reset is refused while it
+    moves or is commanded toward the contact and accepted when it stands still.
+    """
+    loop = Loop(0.0, 0.0, 0.0)
+    loop.cmd = (0.1, 0.0)
+    loop.run(3.0)
+    loop.bypass = 0.1
+    seq_at_injection = loop.scan_seq
+    loop.virtual = ("robot", 0.01)
+    states = []
+    ok = loop.run(2.0, stop=lambda l: states.append((l.scan_seq, l.out.state)) or
+                  l.out.state == "ESTOP")
+    assert ok, "no ESTOP: {}".format(loop.out)
+    assert loop.scan_seq - seq_at_injection == 3, "latched on scan {} after the injection".format(
+        loop.scan_seq - seq_at_injection)
+    assert all(state == "ACTIVE" for _, state in states[:-1]), states
+    assert "contact zone (front)" in loop.out.reason
+    assert loop.out.estop_latched and loop.out.locked
+    # still rolling: refused
+    loop.run(0.2)
+    assert abs(loop.speed) > 0.02
+    assert loop.core.request_reset() == (False, "obstacle in contact zone (front)")
+    # standing, but commanded toward the contact: refused
+    loop.bypass = None
+    loop.cmd = (0.2, 0.0)
+    loop.run(1.0)
+    assert abs(loop.speed) < 0.02
+    assert loop.core.request_reset() == (False, "obstacle in contact zone (front)")
+    # standing and idle: accepted, the filter keeps blocking forward motion
+    loop.cmd = (0.0, 0.0)
+    loop.run(1.0)
+    assert loop.core.request_reset() == (True, "reset")
+    loop.run(0.5)
+    assert loop.out.state == "ACTIVE" and not loop.out.estop_latched
+    loop.cmd = (0.3, 0.0)
+    loop.run(1.0)
+    assert loop.applied[0] == 0.0 and loop.out.state == "ACTIVE"
+    loop.cmd = (-0.1, 0.0)
+    loop.run(0.5)
+    assert loop.applied[0] == pytest.approx(-0.1)
