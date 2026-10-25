@@ -1,0 +1,4 @@
+safety_supervisor:
+  ros__parameters:
+    stop_margin: 0.05
+    stop_margin: -1.0
