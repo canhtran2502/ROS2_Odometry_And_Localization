@@ -810,3 +810,27 @@ a case needs it.
   parameter.
 - `test_safety_supervisor.launch.py` with two impls and eight scenario methods may approach the
   900 s TIMEOUT. If so, split it into `..._zones` and `..._latch`.
+
+## Iteration 3 amendments (from the Opus review; these supersede earlier wording)
+
+- **Contact definition (H1).** Contact flags use only points inside the swept path
+  (`|y| <= footprint half width`); the STOP/WARNING corridor still uses the lateral margin.
+  A side wall just outside the footprint gives STOP, never a contact latch.
+- **Contact debounce (M6).** A contact latches the e-stop only after `contact_debounce_scans`
+  (default 3) consecutive evaluated scans; an unconfirmed contact is a STOP with the same limits
+  and brake pulse (the STOP filter itself is not debounced).
+- **Reset rule (H1).** In `filter` mode a reset with a one-sided contact is accepted when neither
+  odometry nor a fresh command moves toward the obstacle; it is refused in `lock_only`, with
+  contact on both sides, or while moving or commanded toward the obstacle.
+- **Sub-range_min returns (M3).** A finite range below `range_min` (including 0) is an obstacle at
+  `range_min` along the beam; `inf` stays free; NaN counts toward the invalid ratio. A one-time
+  WARN reports a blind spot when `range_min` overlaps the stop corridor
+  (`blind_zone_warning`).
+- **Dock reverse cap (M4).** `max_reverse = min(dock_max_speed, speed_limit(d_rear, dock_stop_margin))`,
+  so the literal AC10 case (rear obstacle at 0.03 m) yields a reverse limit of 0.04 m/s instead of
+  0.06 m/s because the braking ramp now applies.
+- **Restart (M5).** New parameter `require_reset_after_restart` (default false): when true the core
+  starts ESTOP-latched with reason `restart: reset required`. `safety/estop` has a volatile and a
+  transient_local subscription.
+- **Launch (L4).** `simulated_robot.launch.py` fails with a clear error for a `safety` value other
+  than `supervisor` or `legacy`.

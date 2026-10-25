@@ -78,6 +78,8 @@ class Config:
     max_invalid_beam_ratio: float = 0.5
     latch_faults: bool = False
     latch_on_contact: bool = True
+    contact_debounce_scans: int = 3
+    require_reset_after_restart: bool = False
     rate: float = 20.0
     status_rate: float = 5.0
     dock_approach_enabled: bool = True
@@ -221,7 +223,9 @@ def scan_to_points(ranges, angle_min, angle_increment, range_min, range_max,
     """
     Convert a LaserScan into points of the robot frame.
 
-    NaN beams count as invalid, inf and out-of-range beams are skipped.
+    NaN beams count as invalid, inf (no return) and beams beyond range_max are skipped.
+    A finite range below range_min (including 0) is an obstacle inside the sensor blind zone:
+    it is kept as a point at range_min along the beam (the farthest it can be), never dropped.
     Returns (points, invalid_ratio) with invalid_ratio = NaN beams / total beams.
     """
     points = []
@@ -232,8 +236,10 @@ def scan_to_points(ranges, angle_min, angle_increment, range_min, range_max,
         if math.isnan(r):
             invalid += 1
             continue
-        if math.isinf(r) or r < range_min or r > range_max:
+        if math.isinf(r) or r > range_max:
             continue
+        if r < range_min:
+            r = range_min
         angle = angle_min + i * angle_increment + tf_yaw
         points.append((tf_x + r * math.cos(angle), tf_y + r * math.sin(angle)))
     ratio = float(invalid) / float(total) if total > 0 else 0.0
@@ -251,11 +257,18 @@ class Evaluation:
 
 
 def evaluate_points(points, cfg):
-    """Corridor clearances, nearest obstacle and contact flags for points in the robot frame."""
+    """
+    Corridor clearances, nearest obstacle and contact flags for points in the robot frame.
+
+    The corridor (STOP/WARNING clearance) is the footprint half width plus lateral_margin wide.
+    The contact flags use only points inside the swept path (|y| <= half width, no margin).
+    """
     poly = footprint_polygon(cfg.footprint)
     x_front, x_rear, half_width = footprint_extents(poly)
     band = half_width + cfg.lateral_margin
     ev = Evaluation()
+    path_front = _INF
+    path_rear = _INF
     for x, y in points:
         if not (math.isfinite(x) and math.isfinite(y)):
             continue
@@ -271,9 +284,40 @@ def evaluate_points(points, cfg):
                 ev.front_clearance = min(ev.front_clearance, x - x_front)
             if x <= x_rear:
                 ev.rear_clearance = min(ev.rear_clearance, x_rear - x)
-    ev.contact_front = ev.front_clearance <= cfg.contact_margin
-    ev.contact_rear = ev.rear_clearance <= cfg.contact_margin
+            if abs(y) <= half_width:
+                if x >= x_front:
+                    path_front = min(path_front, x - x_front)
+                if x <= x_rear:
+                    path_rear = min(path_rear, x_rear - x)
+    ev.contact_front = path_front <= cfg.contact_margin
+    ev.contact_rear = path_rear <= cfg.contact_margin
     return ev
+
+
+def blind_zone_warning(cfg, laser_x, laser_y, range_min):
+    """
+    Describe a laser blind spot (range_min circle) overlapping a stop corridor, "" if none.
+
+    The check uses the sensor position in the robot frame and the STOP corridors (front and
+    rear, the rear one with the smaller dock_stop_margin when the dock profile is enabled).
+    """
+    poly = footprint_polygon(cfg.footprint)
+    x_front, x_rear, half_width = footprint_extents(poly)
+    band = half_width + cfg.lateral_margin
+    rear_margin = cfg.dock_stop_margin if cfg.dock_approach_enabled else cfg.stop_margin
+    areas = (("front", x_front, x_front + cfg.stop_margin),
+             ("rear", x_rear - rear_margin, x_rear))
+    parts = []
+    for name, x_lo, x_hi in areas:
+        dx = max(x_lo - laser_x, 0.0, laser_x - x_hi)
+        dy = max(abs(laser_y) - band, 0.0)
+        if math.hypot(dx, dy) < range_min:
+            parts.append(name)
+    if not parts:
+        return ""
+    return ("laser range_min %.3f m blind zone (sensor at x=%.3f, y=%.3f) overlaps the %s "
+            "stop corridor: a driver that reports no return below range_min leaves a blind "
+            "spot there" % (range_min, laser_x, laser_y, " and ".join(parts)))
 
 
 # ---------------------------------------------------------------------------------------------
@@ -381,6 +425,8 @@ def validate_config(cfg):
         return "contact_margin must be >= 0"
     if cfg.stop_margin <= cfg.contact_margin:
         return "stop_margin must be > contact_margin"
+    if cfg.contact_debounce_scans < 1:
+        return "contact_debounce_scans must be >= 1"
     if cfg.stop_release_hysteresis < 0.0:
         return "stop_release_hysteresis must be >= 0"
     if cfg.slowdown_distance <= 0.0:
@@ -504,6 +550,7 @@ class Inputs:
     cmd_age: float = -1.0             # s, negative: never
     v_cmd: float = _NAN               # m/s command (or observed command), NaN: unknown
     estop_input: bool = False
+    scan_seq: int = -1                # id of the evaluated scan, negative: every update counts
     dock_active: bool = False         # DockGate result
     dock_reason: str = ""
     tick_exception: str = ""          # non-empty: the previous tick body raised
@@ -548,6 +595,14 @@ class SafetyCore:
         self._last_contact_front = False
         self._last_contact_rear = False
         self._last_dock_active = False
+        self._last_direction = 0
+        self._last_scan_seq = None
+        self._contact_count_front = 0
+        self._contact_count_rear = 0
+        if cfg.require_reset_after_restart:
+            # An e-stop does not survive a restart: start latched until ~/reset is called
+            self._estop_latched = True
+            self._latch_reason = "restart: reset required"
 
     def shutdown(self):
         self._shutdown = True
@@ -567,10 +622,16 @@ class SafetyCore:
             return False, "estop input active"
         if self._last_problem:
             return False, "fault: " + self._last_problem
-        if self._last_contact_front:
-            return False, "obstacle in contact zone (front)"
-        if self._last_contact_rear and not self._last_dock_active:
-            return False, "obstacle in contact zone (rear)"
+        front = self._last_contact_front
+        rear = self._last_contact_rear and not self._last_dock_active
+        if front or rear:
+            # A contact (swept path, within contact_margin) allows a reset only when the speed
+            # filter keeps blocking the motion toward it and the robot can reverse out: one side
+            # only, nothing moving or commanded toward it. lock_only has no filter: refuse.
+            side = "front" if front else "rear"
+            toward = self._last_direction > 0 if front else self._last_direction < 0
+            if (self.cfg.enforcement != ENFORCEMENT_FILTER or (front and rear) or toward):
+                return False, "obstacle in contact zone (" + side + ")"
         self._estop_latched = False
         self._latch_reason = ""
         self._brake_active = False
@@ -663,8 +724,25 @@ class SafetyCore:
             # The rear margin changes with the profile: do not carry the old margin's STOP
             # hysteresis over, evaluate the rear zone afresh against the new margin
             prev_rear = ZONE_UNKNOWN
+        # Contact debounce: N consecutive evaluated scans (an unconfirmed contact is a STOP)
         if usable:
-            front_zone = zone_for(ev.front_clearance, prev_front, cfg.stop_margin, cfg)
+            if inp.scan_seq < 0 or inp.scan_seq != self._last_scan_seq:
+                self._contact_count_front = (
+                    min(self._contact_count_front + 1, cfg.contact_debounce_scans)
+                    if ev.contact_front else 0)
+                self._contact_count_rear = (
+                    min(self._contact_count_rear + 1, cfg.contact_debounce_scans)
+                    if ev.contact_rear else 0)
+            self._last_scan_seq = inp.scan_seq
+        else:
+            self._contact_count_front = 0
+            self._contact_count_rear = 0
+            self._last_scan_seq = None
+        confirmed_front = self._contact_count_front >= cfg.contact_debounce_scans
+        confirmed_rear = self._contact_count_rear >= cfg.contact_debounce_scans
+        if usable:
+            front_zone = zone_for(ev.front_clearance, prev_front, cfg.stop_margin, cfg,
+                                  confirmed_front)
             if front_zone in (ZONE_STOP, ZONE_CONTACT):
                 fwd_limit = 0.0
             else:
@@ -672,9 +750,14 @@ class SafetyCore:
             if dock_active:
                 rear_zone = zone_for(ev.rear_clearance, prev_rear, cfg.dock_stop_margin, cfg,
                                      False)
-                rev_limit = 0.0 if rear_zone == ZONE_STOP else cfg.dock_max_speed
+                if rear_zone == ZONE_STOP:
+                    rev_limit = 0.0
+                else:
+                    rev_limit = min(cfg.dock_max_speed,
+                                    speed_limit(ev.rear_clearance, cfg.dock_stop_margin, cfg))
             else:
-                rear_zone = zone_for(ev.rear_clearance, prev_rear, cfg.stop_margin, cfg)
+                rear_zone = zone_for(ev.rear_clearance, prev_rear, cfg.stop_margin, cfg,
+                                     confirmed_rear)
                 if rear_zone in (ZONE_STOP, ZONE_CONTACT):
                     rev_limit = 0.0
                 else:
@@ -695,6 +778,7 @@ class SafetyCore:
         cmd_fresh = 0.0 <= inp.cmd_age <= cfg.cmd_timeout
         v_cmd = _finite_or_nan(inp.v_cmd) if cmd_fresh else _NAN
         direction = travel_direction(v_cmd, v_odom, cfg.stopped_speed)
+        self._last_direction = direction
         odom_present = math.isfinite(v_odom)
         moving = abs(v_odom) > cfg.stopped_speed if odom_present else direction != 0
         zone_dir = ZONE_UNKNOWN

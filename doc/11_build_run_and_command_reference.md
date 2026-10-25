@@ -185,7 +185,7 @@ ros2 launch bumperbot_utils safety_supervisor.launch.py enforcement:=lock_only
 # Simulation: supervisor (default), Python node, or the legacy safety_stop node and wiring
 ros2 launch bumperbot_bringup simulated_robot.launch.py simulator:=mujoco
 ros2 launch bumperbot_bringup simulated_robot.launch.py safety_use_python:=true
-ros2 launch bumperbot_bringup simulated_robot.launch.py safety:=legacy
+ros2 launch bumperbot_bringup simulated_robot.launch.py safety:=legacy   # any other value fails the launch with an error
 
 # Inspect and operate the safety supervisor
 ros2 topic echo /safety/status

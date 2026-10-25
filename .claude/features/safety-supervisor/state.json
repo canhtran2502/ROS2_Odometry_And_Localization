@@ -1,9 +1,9 @@
 {
   "slug": "safety-supervisor",
   "title": "AGV safety supervisor",
-  "stage": "test",
-  "iteration": 2,
-  "max_iterations": 5,
+  "stage": "implement",
+  "iteration": 3,
+  "max_iterations": 8,
   "history": [
     {
       "iteration": 1,

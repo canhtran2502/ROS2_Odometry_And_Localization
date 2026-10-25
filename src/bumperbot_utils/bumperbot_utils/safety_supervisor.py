@@ -20,7 +20,8 @@ import rclpy
 from bumperbot_msgs.msg import DockStatus, SafetyStatus
 from bumperbot_utils.safety_logic import (
     Config, DockGate, ENFORCEMENT_FILTER, Evaluation, Inputs, Outputs, SafetyCore, STATE_FAULT,
-    STATE_SHUTDOWN, ZONE_UNKNOWN, evaluate_points, scan_to_points, validate_config)
+    STATE_SHUTDOWN, ZONE_UNKNOWN, blind_zone_warning, evaluate_points, scan_to_points,
+    validate_config)
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
 from rclpy._rclpy_pybind11 import RCLError
@@ -92,7 +93,8 @@ class SafetySupervisor(Node):
                      "cmd_vel_in_topic", "cmd_vel_out_topic", "lock_topic", "status_topic",
                      "estop_topic", "dock_status_topic"):
             setattr(cfg, name, self._declare(name, getattr(cfg, name), "str"))
-        for name in ("use_odom", "latch_faults", "latch_on_contact", "dock_approach_enabled"):
+        for name in ("use_odom", "latch_faults", "latch_on_contact", "dock_approach_enabled",
+                     "require_reset_after_restart"):
             setattr(cfg, name, self._declare(name, getattr(cfg, name), "bool"))
         cfg.footprint = list(self._declare("footprint", list(cfg.footprint), "float_array"))
         for name in ("lateral_margin", "stop_margin", "stop_release_hysteresis",
@@ -103,6 +105,8 @@ class SafetySupervisor(Node):
                      "dock_max_speed", "dock_stop_margin", "dock_approach_radius",
                      "dock_approach_max_time", "dock_status_timeout"):
             setattr(cfg, name, self._declare(name, getattr(cfg, name), "float"))
+        cfg.contact_debounce_scans = self._declare(
+            "contact_debounce_scans", cfg.contact_debounce_scans, "int")
         cfg.debug_inject_tick_exceptions = self._declare(
             "debug_inject_tick_exceptions", cfg.debug_inject_tick_exceptions, "int")
         return cfg
@@ -147,6 +151,8 @@ class SafetySupervisor(Node):
         self._scan_ok = False
         self._scan_pending = None
         self._evaluation = Evaluation()
+        self._evaluation_seq = 0
+        self._blind_checked = False
         self._tf = None
         self._odom_time = None
         self._odom_v = _NAN
@@ -184,7 +190,13 @@ class SafetySupervisor(Node):
         else:
             # lock_only: the command is only observed (direction of travel)
             self.create_subscription(Twist, cfg.cmd_vel_out_topic, self._on_observed_cmd, 10)
+        # Two subscriptions: volatile (any publisher) and transient_local (replays the last value
+        # of a latched publisher to a restarted supervisor)
         self.create_subscription(Bool, cfg.estop_topic, self._on_estop, 10)
+        estop_qos = QoSProfile(
+            depth=1, reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.TRANSIENT_LOCAL)
+        self.create_subscription(Bool, cfg.estop_topic, self._on_estop, estop_qos)
         dock_qos = QoSProfile(
             depth=1, reliability=ReliabilityPolicy.RELIABLE,
             durability=DurabilityPolicy.TRANSIENT_LOCAL)
@@ -265,7 +277,13 @@ class SafetySupervisor(Node):
             self._scan_invalid = "invalid scan: nan ratio %.2f" % ratio
             return
         self._evaluation = evaluate_points(points, self.cfg)
+        self._evaluation_seq += 1
         self._scan_ok = True
+        if not self._blind_checked:
+            self._blind_checked = True
+            warning = blind_zone_warning(self.cfg, self._tf[0], self._tf[1], msg.range_min)
+            if warning:
+                self.get_logger().warn(warning)
 
     def _on_odom(self, msg):
         try:
@@ -362,6 +380,7 @@ class SafetySupervisor(Node):
         inp.tf_description = "%s <- %s" % (
             cfg.robot_frame, self._scan_frame if self._scan_frame else "<scan frame>")
         inp.evaluation = self._evaluation
+        inp.scan_seq = self._evaluation_seq
         if cfg.use_odom and self._odom_time is not None:
             inp.odom_age = now - self._odom_time
             inp.v_odom = self._odom_v

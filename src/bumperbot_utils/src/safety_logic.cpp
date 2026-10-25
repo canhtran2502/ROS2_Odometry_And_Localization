@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 
 namespace bumperbot_utils
 {
@@ -261,11 +262,14 @@ ScanPoints scan_to_points(
       ++invalid;
       continue;
     }
-    if (std::isinf(r) || r < range_min || r > range_max) {
+    if (std::isinf(r) || r > range_max) {
       continue;
     }
+    // A finite range below range_min (including 0) is an obstacle inside the blind zone: keep
+    // it at range_min along the beam (the farthest it can be), never drop it
+    const double range = r < range_min ? range_min : r;
     const double angle = angle_min + static_cast<double>(i) * angle_increment + tf_yaw;
-    result.points.emplace_back(tf_x + r * std::cos(angle), tf_y + r * std::sin(angle));
+    result.points.emplace_back(tf_x + range * std::cos(angle), tf_y + range * std::sin(angle));
   }
   result.invalid_ratio =
     total > 0 ? static_cast<double>(invalid) / static_cast<double>(total) : 0.0;
@@ -278,6 +282,8 @@ Evaluation evaluate_points(const std::vector<Point> & points, const Config & cfg
   const Extents ext = footprint_extents(poly);
   const double band = ext.half_width + cfg.lateral_margin;
   Evaluation ev;
+  double path_front = kInf;
+  double path_rear = kInf;
   for (const Point & p : points) {
     const double x = p.first;
     const double y = p.second;
@@ -300,11 +306,57 @@ Evaluation evaluate_points(const std::vector<Point> & points, const Config & cfg
       if (x <= ext.x_rear) {
         ev.rear_clearance = std::min(ev.rear_clearance, ext.x_rear - x);
       }
+      // Contact flags use only points inside the swept path (|y| <= half width, no margin)
+      if (std::fabs(y) <= ext.half_width) {
+        if (x >= ext.x_front) {
+          path_front = std::min(path_front, x - ext.x_front);
+        }
+        if (x <= ext.x_rear) {
+          path_rear = std::min(path_rear, ext.x_rear - x);
+        }
+      }
     }
   }
-  ev.contact_front = ev.front_clearance <= cfg.contact_margin;
-  ev.contact_rear = ev.rear_clearance <= cfg.contact_margin;
+  ev.contact_front = path_front <= cfg.contact_margin;
+  ev.contact_rear = path_rear <= cfg.contact_margin;
   return ev;
+}
+
+std::string blind_zone_warning(
+  const Config & cfg, double laser_x, double laser_y, double range_min)
+{
+  const Polygon poly = footprint_polygon(cfg.footprint);
+  const Extents ext = footprint_extents(poly);
+  const double band = ext.half_width + cfg.lateral_margin;
+  const double rear_margin = cfg.dock_approach_enabled ? cfg.dock_stop_margin : cfg.stop_margin;
+  struct Area
+  {
+    const char * name;
+    double x_lo;
+    double x_hi;
+  };
+  const Area areas[2] = {
+    {"front", ext.x_front, ext.x_front + cfg.stop_margin},
+    {"rear", ext.x_rear - rear_margin, ext.x_rear}};
+  std::string parts;
+  for (const Area & area : areas) {
+    const double dx = std::max({area.x_lo - laser_x, 0.0, laser_x - area.x_hi});
+    const double dy = std::max(std::fabs(laser_y) - band, 0.0);
+    if (std::hypot(dx, dy) < range_min) {
+      parts += (parts.empty() ? "" : " and ") + std::string(area.name);
+    }
+  }
+  if (parts.empty()) {
+    return "";
+  }
+  char buf[320];
+  std::snprintf(
+    buf, sizeof(buf),
+    "laser range_min %.3f m blind zone (sensor at x=%.3f, y=%.3f) overlaps the %s "
+    "stop corridor: a driver that reports no return below range_min leaves a blind "
+    "spot there",
+    range_min, laser_x, laser_y, parts.c_str());
+  return buf;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -413,6 +465,9 @@ std::string validate_config(const Config & cfg)
   }
   if (cfg.stop_margin <= cfg.contact_margin) {
     return "stop_margin must be > contact_margin";
+  }
+  if (cfg.contact_debounce_scans < 1) {
+    return "contact_debounce_scans must be >= 1";
   }
   if (cfg.stop_release_hysteresis < 0.0) {
     return "stop_release_hysteresis must be >= 0";
@@ -545,6 +600,11 @@ std::pair<bool, std::string> DockGate::update(
 SafetyCore::SafetyCore(const Config & cfg)
 : cfg_(cfg)
 {
+  if (cfg_.require_reset_after_restart) {
+    // An e-stop does not survive a restart: start latched until ~/reset is called
+    estop_latched_ = true;
+    latch_reason_ = "restart: reset required";
+  }
 }
 
 void SafetyCore::shutdown()
@@ -578,11 +638,16 @@ std::pair<bool, std::string> SafetyCore::request_reset()
   if (!last_problem_.empty()) {
     return {false, "fault: " + last_problem_};
   }
-  if (last_contact_front_) {
-    return {false, "obstacle in contact zone (front)"};
-  }
-  if (last_contact_rear_ && !last_dock_active_) {
-    return {false, "obstacle in contact zone (rear)"};
+  const bool front = last_contact_front_;
+  const bool rear = last_contact_rear_ && !last_dock_active_;
+  if (front || rear) {
+    // A contact (swept path, within contact_margin) allows a reset only when the speed
+    // filter keeps blocking the motion toward it and the robot can reverse out: one side
+    // only, nothing moving or commanded toward it. lock_only has no filter: refuse.
+    const bool toward = front ? last_direction_ > 0 : last_direction_ < 0;
+    if (cfg_.enforcement != ENFORCEMENT_FILTER || (front && rear) || toward) {
+      return {false, std::string("obstacle in contact zone (") + (front ? "front" : "rear") + ")"};
+    }
   }
   estop_latched_ = false;
   latch_reason_.clear();
@@ -692,8 +757,25 @@ Outputs SafetyCore::update(double now, const Inputs & inp)
   std::string rear_zone = ZONE_UNKNOWN;
   double fwd_limit = 0.0;
   double rev_limit = 0.0;
+  // Contact debounce: N consecutive evaluated scans (an unconfirmed contact is a STOP)
   if (usable) {
-    front_zone = zone_for(ev.front_clearance, prev_front, cfg_.stop_margin, cfg_);
+    if (inp.scan_seq < 0 || !has_last_scan_seq_ || inp.scan_seq != last_scan_seq_) {
+      contact_count_front_ =
+        ev.contact_front ? std::min(contact_count_front_ + 1, cfg_.contact_debounce_scans) : 0;
+      contact_count_rear_ =
+        ev.contact_rear ? std::min(contact_count_rear_ + 1, cfg_.contact_debounce_scans) : 0;
+    }
+    has_last_scan_seq_ = true;
+    last_scan_seq_ = inp.scan_seq;
+  } else {
+    contact_count_front_ = 0;
+    contact_count_rear_ = 0;
+    has_last_scan_seq_ = false;
+  }
+  const bool confirmed_front = contact_count_front_ >= cfg_.contact_debounce_scans;
+  const bool confirmed_rear = contact_count_rear_ >= cfg_.contact_debounce_scans;
+  if (usable) {
+    front_zone = zone_for(ev.front_clearance, prev_front, cfg_.stop_margin, cfg_, confirmed_front);
     if (is_blocking(front_zone)) {
       fwd_limit = 0.0;
     } else {
@@ -701,9 +783,14 @@ Outputs SafetyCore::update(double now, const Inputs & inp)
     }
     if (dock_active) {
       rear_zone = zone_for(ev.rear_clearance, prev_rear, cfg_.dock_stop_margin, cfg_, false);
-      rev_limit = rear_zone == ZONE_STOP ? 0.0 : cfg_.dock_max_speed;
+      if (rear_zone == ZONE_STOP) {
+        rev_limit = 0.0;
+      } else {
+        rev_limit = std::min(
+          cfg_.dock_max_speed, speed_limit(ev.rear_clearance, cfg_.dock_stop_margin, cfg_));
+      }
     } else {
-      rear_zone = zone_for(ev.rear_clearance, prev_rear, cfg_.stop_margin, cfg_);
+      rear_zone = zone_for(ev.rear_clearance, prev_rear, cfg_.stop_margin, cfg_, confirmed_rear);
       if (is_blocking(rear_zone)) {
         rev_limit = 0.0;
       } else {
@@ -722,6 +809,7 @@ Outputs SafetyCore::update(double now, const Inputs & inp)
   const bool cmd_fresh = inp.cmd_age >= 0.0 && inp.cmd_age <= cfg_.cmd_timeout;
   const double v_cmd = cmd_fresh ? finite_or_nan(inp.v_cmd) : kNaN;
   const int direction = travel_direction(v_cmd, v_odom, cfg_.stopped_speed);
+  last_direction_ = direction;
   const bool odom_present = std::isfinite(v_odom);
   const bool moving = odom_present ? std::fabs(v_odom) > cfg_.stopped_speed : direction != 0;
   std::string zone_dir = ZONE_UNKNOWN;

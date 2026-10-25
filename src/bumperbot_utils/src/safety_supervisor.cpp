@@ -70,6 +70,10 @@ safety::Config SafetySupervisor::load_config()
   cfg.use_odom = declare_checked<bool>("use_odom", cfg.use_odom);
   cfg.latch_faults = declare_checked<bool>("latch_faults", cfg.latch_faults);
   cfg.latch_on_contact = declare_checked<bool>("latch_on_contact", cfg.latch_on_contact);
+  cfg.require_reset_after_restart =
+    declare_checked<bool>("require_reset_after_restart", cfg.require_reset_after_restart);
+  cfg.contact_debounce_scans =
+    declare_checked<int64_t>("contact_debounce_scans", cfg.contact_debounce_scans);
   cfg.dock_approach_enabled =
     declare_checked<bool>("dock_approach_enabled", cfg.dock_approach_enabled);
   cfg.footprint = declare_checked<std::vector<double>>("footprint", cfg.footprint);
@@ -174,8 +178,13 @@ void SafetySupervisor::setup()
     cmd_sub_ = create_subscription<geometry_msgs::msg::Twist>(
       cfg_.cmd_vel_out_topic, 10, std::bind(&SafetySupervisor::on_observed_cmd, this, _1));
   }
+  // Two subscriptions: volatile (any publisher) and transient_local (replays the last value of
+  // a latched publisher to a restarted supervisor)
   estop_sub_ = create_subscription<std_msgs::msg::Bool>(
     cfg_.estop_topic, 10, std::bind(&SafetySupervisor::on_estop, this, _1));
+  estop_latched_sub_ = create_subscription<std_msgs::msg::Bool>(
+    cfg_.estop_topic, rclcpp::QoS(1).reliable().transient_local(),
+    std::bind(&SafetySupervisor::on_estop, this, _1));
   dock_sub_ = create_subscription<bumperbot_msgs::msg::DockStatus>(
     cfg_.dock_status_topic, rclcpp::QoS(1).reliable().transient_local(),
     std::bind(&SafetySupervisor::on_dock, this, _1));
@@ -296,7 +305,16 @@ void SafetySupervisor::try_evaluate()
     return;
   }
   evaluation_ = safety::evaluate_points(result.points, cfg_);
+  ++evaluation_seq_;
   scan_ok_ = true;
+  if (!blind_checked_) {
+    blind_checked_ = true;
+    const std::string warning =
+      safety::blind_zone_warning(cfg_, tf_x_, tf_y_, msg->range_min);
+    if (!warning.empty()) {
+      RCLCPP_WARN(get_logger(), "%s", warning.c_str());
+    }
+  }
 }
 
 void SafetySupervisor::on_odom(const nav_msgs::msg::Odometry::SharedPtr msg)
@@ -419,6 +437,7 @@ safety::Inputs SafetySupervisor::build_inputs(double now)
   inp.tf_ok = has_tf_;
   inp.tf_description = cfg_.robot_frame + " <- " + (has_scan_frame_ ? scan_frame_ : "<scan frame>");
   inp.evaluation = evaluation_;
+  inp.scan_seq = evaluation_seq_;
   if (cfg_.use_odom && has_odom_) {
     inp.odom_age = now - odom_time_;
     inp.v_odom = odom_v_;

@@ -90,6 +90,8 @@ private:
   bool scan_ok_ = false;
   sensor_msgs::msg::LaserScan::SharedPtr scan_pending_;
   safety::Evaluation evaluation_;
+  int64_t evaluation_seq_ = 0;
+  bool blind_checked_ = false;
   bool has_tf_ = false;
   double tf_x_ = 0.0;
   double tf_y_ = 0.0;
@@ -124,6 +126,7 @@ private:
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
   rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr cmd_sub_;
   rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr estop_sub_;
+  rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr estop_latched_sub_;
   rclcpp::Subscription<bumperbot_msgs::msg::DockStatus>::SharedPtr dock_sub_;
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr reset_srv_;
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr estop_srv_;

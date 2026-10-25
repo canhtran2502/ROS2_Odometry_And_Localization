@@ -14,10 +14,12 @@ safety_supervisor:
     cmd_vel_in_topic: safety/cmd_vel_in
     cmd_vel_out_topic: bumperbot_controller/cmd_vel_unstamped
     # twist_mux lock "safety_stop" (priority 255). true on INITIALIZING, FAULT, ESTOP, SHUTDOWN
-    # and during a brake pulse. It stays true when the node exits or fails to start.
+    # and during a brake pulse. It stays true after a CLEAN exit (SIGINT/SIGTERM) or a failed
+    # start; after a crash (SIGKILL, segfault) the last published value stays and may be false.
     lock_topic: safety_stop
     status_topic: safety/status
-    # std_msgs/Bool, true latches the e-stop (the reset is refused while it stays true)
+    # std_msgs/Bool, true latches the e-stop (the reset is refused while it stays true).
+    # Subscribed volatile and transient_local: use a periodic or a latched publisher
     estop_topic: safety/estop
     dock_status_topic: dock/status
     # true: odometry is required (INITIALIZING / FAULT without it)
@@ -32,8 +34,15 @@ safety_supervisor:
     stop_release_hysteresis: 0.02
     # Length of the warning ramp behind the stop zone (m)
     slowdown_distance: 0.35
-    # Contact zone (m): moving toward it latches the e-stop
+    # Contact zone (m) in the swept path (|y| <= footprint half width, no lateral margin):
+    # moving toward it latches the e-stop
     contact_margin: 0.015
+    # A contact needs this many consecutive evaluated scans (noise robustness, >= 1); an
+    # unconfirmed contact is still a STOP, only the e-stop latch waits (about 3 scans)
+    contact_debounce_scans: 3
+    # true: start with the e-stop latched after every start/restart until ~/reset is called
+    # (an e-stop never survives a supervisor restart when false)
+    require_reset_after_restart: false
     # Hard speed clamp and top of the ramp (m/s), joystick turbo maximum
     max_linear_speed: 0.7
     # Hard angular clamp (rad/s), joystick angular maximum

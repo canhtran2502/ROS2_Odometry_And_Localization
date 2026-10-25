@@ -75,6 +75,8 @@ struct Config
   double max_invalid_beam_ratio = 0.5;
   bool latch_faults = false;
   bool latch_on_contact = true;
+  int64_t contact_debounce_scans = 3;
+  bool require_reset_after_restart = false;
   double rate = 20.0;
   double status_rate = 5.0;
   bool dock_approach_enabled = true;
@@ -123,6 +125,10 @@ struct Evaluation
 };
 Evaluation evaluate_points(const std::vector<Point> & points, const Config & cfg);
 
+// Describes a laser blind spot (range_min circle) overlapping a stop corridor, "" if none
+std::string blind_zone_warning(
+  const Config & cfg, double laser_x, double laser_y, double range_min);
+
 // Limits, zones, direction
 double speed_limit(double d, double margin, const Config & cfg);
 std::string zone_for(
@@ -166,6 +172,7 @@ struct Inputs
   double cmd_age = -1.0;                // s, negative: never
   double v_cmd = std::numeric_limits<double>::quiet_NaN();   // m/s, NaN: unknown
   bool estop_input = false;
+  int64_t scan_seq = -1;                // id of the evaluated scan, negative: every update counts
   bool dock_active = false;             // DockGate result
   std::string dock_reason;
   std::string tick_exception;           // non-empty: the previous tick body raised
@@ -217,6 +224,11 @@ private:
   bool last_contact_front_ = false;
   bool last_contact_rear_ = false;
   bool last_dock_active_ = false;
+  int last_direction_ = 0;
+  bool has_last_scan_seq_ = false;
+  int64_t last_scan_seq_ = 0;
+  int64_t contact_count_front_ = 0;
+  int64_t contact_count_rear_ = 0;
 };
 
 }  // namespace safety

@@ -1,10 +1,19 @@
 import os
 from launch import LaunchDescription
-from launch.actions import IncludeLaunchDescription, DeclareLaunchArgument
+from launch.actions import IncludeLaunchDescription, DeclareLaunchArgument, OpaqueFunction
 from launch.conditions import UnlessCondition, IfCondition
 from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch_ros.actions import Node
 from ament_index_python.packages import get_package_share_directory
+
+
+def check_safety_arg(context):
+    # An unknown value would silently start no twist_mux / twist_relay / lock at all
+    value = LaunchConfiguration("safety").perform(context)
+    if value not in ("supervisor", "legacy"):
+        raise RuntimeError(
+            "Invalid launch argument safety:='{}' (allowed: supervisor, legacy)".format(value))
+    return []
 
 
 def generate_launch_description():
@@ -190,6 +199,7 @@ def generate_launch_description():
     return LaunchDescription([
         use_slam_arg,
         safety_arg,
+        OpaqueFunction(function=check_safety_arg),
         safety_use_python_arg,
         use_rviz_arg,
         viewer_arg,
