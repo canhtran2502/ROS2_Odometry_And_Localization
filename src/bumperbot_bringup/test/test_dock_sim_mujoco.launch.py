@@ -265,9 +265,13 @@ class TestDockSim02E2E(DockSimBase):
                 return self.mission_states[-1][1] if self.mission_states else None
 
         self.wait_for(lambda: mission_state() == "NAVIGATING", 300.0, "mission NAVIGATING")
-        res = subprocess.run(
-            ["ros2", "param", "set", "/battery_sim", "percentage_override", str(LOW_OVERRIDE)],
-            capture_output=True, text=True, timeout=60)
+        for _ in range(4):  # the ros2 daemon may not have discovered the node yet
+            res = subprocess.run(
+                ["ros2", "param", "set", "/battery_sim", "percentage_override", str(LOW_OVERRIDE)],
+                capture_output=True, text=True, timeout=60)
+            if "Node not found" not in res.stdout + res.stderr:
+                break
+            time.sleep(2.0)
         self.assertEqual(res.returncode, 0, res.stdout + res.stderr)
 
         self.wait_for(result_future.done, 400.0, "the mission result")

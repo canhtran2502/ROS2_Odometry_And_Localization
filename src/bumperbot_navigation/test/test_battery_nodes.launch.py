@@ -44,6 +44,8 @@ FULL = BatteryState.POWER_SUPPLY_STATUS_FULL
 LATCHED = QoSProfile(depth=10, reliability=ReliabilityPolicy.RELIABLE,
                      durability=DurabilityPolicy.TRANSIENT_LOCAL)
 EXIT_CODES = []
+# Seconds after the start of a battery_monitor process until its mission subscription is live
+DISCOVERY_SETTLE = 6.0
 
 MONITOR_PARAMS = {
     "update_rate": 10.0, "battery_timeout": 1.0, "dock_retry_delay": 0.5,
@@ -55,6 +57,20 @@ MONITOR_PARAMS = {
 @launch_testing.markers.keep_alive
 def generate_test_description():
     return launch.LaunchDescription([launch_testing.actions.ReadyToTest()]), {}
+
+
+def ros2_param_set(node, name, value, attempts=4):
+    """Run `ros2 param set`, retrying only while the CLI cannot see the node yet."""
+    # The ros2 daemon may need a few seconds to discover a fresh node ("Node not found");
+    # every other result (including a rejected value) is returned at once.
+    res = None
+    for _ in range(attempts):
+        res = subprocess.run(["ros2", "param", "set", node, name, str(value)],
+                             capture_output=True, text=True, timeout=30)
+        if "Node not found" not in res.stdout + res.stderr:
+            break
+        time.sleep(2.0)
+    return res
 
 
 def wait_until(predicate, timeout, period=0.02):
@@ -130,6 +146,9 @@ class MockWorld(Node):
         self.make_cancel_service()
         self.battery_pub = self.create_publisher(BatteryState, "battery_state", 10)
         self.make_mission_publisher()
+        # mission_manager republishes its status periodically (status_rate); a single
+        # latched sample can be missed by a subscriber that is still being matched
+        self.mission_timer = self.create_timer(0.5, self.publish_mission)
         self.dock_status_pub = self.create_publisher(DockStatus, "dock/status", LATCHED)
         self.odom_pub = self.create_publisher(Odometry, "bumperbot_controller/odom", 10)
         self.create_subscription(String, "battery_monitor/state", self.on_state, LATCHED,
@@ -274,11 +293,22 @@ class MockWorld(Node):
 
     def set_mission(self, state):
         self.make_mission_publisher()
+        self.mission_state = state
+        self.publish_mission()
+
+    def publish_mission(self):
+        """Publish the current mission state (also called periodically, like mission_manager)."""
+        pub = self.mission_pub
+        state = self.mission_state
+        if pub is None or state is None or self.closing:
+            return
         msg = MissionStatus()
         msg.stamp = self.get_clock().now().to_msg()
         msg.state = state
-        self.mission_state = state
-        self.mission_pub.publish(msg)
+        try:
+            pub.publish(msg)
+        except Exception:  # the publisher may be destroyed concurrently by drop_mission_publisher
+            pass
 
     def set_dock_status(self, docked):
         msg = DockStatus()
@@ -352,9 +382,18 @@ class BatteryTestCase(unittest.TestCase):
         params = dict(MONITOR_PARAMS)
         params.update(overrides)
         self.monitor = NodeProcess("battery_monitor.py", params, self.tmp)
+        self.monitor_started = time.monotonic()
         # the monitor publishes its (transient_local) state at once
         self.assertTrue(wait_until(lambda: self.world.states() != [], 20.0),
                         "battery_monitor did not start\n" + self.monitor.log())
+
+    def wait_mission_discovery(self):
+        """Give a fresh monitor process time to discover the /mission/status publisher."""
+        # DDS may need up to ~4 s (measured) until a new subscriber receives the latched sample;
+        # a low battery before that point is a different scenario (a mission that shows up later).
+        remaining = DISCOVERY_SETTLE - (time.monotonic() - self.monitor_started)
+        if remaining > 0:
+            time.sleep(remaining)
 
     def wait_state(self, state, timeout=5.0):
         self.assertTrue(wait_until(lambda: (self.world.states() or [None])[-1] == state, timeout),
@@ -391,6 +430,7 @@ class TestBatteryMonitor(BatteryTestCase):
         w.set_battery(0.5)
         w.set_mission("NAVIGATING")
         self.wait_state("MONITORING")
+        self.wait_mission_discovery()
         w.set_battery(0.15)
         self.assertTrue(wait_until(lambda: len(w.cancel_requests) >= 1, 3.0),
                         "no CancelGoal request\n" + self.monitor.log())
@@ -502,6 +542,7 @@ class TestMissionInterlockAndWatchdogs(BatteryTestCase):
         w.set_battery(0.5)
         w.set_mission("NAVIGATING")
         self.wait_state("MONITORING")
+        self.wait_mission_discovery()
         w.set_battery(0.15)
 
     def cancel_times(self):
@@ -595,7 +636,7 @@ class TestMissionInterlockAndWatchdogs(BatteryTestCase):
         w.set_battery(0.5)
         w.set_mission("NAVIGATING")
         self.wait_state("MONITORING")
-        time.sleep(0.5)
+        self.wait_mission_discovery()
         t_drop = time.monotonic()
         w.drop_mission_publisher()
         time.sleep(1.0)
@@ -632,6 +673,7 @@ class TestMissionInterlockAndWatchdogs(BatteryTestCase):
         self.wait_state("DOCKING")
         time.sleep(1.0)
         self.assertEqual(w.cancel_requests, [])
+        self.wait_mission_discovery()
         t_mission = time.monotonic()
         w.set_mission("NAVIGATING")
         self.assertTrue(wait_until(lambda: len(self.cancel_times()) >= 1, 2.0),
@@ -654,6 +696,7 @@ class TestMissionInterlockAndWatchdogs(BatteryTestCase):
         self.dock_to_charging()
         time.sleep(1.0)
         self.assertEqual(w.cancel_requests, [])
+        self.wait_mission_discovery()
         w.set_mission("NAVIGATING")
         self.assertTrue(wait_until(lambda: len(self.cancel_times()) >= 3, 5.0),
                         "no repeated cancel during CHARGING\n" + self.monitor.log())
@@ -780,6 +823,80 @@ class TestMissionInterlockAndWatchdogs(BatteryTestCase):
         self.wait_state("MONITORING")
 
 
+# ====================================================================== AC16 (exception safety)
+class TestUpdateExceptionSafety(BatteryTestCase):
+    """An exception inside one update tick is logged and the periodic loop keeps running."""
+
+    def run_in_process(self, break_target):
+        from rclpy.executors import SingleThreadedExecutor
+
+        from bumperbot_navigation.battery_monitor import BatteryMonitor
+
+        node = BatteryMonitor()
+        errors = []
+        real_get_logger = node.get_logger
+
+        class Recorder:
+            def __init__(self, inner):
+                self.inner = inner
+
+            def error(self, msg, *args, **kwargs):
+                errors.append(msg)
+                return self.inner.error(msg, *args, **kwargs)
+
+            def __getattr__(self, name):
+                return getattr(self.inner, name)
+
+        node.get_logger = lambda: Recorder(real_get_logger())
+        calls = {"n": 0, "after": 0}
+        original = None if break_target == "logic.update" else getattr(node, break_target)
+        if break_target == "logic.update":
+            original = node.logic.update
+
+            def broken(*args, **kwargs):
+                calls["n"] += 1
+                if calls["n"] <= 2:
+                    raise RuntimeError("injected failure {}".format(calls["n"]))
+                calls["after"] += 1
+                return original(*args, **kwargs)
+            node.logic.update = broken
+        else:
+            def broken(*args, **kwargs):
+                calls["n"] += 1
+                if calls["n"] <= 2:
+                    raise RuntimeError("injected failure {}".format(calls["n"]))
+                calls["after"] += 1
+                return original(*args, **kwargs)
+            setattr(node, break_target, broken)
+        executor = SingleThreadedExecutor()
+        executor.add_node(node)
+        thread = threading.Thread(target=executor.spin, daemon=True)
+        thread.start()
+        try:
+            ok = wait_until(lambda: calls["after"] >= 2, 15.0)
+            alive = thread.is_alive()
+        finally:
+            executor.shutdown()
+            thread.join(timeout=5)
+            node.destroy_node()
+        return ok, alive, errors, calls
+
+    def test_exception_in_logic_update_is_logged_and_the_monitor_keeps_running(self):
+        ok, alive, errors, calls = self.run_in_process("logic.update")
+        self.assertTrue(ok, "ticks after the injected failures never ran: {}".format(calls))
+        self.assertTrue(alive, "the spin thread ended")
+        self.assertGreaterEqual(
+            len([e for e in errors if "injected failure" in e]), 2, errors)
+        self.assertTrue(any("Battery monitor update failed" in e for e in errors), errors)
+
+    def test_exception_in_stale_check_is_logged_and_the_update_continues(self):
+        ok, alive, errors, calls = self.run_in_process("check_stale_mission")
+        self.assertTrue(ok, "ticks after the injected failures never ran: {}".format(calls))
+        self.assertTrue(alive, "the spin thread ended")
+        self.assertGreaterEqual(
+            len([e for e in errors if "Stale mission check failed" in e]), 2, errors)
+
+
 # ====================================================================== AC17
 class TestBatterySim(BatteryTestCase):
 
@@ -850,18 +967,14 @@ class TestBatterySim(BatteryTestCase):
         self.start_sim(initial_percentage=0.8)
         self.assertTrue(wait_until(lambda: w.battery_samples[-1][1] > 0.7, 3.0))
         t0 = time.monotonic()
-        res = subprocess.run(
-            ["ros2", "param", "set", "/battery_sim", "percentage_override", "0.1"],
-            capture_output=True, text=True, timeout=30)
+        res = ros2_param_set("/battery_sim", "percentage_override", 0.1)
         self.assertEqual(res.returncode, 0, res.stdout + res.stderr)
         self.assertIn("successful", res.stdout.lower())
         self.assertTrue(wait_until(lambda: abs(w.battery_samples[-1][1] - 0.1) <= 0.01, 1.0),
                         "last percentage {}".format(w.battery_samples[-1][1]))
         self.assertLessEqual(time.monotonic() - t0, 30.0)
         # an out-of-range value is rejected and the charge stays
-        res = subprocess.run(
-            ["ros2", "param", "set", "/battery_sim", "percentage_override", "5.0"],
-            capture_output=True, text=True, timeout=30)
+        res = ros2_param_set("/battery_sim", "percentage_override", 5.0)
         self.assertNotIn("successful", res.stdout.lower().replace("set parameter failed", ""))
         time.sleep(1.2)
         self.assertLess(w.battery_samples[-1][1], 0.2)

@@ -138,3 +138,68 @@ t=1 CANCEL, t=5 none, t=10.9 CANCEL, t=11 SEND_DOCK (the dock-anyway timeout its
 Launch-test durations vs registered TIMEOUT (ctest): test_dock_manager 621 s / 900 (margin 31 %; was 439 s before 14 new launch tests, no change needed, but it is above the 25 % line only narrowly: a further 40 s of tests would need a larger TIMEOUT);
 test_battery_nodes 150 s / 400 (62 %); test_dock_robustness 218 s / 600 (64 %); test_dock_twist_mux 23 s / 180; test_dock_sim_mujoco 6 s (AC25: 51 s) / 1200.
 No TIMEOUT changed.
+
+# Test report: iteration 3 (fix of UnboundLocalError in battery_monitor.check_stale_mission, exception-safe update())
+Verdict: PASS   (27/27 items: AC1-AC25 PASS, review-fix checks PASS, gate green after test-side flake fixes; see Flakes)
+
+Environment: `rm -rf build install log`, `colcon build --cmake-force-configure --packages-up-to ...` (no --symlink-install),
+`PYTEST_DISABLE_PLUGIN_AUTOLOAD=1`, `ROS_DOMAIN_ID=90`, `ROS_LOCALHOST_ONLY=1` (AC24/AC25 on domain 91). All 22 navigation ctest entries and
+8 bringup entries are registered (listed with `ctest -N`; mujoco pytest `test_sim_core`, `test_shutdown_signals` run via colcon pytest).
+
+## Review of the interrupted edit (uncommitted `test_battery_nodes.launch.py`)
+Kept. It adds `TestUpdateExceptionSafety` (2 tests): an in-process `BatteryMonitor` with (a) `logic.update` or (b) `check_stale_mission`
+replaced by a wrapper that raises `RuntimeError("injected failure n")` on the first 2 calls and delegates afterwards. A `SingleThreadedExecutor`
+spins it in a thread; the tests assert that calls after the failures do run (the periodic loop survives), the spin thread is alive, and that
+the errors are logged ("Battery monitor update failed: injected failure 1/2", "Stale mission check failed: injected failure 1/2").
+Both are deterministic, headless, and fail on the iteration-2 code (an exception in the timer callback ends the spin thread, so the
+post-failure calls never happen). Both pass (see gate log lines "Battery monitor update failed: injected failure 1", "... 2",
+"Stale mission check failed: injected failure 1", "... 2"). Test total 737 -> 739. No product file touched; no test weakened.
+
+## M4 regression check
+`test_latched_mission_without_publisher_is_ignored_after_5_s` (failed in iteration 2) PASSES; `test_latched_mission_with_a_publisher_is_not_stale` PASSES.
+
+## Gate results
+| Run | Result | Notes |
+|---|---|---|
+| Gate 1 (unmodified tests) | 739 tests, 0 errors, 0 failures, 14 skipped | all green, lint included |
+| Gate 2 (unmodified tests) | 739 tests, 3 failures (all `test_battery_nodes`) | flakes, see below |
+| Gate 3 (after test fixes) | 740 tests, only failures: 2x pep257 D213 in my new docstrings (ctest 1 + xunit 2) | fixed; pep257/flake8/uncrustify/cppcheck/lint_cmake/xmllint rerun: 6/6 pass; `test_battery_nodes` rerun via ctest: Passed (199 s). The full gate was NOT run a 4th time (only docstrings/comments changed after gate 3) |
+| `test_parameter_parity_runtime` [cpp],[py] | passed in gates 1, 2, 3 | 0 flakes in 3 gate runs (6/6) |
+| AC24 (`test_stack_up`) | PASS | every E2E run |
+| AC25 (BUMPERBOT_DOCK_E2E=1, domain 91) | 5 of 6 first runs passed (1 flake before the fix), then 3 of 3 after the fix | dock outcome 0 (docked), undock outcome 1 (undocked), 48.8-51.2 s |
+
+## Flakes (precise counts) and test-side fixes (tests only, no product file touched; stated explicitly)
+1. `ros2 param set ... "Node not found"` (ros2 CLI/daemon not yet seeing a fresh node): `test_battery_nodes::test_percentage_override_via_ros2_param`
+   failed 1x in gate 2 and 1x in a standalone run; AC25 `test_low_battery_dock_charge_undock` failed 1x of 6. Test-side fragility
+   (the old tests called the CLI once). Fix: retry only while the output contains "Node not found" (`ros2_param_set()` helper, 4 attempts;
+   the same loop in `test_dock_sim_mujoco.launch.py`). Any other error or a rejected value is still returned/asserted at once.
+2. Mission status latency in `test_battery_nodes` (M4/M2 tests: `test_cancel_is_repeated_while_the_mission_stays_active`,
+   `test_cancel_service_not_ready_is_retried`, `test_refused_cancel_response_is_checked_and_retried`, `test_mission_cancel_timeout_...`,
+   `test_latched_mission_with_a_publisher_is_not_stale`): failed 2 tests in gate 2 (0 in gate 1); standalone: 3/6, 3/6 and 3/12 runs failed
+   depending on variant, full-file runs failed 3 of 3 once in a row. Cause: a freshly started `battery_monitor` process receives the latched
+   `/mission/status` sample only after up to ~4 s (DDS reader-side discovery; the mock saw subscription count 1 immediately, and a 1 s
+   settle still failed 2 of 8, a 6 s settle 0 of 10). The tests lowered the battery 0.1 s after the monitor start, so the monitor
+   legitimately docked without having seen the mission (then M2 cancel only arrived about 4 s later, past the test windows). No product
+   fault found: the monitor behaves as specified (the cancel does arrive late). Fix: `wait_mission_discovery()` (DISCOVERY_SETTLE = 6 s after
+   the monitor start) before the low-battery step / before a mission is published in the tests that depend on the monitor having seen the
+   previous status; the mock `MockWorld` also republishes the current mission status every 0.5 s like `mission_manager` (`status_rate`).
+   No assertion was weakened or removed. After the fix: `test_battery_nodes` 3 of 3 full runs pass in standalone, 1 gate run and 1 ctest run
+   pass (5 of 5). Real-robot note: no change needed, but the ~4 s DDS discovery delay of a latched topic is a known property.
+3. Gate 3 lint: my own two new docstrings violated pep257 D213; fixed.
+
+## Launch-test durations vs registered TIMEOUT (gate 3 unless noted)
+| Test | Duration | TIMEOUT | Margin |
+|---|---|---|---|
+| test_dock_manager (cpp+py) | 626 s (gate 1: 619, gate 2: 629) | 900 | 30 % (>= 25 %, OK; tight if 40-60 s more tests are added) |
+| test_battery_nodes | 197.5 s (was 150 s before the settle waits; +48 s) | 400 | 51 % |
+| test_dock_robustness | 221 s | 600 | 63 % |
+| test_mission_manager | 249 s | 420 | 41 % |
+| test_mission_review_fixes | 203 s | 360 | 44 % |
+| test_dock_twist_mux | 23 s | 180 | 87 % |
+| test_dock_sim_mujoco (AC24 only) | 5.4 s; AC25 E2E 49-51 s | 1200 | 99 % |
+No TIMEOUT changed.
+
+## Observations
+- `joy_teleop` (third-party) still prints `rcl_shutdown already called` on launch shutdown; unrelated.
+- Build: `build/ install/ log/` removed, `colcon build --cmake-force-configure --packages-up-to <5 pkgs>` (no --symlink-install; 10 packages). `--packages-select` alone
+  fails on missing dependency `package.sh` of bumperbot_description/bumperbot_mapping after a clean install, so dependencies must be built too.
