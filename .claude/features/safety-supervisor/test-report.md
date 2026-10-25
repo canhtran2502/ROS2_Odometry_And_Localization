@@ -89,3 +89,76 @@ side changed, the intent ("that feature did not change the launch files") is kep
 - suggested fix: reset `prev_rear` (or ignore hysteresis) in the tick where the dock profile switches on, or
   use `dock_stop_margin` as hysteresis base when the profile is active; or change the plan example to > 0.03 m.
 - the other AC10 checks use 0.04 m (outside the hysteresis band) and pass for both implementations.
+
+---
+
+# Test report: iteration 2
+
+Verdict: PASS   (20/20: AC1-AC19 plus the full-suite gate as one item)
+
+Build: `rm -rf build install log; PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 colcon build --packages-up-to bumperbot_bringup bumperbot_mujoco bumperbot_utils --cmake-force-configure`
+(no `--symlink-install`, 10 packages, OK). Gate: `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 colcon test --executor sequential --packages-select bumperbot_msgs bumperbot_utils bumperbot_navigation bumperbot_mujoco bumperbot_bringup`
+then `colcon test-result --verbose`: **1127 tests, 0 errors, 0 failures, 21 skipped** (skips are the opt-in E2Es).
+Not committed.
+
+## Test changes (nothing weakened)
+All edits are in test files only; product code untouched.
+- (a) `test/data/safety_cases.yaml`: corridor half width is now 0.125 + 0.03 = 0.155 (was 0.09 + 0.03 = 0.12). The points moved
+  by the same offset (+0.035) so every case keeps the same distance to the corridor edge, the same inside/outside intent and
+  the same expected values:
+  `eval_side_point_outside_both_corridors` (0, 0.25) -> (0, 0.285), expect nearest_distance 0.16 unchanged (0.285 - 0.125);
+  `eval_inside_corridor_edge` (0.2, 0.119) -> (0.2, 0.154) (1 mm inside, front_clearance 0.1 unchanged);
+  `eval_outside_corridor_edge` (0.2, 0.121) -> (0.2, 0.156) (1 mm outside, front_clearance inf unchanged);
+  `eval_corner_outside_corridor_nearest` (0.12, 0.15) -> (0.12, 0.185), nearest 0.0632455532 unchanged (same offset to the new corner (0.10, 0.125));
+  `eval_lateral_margin_zero_narrows_the_corridor` (0.2, 0.10) -> (0.2, 0.135) (margin 0: corridor 0.125, point 10 mm outside, inf unchanged).
+  The inside-edge case was not in the requested list but would have lost its edge meaning, so it was moved too.
+- (b) New footprint `[0.10, 0.125, 0.10, -0.125, -0.10, -0.125, -0.10, 0.125]` expected in `PLAN_DEFAULTS`
+  (`test_safety_static.py`, used by `test_static_python_defaults_equal_plan_and_yaml`, `test_static_cpp_defaults_equal_plan`,
+  `test_parameter_parity_runtime`), `test_default_config_is_valid_and_matches_the_plan_defaults` (`test_safety_logic.py`) and gtest `DefaultConfigIsValid`.
+  New test `test_static_plan_table_footprint_matches_defaults_and_covers_wheels` parses the footprint row of the (corrected) plan table,
+  requires it to equal the defaults and the half width >= 0.118 m (wheel extent, AC4).
+- (c) `test_static_safety_stop_legacy_unchanged_by_the_feature` no longer uses `git diff HEAD`. It finds the parent of the
+  `feat(safety-supervisor): plan architecture` commit (feature base) and requires: `ast.dump` of `safety_stop.py` equal base vs worktree;
+  `safety_stop.cpp` equal base vs worktree after stripping all whitespace; the legacy `add_executable(safety_stop` and `/safety_stop.py`
+  install tokens still present in `CMakeLists.txt`. Stricter than before for behavior (the old test only checked "no uncommitted change"),
+  and it now tolerates the formatting-only commit. Note: the C++ comparison is whitespace-insensitive but does include comments and the
+  formatting commit changed only whitespace, which passed.
+- AC10 literal case, both impls: `test_dock_profile_plan_scenario` (rear obstacle 0.03 m, STOP under the normal margin, then DOCKING, output -0.06) kept,
+  refactored into `check_dock_engage_from_stop`; new `test_dock_profile_engage_at_old_hysteresis_boundary`: obstacle first at 0.03 m (STOP), moved to the
+  old hysteresis boundary where only the normal margin's hysteresis (stop_margin + stop_release_hysteresis = 0.07 m) holds STOP, precondition asserted
+  (rear_zone STOP), then DOCKING, output -0.06. Note: exactly 0.07 m cannot be tested: scan ranges are float32, 0.07 arrives as 0.0700000077
+  and the zone already leaves STOP before docking (first attempt of this test failed for that reason, a test-setup issue, not a product defect), so
+  0.069 m (1 mm inside the band) is used.
+
+## Results
+| AC | Test | Result | Evidence |
+|---|---|---|---|
+| AC1 | `test_safety_static.py -k interfaces` | PASS | unchanged |
+| AC2 | `test_safety_logic.py` + gtest `test_safety_logic_cpp` with the moved cases | PASS | both pass with the shared table (0.34 s / 0.06 s) |
+| AC3 | `test_safety_robustness.py` | PASS | 84 s, includes the 15 invalid files and defaults |
+| AC4 | `test_safety_supervisor_sim.py` (footprint AABB incl. wheels, laser pose, mock/sim agreement) | PASS | the iteration 1 failure is gone: wheel AABB y +-0.1181 is inside +-0.125; part of the mujoco package, 0 failures |
+| AC5-AC9, AC11, AC12 | `test_safety_supervisor.launch.py` [cpp,py] | PASS | 18 tests per impl, OK (`launch_test` 121 s / 127 s) |
+| AC10 | `test_dock_profile_*` [cpp,py] incl. plan scenario 0.03 m and old hysteresis boundary | PASS | -0.06 output after DOCKING for both impls; fallbacks, time limit, latency pass |
+| AC13 | `test_safety_twist_mux.launch.py` | PASS | 52.6 s |
+| AC14 | `test_safety_launch_config.py` | PASS | 5.0 s |
+| AC15 | `test_safety_static.py` + `test_parameter_parity_runtime` | PASS | defaults py == C++ == YAML == plan (new footprint) |
+| AC16 | `test_safety_supervisor_sim.py::test_a..test_e` | PASS | with the wider footprint |
+| AC17 | regression: all explore/mission/dock/navigation/mujoco tests | PASS | 0 failures in the gate (navigation 26 min 24 s) |
+| AC18 | `test_safety_sim_mujoco.launch.py` smoke | PASS | OK (1.0 s test time) |
+| AC18 | same, `BUMPERBOT_SAFETY_E2E=1` | PASS | 2 tests OK in 30 s, front clearance at rest 0.0346 m |
+| AC19 | `test_safety_docs.py` + `test_dock_docs.py` | PASS | passed in the gate |
+| Gate | colcon test of the 5 gate packages | PASS | 1127 tests, 0 failures; legacy lint (flake8, uncrustify, lint_cmake) in bumperbot_utils now passes |
+
+Note (out of scope): `bumperbot_mapping` and `bumperbot_controller` were not run (pre-existing lint failures, untouched by the feature).
+
+## Durations vs registered TIMEOUT
+| Test | Duration | TIMEOUT |
+|---|---|---|
+| test_safety_logic_cpp / test_safety_logic / static / docs | 0.06 / 0.34 / 1.7 / 0.16 s | 120 |
+| test_safety_robustness | 84 s | 600 |
+| test_safety_supervisor (launch, 18 x 2) | 251 s | 900 |
+| test_safety_launch_config | 5.0 s | 180 |
+| test_safety_twist_mux | 52.6 s | 300 |
+| test_safety_sim_mujoco (smoke) | 2.2 s (E2E run 31 s) | 900 |
+| test_auto_explore_mujoco / test_dock_sim_mujoco / test_mission_sim_mujoco | 23 / 7.5 / 8.2 s | 180 / 1200 / 900 |
+(the registered values for the older tests are from iteration 1; no test is near its TIMEOUT.)

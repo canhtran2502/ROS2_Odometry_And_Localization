@@ -146,7 +146,7 @@ PLAN_DEFAULTS = {
     "cmd_vel_out_topic": "bumperbot_controller/cmd_vel_unstamped", "lock_topic": "safety_stop",
     "status_topic": "safety/status", "estop_topic": "safety/estop",
     "dock_status_topic": "dock/status", "use_odom": True,
-    "footprint": [0.10, 0.09, 0.10, -0.09, -0.10, -0.09, -0.10, 0.09],
+    "footprint": [0.10, 0.125, 0.10, -0.125, -0.10, -0.125, -0.10, 0.125],
     "lateral_margin": 0.03, "stop_margin": 0.05, "stop_release_hysteresis": 0.02,
     "slowdown_distance": 0.35, "contact_margin": 0.015, "max_linear_speed": 0.7,
     "max_angular_speed": 5.0, "response_time": 0.3, "max_decel": 0.5, "stopped_speed": 0.02,
@@ -226,8 +226,62 @@ def test_static_both_nodes_declare_the_same_parameters():
         assert "declare_parameter" in text
 
 
+def plan_commit_parent():
+    """Return the commit before the safety-supervisor plan commit (the feature base)."""
+    log = subprocess.run(
+        ["git", "log", "--format=%H", "--", ".claude/features/safety-supervisor/plan.md"],
+        cwd=ROOT, capture_output=True, text=True).stdout.split()
+    assert log, "plan commit not found"
+    res = subprocess.run(["git", "rev-parse", log[-1] + "^"], cwd=ROOT, capture_output=True,
+                         text=True)
+    assert res.returncode == 0, res.stderr
+    return res.stdout.strip()
+
+
+def git_show(commit, rel):
+    res = subprocess.run(["git", "show", "{}:{}".format(commit, rel)], cwd=ROOT,
+                         capture_output=True, text=True)
+    assert res.returncode == 0, res.stderr
+    return res.stdout
+
+
 def test_static_safety_stop_legacy_unchanged_by_the_feature():
-    res = subprocess.run(
-        ["git", "diff", "--quiet", "HEAD", "--", "src/bumperbot_utils/src/safety_stop.cpp",
-         "src/bumperbot_utils/bumperbot_utils/safety_stop.py"], cwd=ROOT)
-    assert res.returncode == 0, "the legacy safety_stop node was modified"
+    """Legacy node is behaviorally identical to the feature base (formatting may differ)."""
+    base = plan_commit_parent()
+    py_rel = "src/bumperbot_utils/bumperbot_utils/safety_stop.py"
+    cpp_rel = "src/bumperbot_utils/src/safety_stop.cpp"
+    import ast
+    old_ast = ast.dump(ast.parse(git_show(base, py_rel)))
+    with open(os.path.join(ROOT, py_rel)) as f:
+        new_ast = ast.dump(ast.parse(f.read()))
+    assert old_ast == new_ast, "safety_stop.py differs from the feature base {}".format(base)
+    # Whitespace-insensitive token comparison: comments and string literals aside, formatting
+    # only changes whitespace. Trailing commas or line wrapping inside strings would show up here.
+    old_cpp = re.sub(r"\s+", "", git_show(base, cpp_rel))
+    with open(os.path.join(ROOT, cpp_rel)) as f:
+        new_cpp = re.sub(r"\s+", "", f.read())
+    assert old_cpp == new_cpp, "safety_stop.cpp differs from the feature base {}".format(base)
+    # CMake: the legacy install rules are still present (the install( formatting may differ)
+    with open(os.path.join(ROOT, "src/bumperbot_utils/CMakeLists.txt")) as f:
+        cmake = f.read()
+    old = git_show(base, "src/bumperbot_utils/CMakeLists.txt")
+    tokens = re.findall(r"/safety_stop\.py|add_executable\(safety_stop\b", old)
+    assert len(tokens) == 2, tokens
+    for token in tokens:
+        assert token in cmake, "legacy CMake token lost: " + token
+
+
+def plan_table_footprint():
+    with open(os.path.join(ROOT, ".claude/features/safety-supervisor/plan.md")) as f:
+        for line in f:
+            if line.startswith("| `footprint`"):
+                inner = re.search(r"`\[([^`]*)\]`", line).group(1)
+                return [float(x) for x in inner.split(",")]
+    raise AssertionError("footprint row not found in the plan")
+
+
+def test_static_plan_table_footprint_matches_defaults_and_covers_wheels():
+    fp = plan_table_footprint()
+    assert fp == PLAN_DEFAULTS["footprint"]
+    half_width = max(abs(y) for y in fp[1::2])
+    assert half_width >= 0.118, "footprint must contain the wheel collision extent 0.118 m"

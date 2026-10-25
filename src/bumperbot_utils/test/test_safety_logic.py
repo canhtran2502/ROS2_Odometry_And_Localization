@@ -201,6 +201,6 @@ def test_table_is_complete():
 def test_default_config_is_valid_and_matches_the_plan_defaults():
     cfg = sl.Config()
     assert sl.validate_config(cfg) == ""
-    assert cfg.footprint == [0.10, 0.09, 0.10, -0.09, -0.10, -0.09, -0.10, 0.09]
+    assert cfg.footprint == [0.10, 0.125, 0.10, -0.125, -0.10, -0.125, -0.10, 0.125]
     assert (cfg.stop_margin, cfg.slowdown_distance, cfg.contact_margin) == (0.05, 0.35, 0.015)
     assert (cfg.dock_max_speed, cfg.dock_stop_margin) == (0.06, 0.01)

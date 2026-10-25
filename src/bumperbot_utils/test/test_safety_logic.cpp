@@ -448,7 +448,7 @@ TEST(SafetyLogicCases, DefaultConfigIsValid)
 {
   const sf::Config cfg;
   EXPECT_EQ(sf::validate_config(cfg), "");
-  const std::vector<double> fp = {0.10, 0.09, 0.10, -0.09, -0.10, -0.09, -0.10, 0.09};
+  const std::vector<double> fp = {0.10, 0.125, 0.10, -0.125, -0.10, -0.125, -0.10, 0.125};
   EXPECT_EQ(cfg.footprint, fp);
 }
 

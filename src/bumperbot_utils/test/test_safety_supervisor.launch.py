@@ -574,17 +574,25 @@ class TestSafetySupervisor(SafetyNodeBase):
             w.set_cmd(cmd)
         return prep
 
-    def test_dock_profile_plan_scenario(self, impl):
+    def check_dock_engage_from_stop(self, impl, rear, start=None):
         """
-        AC10 (a) with the plan's literal numbers: rear obstacle 0.03 m, input -0.15.
+        Rear obstacle at `rear` m, rear zone STOP under the normal margin, then DOCKING.
 
-        The node first runs with the normal rear protection (UNDOCKED, rear zone STOP), then the
-        dock status changes to DOCKING.
+        With `start` the obstacle first sits at `start` m (STOP), then moves to `rear`, where
+        only the STOP hysteresis of the normal margin keeps the zone in STOP.
+
+        The old margin's STOP hysteresis must not be carried over: the output is -0.06.
         """
         w = self.world
-        with self.scenario(impl, prep=self.dock_prep(state="UNDOCKED", rear=0.03)):
+        first = rear if start is None else start
+        with self.scenario(impl, prep=self.dock_prep(state="UNDOCKED", rear=first)):
             time.sleep(1.5)
             self.assertEqual(w.last_status().rear_zone, "STOP")
+            if start is not None:
+                w.set_obstacles([rear_pt(rear)])
+                time.sleep(1.5)
+                st = w.last_status()
+                self.assertEqual(st.rear_zone, "STOP", "hysteresis precondition: {}".format(st))
             w.set_dock("DOCKING", (0.0, 0.0))
             w.publish_dock_now()
             got = w.wait_status(lambda m: m.state == "DOCK_APPROACH", 3.0)
@@ -592,8 +600,29 @@ class TestSafetySupervisor(SafetyNodeBase):
             time.sleep(1.5)
             values = self.window(1.0)
             self.assertTrue(values and all(abs(v + 0.06) < 1e-6 for v in values),
-                            "rear obstacle at 0.03 m: output {} status {}".format(
-                                sorted(set(values)), w.last_status()))
+                            "rear obstacle at {} m: output {} status {}".format(
+                                rear, sorted(set(values)), w.last_status()))
+
+    def test_dock_profile_plan_scenario(self, impl):
+        """
+        AC10 (a) with the plan's literal numbers: rear obstacle 0.03 m, input -0.15.
+
+        The node first runs with the normal rear protection (UNDOCKED, rear zone STOP), then the
+        dock status changes to DOCKING.
+        """
+        self.check_dock_engage_from_stop(impl, 0.03)
+
+    def test_dock_profile_engage_at_old_hysteresis_boundary(self, impl):
+        """
+        AC10 (a): rear obstacle exactly at the old STOP hysteresis boundary.
+
+        Normal margin 0.05 + stop_release_hysteresis 0.02 = 0.07 m. Scan ranges are float32, so
+        0.07 m arrives as 0.0700000077 and already leaves STOP; 1 mm inside the band is used. The
+        obstacle is held in STOP by the old margin only, the dock profile must still give -0.06
+        right after engaging.
+        """
+        boundary = CFG.stop_margin + CFG.stop_release_hysteresis - 0.001
+        self.check_dock_engage_from_stop(impl, boundary, start=0.03)
 
     def test_dock_profile_active(self, impl):
         """AC10 (a): bounded rear profile with unchanged front protection."""
