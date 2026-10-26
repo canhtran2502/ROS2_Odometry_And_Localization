@@ -35,7 +35,8 @@ bumperbot_ws/
     │   └── launch/
     │       ├── real_robot.launch.py                   # Physical AMR hardware launch
     │       ├── simulated_robot.launch.py              # Full simulation bringup (Gazebo/MuJoCo, RViz/SLAM/AMCL)
-    │       └── auto_explore.launch.py                 # SLAM + frontier_explorer autonomous exploration
+    │       ├── auto_explore.launch.py                 # SLAM + frontier_explorer autonomous exploration
+    │       └── mission_sim.launch.py                  # Simulator + AMCL + Nav2 + mission_manager (AGV missions)
     │
     ├── bumperbot_controller/                          # Kinematics, odometry, velocity multiplexing
     │   ├── CMakeLists.txt
@@ -164,13 +165,36 @@ bumperbot_ws/
     │       ├── __init__.py
     │       └── safety_stop.py                         # Python 2-tier reactive safety supervisor node
     │
+    ├── bumperbot_navigation/                          # Nav2 configuration + AGV waypoint mission manager
+    │   ├── CMakeLists.txt
+    │   ├── package.xml
+    │   ├── include/bumperbot_navigation/
+    │   │   ├── mission_logic.hpp                      # C++ pure mission logic API (no rclcpp)
+    │   │   └── mission_manager.hpp                    # C++ mission_manager node class
+    │   ├── src/
+    │   │   ├── mission_logic.cpp                      # Station loading (yaml-cpp) + MissionTracker
+    │   │   └── mission_manager.cpp                    # C++ /execute_mission server + Nav2 client
+    │   ├── bumperbot_navigation/
+    │   │   ├── mission_logic.py                       # Python twin of mission_logic.cpp (no rclpy)
+    │   │   └── mission_manager.py                     # Python twin of mission_manager.cpp
+    │   ├── config/
+    │   │   ├── stations.yaml                          # Named stations on small_house, incl. the dock
+    │   │   ├── mission_manager.yaml                   # mission_manager parameters
+    │   │   └── nav2_params.yaml                       # Nav2 parameters for BumperBot
+    │   ├── launch/
+    │   │   └── navigation.launch.py                   # Nav2 servers + lifecycle manager
+    │   └── test/                                      # Unit, launch and static tests + shared test data
+    │
     ├── bumperbot_msgs/                                # Custom ROS 2 IDL interface definitions
     │   ├── CMakeLists.txt
     │   ├── package.xml
     │   ├── srv/
     │   │   ├── AddTwoInts.srv                         # Standard arithmetic request/response
     │   │   └── GetTransform.srv                       # TF lookup service returning TransformStamped
+    │   ├── msg/
+    │   │   └── MissionStatus.msg                      # /mission/status of the mission manager
     │   └── action/
+    │       ├── ExecuteMission.action                  # Ordered station mission (goal/feedback/result)
     │       └── Fibonacci.action                       # Asynchronous iterative goal/feedback/result
     │
     ├── bumperbot_cpp_examples/                        # C++ rclcpp pedagogical reference implementations
@@ -259,7 +283,7 @@ The repository dependencies form a clean layered architecture without circular r
 
 | Package | Build Tool | Direct Workspace Dependencies | Primary External Dependencies |
 |---|---|---|---|
-| `bumperbot_msgs` | `ament_cmake` | None | `rosidl_default_generators`, `geometry_msgs` |
+| `bumperbot_msgs` | `ament_cmake` | None | `rosidl_default_generators`, `geometry_msgs`, `builtin_interfaces` |
 | `bumperbot_description` | `ament_cmake` | None | `urdf`, `xacro`, `ros_gz_sim`, `ros_gz_bridge` |
 | `bumperbot_controller` | `ament_cmake` | None | `rclcpp`, `rclpy`, `geometry_msgs`, `sensor_msgs`, `nav_msgs`, `tf2`, `tf2_ros`, `Eigen3`, `diff_drive_controller` |
 | `bumperbot_mujoco` | `ament_python` | `bumperbot_description`, `bumperbot_controller` | `rclpy`, `sensor_msgs`, `topic_based_ros2_control`, `mujoco` (pip) |
@@ -267,7 +291,8 @@ The repository dependencies form a clean layered architecture without circular r
 | `bumperbot_utils` | `ament_cmake` | None | `rclcpp`, `rclpy`, `sensor_msgs`, `std_msgs`, `visualization_msgs`, `twist_mux_msgs` |
 | `bumperbot_localization`| `ament_cmake` | `bumperbot_controller` | `rclcpp`, `rclpy`, `nav_msgs`, `sensor_msgs`, `geometry_msgs`, `robot_localization`, `nav2_amcl`, `nav2_map_server` |
 | `bumperbot_mapping` | `ament_cmake` | None | `rclcpp`, `rclpy`, `sensor_msgs`, `nav_msgs`, `tf2`, `tf2_ros`, `slam_toolbox`, `nav2_map_server`, `nav2_msgs`, `visualization_msgs`, `numpy`, `scipy` |
-| `bumperbot_bringup` | `ament_cmake` | `bumperbot_description`, `bumperbot_controller`, `bumperbot_firmware`, `bumperbot_localization`, `bumperbot_mapping`, `bumperbot_utils` | `rviz2` |
+| `bumperbot_navigation` | `ament_cmake` | `bumperbot_msgs` | `rclcpp`, `rclcpp_action`, `rclpy`, `nav2_msgs`, `tf2_ros`, `yaml_cpp_vendor`, `nav2_controller`, `nav2_planner`, `nav2_behaviors`, `nav2_bt_navigator`, `nav2_lifecycle_manager` |
+| `bumperbot_bringup` | `ament_cmake` | `bumperbot_description`, `bumperbot_controller`, `bumperbot_firmware`, `bumperbot_localization`, `bumperbot_mapping`, `bumperbot_utils`, `bumperbot_navigation` | `rviz2` |
 | `bumperbot_cpp_examples`| `ament_cmake` | `bumperbot_msgs` | `rclcpp`, `rclcpp_action`, `rclcpp_lifecycle`, `tf2`, `tf2_ros`, `turtlesim` |
 | `bumperbot_py_examples` | `ament_python`| `bumperbot_msgs` | `rclpy`, `tf2_ros`, `turtlesim` |
 

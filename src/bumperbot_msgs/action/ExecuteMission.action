@@ -1,0 +1,23 @@
+# Goal: ordered list of station names from stations.yaml
+string[] stations
+---
+# Result
+uint8 OUTCOME_COMPLETED=0              # every station visited, docked
+uint8 OUTCOME_COMPLETED_WITH_SKIPS=1   # some stations skipped, docked
+uint8 OUTCOME_ABORTED=2                # mission stopped on error, docked
+uint8 OUTCOME_CANCELED=3               # canceled by the client, docked
+uint8 OUTCOME_DOCK_FAILED=4            # the dock could not be reached
+uint8 outcome
+bool docked
+string[] visited
+string[] skipped
+string message
+---
+# Feedback
+string state
+string current_station
+int32 current_index          # index in the goal list, -1 while docking / idle
+uint32 total_stations
+uint32 attempt               # 1-based attempt of the current navigation
+float32 progress             # (visited + skipped) / total_stations, 0..1
+float32 distance_remaining   # from NavigateToPose feedback, -1 if unknown

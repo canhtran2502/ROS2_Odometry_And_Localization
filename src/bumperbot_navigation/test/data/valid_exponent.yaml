@@ -1,0 +1,6 @@
+frame_id: map
+dock_station: dock
+stations:
+  dock: {x: 0.0, y: 0.0, yaw: 0.0, dwell: 0.0}
+  far: {x: 1e3, y: 1.5e3, yaw: 1.0E-1, dwell: 2e0}
+  neg: {x: -2.5e-1, y: 1e+2, yaw: 0, dwell: 0}
