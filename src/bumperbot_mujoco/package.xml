@@ -28,6 +28,7 @@
   <test_depend>bumperbot_mapping</test_depend>
   <test_depend>python3-scipy</test_depend>
   <test_depend>bumperbot_navigation</test_depend>
+  <test_depend>bumperbot_utils</test_depend>
 
   <export>
     <build_type>ament_python</build_type>

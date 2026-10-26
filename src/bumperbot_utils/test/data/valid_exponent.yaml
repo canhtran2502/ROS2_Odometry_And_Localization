@@ -1,0 +1,5 @@
+safety_supervisor:
+  ros__parameters:
+    stop_margin: 5.0e-2
+    slowdown_distance: 3.5e-1
+    scan_timeout: 6.0E-1

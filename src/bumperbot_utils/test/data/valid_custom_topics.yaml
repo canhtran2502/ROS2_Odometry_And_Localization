@@ -1,0 +1,6 @@
+safety_supervisor:
+  ros__parameters:
+    scan_topic: lidar/scan
+    lock_topic: custom_lock
+    robot_frame: base_link
+    dock_max_speed: 0.7

@@ -205,13 +205,24 @@ def feature_base_commit():
     return "HEAD"  # not committed yet: compare with HEAD
 
 
+def feature_end_commit():
+    """Last commit of the waypoint-mission-manager feature (later features may change files)."""
+    out = subprocess.run(
+        ["git", "log", "-1", "--format=%H", "--", ".claude/features/waypoint-mission-manager"],
+        cwd=ROOT, capture_output=True, text=True).stdout.split()
+    assert out, "no commit of the waypoint-mission-manager feature was found"
+    return out[0]
+
+
 def test_real_and_simulated_robot_launch_unchanged_by_feature():
     base = feature_base_commit()
+    end = feature_end_commit()
     res = subprocess.run(
-        ["git", "diff", "--quiet", base, "--",
+        ["git", "diff", "--quiet", base, end, "--",
          "src/bumperbot_bringup/launch/real_robot.launch.py",
          "src/bumperbot_bringup/launch/simulated_robot.launch.py"], cwd=ROOT)
-    assert res.returncode == 0, f"real_robot/simulated_robot launch files changed since {base}"
+    assert res.returncode == 0, (
+        f"real_robot/simulated_robot launch files changed by the feature ({base}..{end})")
 
 
 def test_real_robot_launch_unchanged_vs_main():

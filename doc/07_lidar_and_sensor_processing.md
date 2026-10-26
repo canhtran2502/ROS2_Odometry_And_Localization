@@ -40,7 +40,9 @@ For beam index $i \in [0, N-1]$ with distance $r = \text{ranges}[i]$:
 
 ---
 
-## C. Autonomous Reactive Safety Supervisor (`safety_stop`)
+## C. Autonomous Reactive Safety Supervisor (`safety_stop`, legacy)
+
+> The simulation stack now starts `safety_supervisor` (section C2) instead of this node. `safety_stop` stays in the package unchanged and is started only with `ros2 launch bumperbot_bringup simulated_robot.launch.py safety:=legacy`.
 
 Implemented in `src/bumperbot_utils/src/safety_stop.cpp` and `bumperbot_utils/safety_stop.py`, this node acts as an autonomous virtual bumper protecting the robot against collisions.
 
@@ -87,6 +89,56 @@ The node generates two concentric visual disks using `visualization_msgs/msg/Mar
 
 ---
 
+## C2. Safety Supervisor (`safety_supervisor`)
+
+`safety_supervisor` (`bumperbot_utils`, C++ `safety_supervisor` and Python `safety_supervisor.py`, same parameters, topics, services and reason strings) is the safety layer of the simulation stack. It works independent of Nav2 and uses only `/scan`, odometry, TF and the velocity command stream. The pure logic lives in `safety_logic.hpp/.cpp` and `bumperbot_utils/safety_logic.py` (no ROS; one shared case table runs in pytest and gtest). Parameters: `config/safety_supervisor.yaml`. The legacy `safety_stop` node (section C) stays in the package unchanged and is started only with `safety:=legacy`.
+
+**Zones.** Each valid scan point is transformed into `base_footprint` (the LiDAR is yawed by pi, so the TF `base_footprint <- laser_link` is required). Points in the front corridor (ahead of the footprint front edge, footprint half width + `lateral_margin`) limit only forward motion; points in the rear corridor limit only reverse motion; points beside the robot or inside the footprint limit nothing. Contact is stricter than the corridor: only points inside the swept path (`|y|` <= footprint half width, no `lateral_margin`) count as CONTACT, so a wall at 2 cm beside the wheel (inside the corridor, outside the swept path) stops both directions but never latches an e-stop. Range handling: a finite range below `range_min` (including 0) is an obstacle at `range_min` along the beam (the farthest it can be), `inf` is no return (free), NaN counts toward `max_invalid_beam_ratio`. At the first valid scan the node logs a WARNING when the `range_min` circle around the laser (default laser at x=-0.005 m, `range_min` 0.12 m) overlaps the front or rear stop corridor, because a driver that reports no return below `range_min` (the MuJoCo sim does) leaves a blind spot there. The default footprint is the rectangle x +-0.10 m, y +-0.125 m: it contains the base mesh, casters, IMU, LiDAR and the wheels (wheel collision extent y +-0.118 m plus a small tolerance). With `d` the clearance from the footprint edge:
+
+| Zone | Condition | Effect |
+|---|---|---|
+| CONTACT | `d <= contact_margin` (0.015 m), swept path only, `contact_debounce_scans` (3) consecutive scans | hard stop; latches the e-stop while moving toward it (`latch_on_contact`); an unconfirmed contact is a STOP (brake pulse, same limits) |
+| STOP | `d <= stop_margin` (0.05 m); left at `d > stop_margin + stop_release_hysteresis` | hard stop in that direction; a brake pulse if the robot moves toward it |
+| WARNING | `d < stop_margin + slowdown_distance` (0.35 m) | speed limit that never increases as `d` decreases |
+| CLEAR | otherwise | `max_linear_speed` (0.7 m/s) |
+
+The speed limit is `min(max_linear_speed, ramp, braking)` with `ramp = max_linear_speed * (d - stop_margin) / slowdown_distance` and `braking = max_decel * (-response_time + sqrt(response_time^2 + 2 (d - stop_margin) / max_decel))`. Note the exact meaning of the zone label: WARNING is set by distance only (`d < stop_margin + slowdown_distance`), while the braking term can already push the speed limit below `max_linear_speed` further out (for example `speed_limit(0.60 m)` is 0.607 m/s with the zone still CLEAR). So the allowed speed (`max_forward_speed`, `max_reverse_speed`) can be below `max_linear_speed` while the zone label is still CLEAR; use the speed fields, not the label, to know the limit. An obstacle behind the robot never limits forward motion and an obstacle ahead never limits reverse motion.
+
+**Two enforcement channels (`enforcement: filter`, default).**
+- Speed filter: in the simulation stack the `twist_mux` output is remapped to `safety/cmd_vel_in`. The supervisor publishes the limited command on `bumperbot_controller/cmd_vel_unstamped` (consumed by `twist_relay`), so every source (joystick, keyboard, Nav2, docking, exploration) is slowed without Nav2. `v` is clamped to `[-max_reverse, +max_forward]`, `w` to `max_angular_speed`; a stale (`cmd_timeout`) or non-finite command gives zero (not a fault, no lock).
+- The `twist_mux` `safety_stop` lock (priority 255, `twist_mux_locks.yaml` unchanged). The supervisor is its only publisher in the default stack and republishes it at 20 Hz. It is `true` in INITIALIZING, FAULT, ESTOP, SHUTDOWN and during a brake pulse.
+
+**Brake pulse.** When the zone of the travel direction becomes STOP (or CONTACT) while the robot moves toward it, the lock is raised for at least `brake_hold_time` and is released once odometry reports `|v| < stopped_speed` after that time. Afterwards the filter keeps blocking motion toward the obstacle and lets motion away from it pass, so the robot can always back out. Travel direction comes from the odometry sign (command sign when the robot is stopped).
+
+**States.** `INITIALIZING` (no scan yet, TF missing, no odometry yet: locked, zero output, the reason names the input), `ACTIVE`, `DOCK_APPROACH`, `FAULT` (locked, zero output, auto-recovers after `recovery_time` of healthy data, or latches the e-stop with `latch_faults: true`), `ESTOP` (latched) and `SHUTDOWN`. Priority: SHUTDOWN > ESTOP > INITIALIZING > FAULT > DOCK_APPROACH / ACTIVE.
+
+**Reason strings (`/safety/status` `reason`).** `waiting for scan`, `waiting for TF base_footprint <- laser_link`, `waiting for odom`, `scan timeout`, `odom timeout`, `no valid scan`, `invalid scan: empty frame_id`, `scan frame changed`, `invalid scan: empty ranges`, `invalid scan: angle_increment <= 0`, `invalid scan: nan ratio <r>`, `internal error: <what>`, `estop input`, `contact zone (front|rear)`, `fault: <reason>` (latched by a fault), `shutdown`; in ACTIVE `front zone <ZONE>`, `rear zone <ZONE>`, `brake pulse`, `dock approach`, `dock approach time limit`, `dock status stale`, `no dock status`, `dock state <STATE>`, `dock out of radius`, `dock TF unavailable`, `dock approach disabled`, `dock profile unavailable in lock_only`. The reason is empty only in ACTIVE with both zones CLEAR.
+
+**Watchdog.** Ages use the steady clock and the loop runs on a wall timer, so protection continues when `/clock` stalls. A scan older than `scan_timeout` (0.6 s), odometry older than `odom_timeout` (0.5 s) or an invalid scan gives FAULT. A tick exception gives FAULT `internal error: ...` and the node keeps running. On SIGINT/SIGTERM the node publishes status SHUTDOWN, the lock `true` and a zero command three times, and exits with code 0. The lock stays engaged after this clean exit; a crash leaves the last value (see doc/12).
+
+**Latched e-stop.** Triggered by the service `/safety_supervisor/trigger_estop` (`std_srvs/Trigger`), by `safety/estop` (`std_msgs/Bool`, true) or by a contact-zone violation while moving toward it. It stays latched until `/safety_supervisor/reset` succeeds. The reset is refused (`success: false`) with `estop input active` while `safety/estop` is still true and `fault: <reason>` while an input fault exists. With an obstacle in the contact zone (swept path, within `contact_margin`; the rear is exempt while the dock profile holds) the reset is accepted in `filter` mode when the contact is on one side only and neither the odometry nor the fresh command moves toward it, because the filter then keeps `max_forward`/`max_reverse` at 0 toward the obstacle and the robot can reverse out; otherwise it is refused with `obstacle in contact zone (front)` / `(rear)` (always in `lock_only`, which has no filter, and with contact on both sides). The contact decision is debounced: it latches after `contact_debounce_scans` (3) consecutive scans, so range noise (sigma 0.01 m) on a wall at rest does not flip it; the latency of a real latch is 3 scan periods (0.6 s at 5 Hz), during which the robot is already in STOP with a brake pulse. The STOP filter is not debounced. Restart: the latch lives in memory only. With `require_reset_after_restart: true` the node starts latched (`restart: reset required`) until `~/reset`; the default is false so launches work without a manual reset, and an operator e-stop is then cleared by a restart. `safety/estop` is subscribed volatile and transient_local (a restarted node gets a latched true; a one-shot volatile `ros2 topic pub --once` is lost, so publish periodically). Reset when not latched returns `success: true`, `not latched`.
+
+**Dock-approach profile.** Active only while `dock_approach_enabled`, `enforcement: filter`, `/dock/status` is fresh (`dock_status_timeout`) and `DOCKING`, the robot is within `dock_approach_radius` of `DockStatus.dock_pose` (TF `DockStatus.frame_id -> base_footprint`) and `dock_approach_max_time` has not elapsed in this episode. It changes only the rear direction: the rear stop margin becomes `dock_stop_margin`, the rear warning ramp becomes a hard reverse cap `min(dock_max_speed, speed_limit(d_rear, dock_stop_margin))` (at most 0.06 m/s, lower when the braking distance requires it, for example 0.04 m/s at 0.03 m) and the rear contact latch is suspended. When the profile engages or disengages, the rear zone is re-evaluated against the new margin without the old margin's STOP release hysteresis, so protection changes immediately in both directions. Front protection, the lock, the e-stop and the watchdog are unchanged. The profile re-arms only after `/dock/status` leaves DOCKING. The lock is never bypassed. See doc/10.
+
+**`lock_only` mode.** `enforcement:=lock_only` makes the node subscribe read-only to the observed command (`bumperbot_controller/cmd_vel_unstamped`), publish no velocity and drive only the lock (brake on motion toward an occupied stop zone, e-stop, watchdog). Slowdown and the dock profile are unavailable and the status says so. Limitations: it cannot hold a robot out of an occupied STOP zone (see doc/12), and a crash of the supervisor leaves the robot unprotected, so run it under a process supervisor (systemd `Restart=always`). This is the hardware recipe:
+
+```bash
+# Real robot: start a LiDAR driver (none is provided in this repo), then
+ros2 launch bumperbot_utils safety_supervisor.launch.py enforcement:=lock_only
+```
+
+**Decision: `real_robot.launch.py` is not changed and does not start `safety_supervisor` (or `safety_stop`).** No LiDAR driver is started by it, so a fail-safe supervisor would stay in INITIALIZING with the 255 lock engaged forever and would also disable the joystick, a silent breaking change on hardware. The `filter` channel also needs the `twist_mux` output rewired (`joystick_teleop.launch.py cmd_vel_out:=safety/cmd_vel_in`), which is a wiring decision for the user. Without starting the supervisor yourself, nothing provides the lock on hardware, as before.
+
+**Interfaces.** `safety/status` (`bumperbot_msgs/msg/SafetyStatus`, transient_local, 5 Hz and on every change): state, enforcement, active/front/rear zone, clearances, nearest obstacle distance and bearing, allowed speeds, lock, brake, e-stop latch, dock profile flag, reason and input ages. Not implemented on purpose: virtual keepout / speed-limit polygons in `map` (the safety layer must stay valid when AMCL is lost; use Nav2 costmap filters).
+
+```bash
+ros2 topic echo /safety/status
+ros2 service call /safety_supervisor/trigger_estop std_srvs/srv/Trigger
+ros2 service call /safety_supervisor/reset std_srvs/srv/Trigger
+```
+
+---
+
 ## D. IMU Processing & Frame Sign Conversion (`imu_republisher`)
 
 Implemented in `src/bumperbot_localization/src/imu_republisher.cpp` and `imu_republisher.py`:
@@ -126,6 +178,7 @@ ros2 topic echo --once /scan --field ranges
 
 # 3. View live safety supervisor state changes
 ros2 topic echo /safety_stop
+ros2 topic echo /safety/status      # SafetyStatus of safety_supervisor
 
 # 4. Inspect IMU publication rates and covariance matrices
 ros2 topic hz /imu/out

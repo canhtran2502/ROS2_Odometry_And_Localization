@@ -1,0 +1,1149 @@
+# Shared parity table of the safety logic (run by test_safety_logic.py and test_safety_logic.cpp).
+#
+# Every case has a name and a function (fn). Optional `cfg` overrides Config fields.
+# Numbers are compared with an absolute tolerance of 1e-9, strings and booleans exactly.
+# Expected values were derived from the plan formulas by hand, not by running the code.
+#
+# Core sequences (fn: core) use step lists: every step applies `set` to the persistent inputs,
+# calls update(t), checks `expect` (output fields), then runs `action` (reset, trigger_estop or
+# shutdown) and checks `expect_reset` ([ok, message]) and `limit` ({v, w, expect: [v, w]}).
+# `start: healthy` starts from fresh inputs of a running robot, `start: failsafe` from the
+# default (nothing received yet) inputs.
+polygons:
+  square: [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]]
+  bowtie: [[0.0, 0.0], [1.0, 1.0], [1.0, 0.0], [0.0, 1.0]]
+  l_shape: [[0.0, 0.0], [2.0, 0.0], [2.0, 1.0], [1.0, 1.0], [1.0, 2.0], [0.0, 2.0]]
+  triangle: [[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]]
+  two_points: [[0.0, 0.0], [1.0, 0.0]]
+  duplicate_vertex: [[0.0, 0.0], [0.0, 0.0], [1.0, 0.0], [1.0, 1.0]]
+  collinear: [[0.0, 0.0], [1.0, 0.0], [2.0, 0.0]]
+  robot: [[0.10, 0.09], [0.10, -0.09], [-0.10, -0.09], [-0.10, 0.09]]
+  offset: [[0.2, 0.1], [0.2, -0.3], [-0.05, -0.3], [-0.05, 0.1]]
+
+cases:
+  # ---------------------------------------------------------------- geometry
+  - {name: simple_square, fn: polygon_is_simple, poly: square, expect: true}
+  - {name: simple_triangle, fn: polygon_is_simple, poly: triangle, expect: true}
+  - {name: simple_concave_l_shape, fn: polygon_is_simple, poly: l_shape, expect: true}
+  - {name: not_simple_bowtie, fn: polygon_is_simple, poly: bowtie, expect: false}
+  - {name: not_simple_two_points, fn: polygon_is_simple, poly: two_points, expect: false}
+  - {name: not_simple_duplicate_vertex, fn: polygon_is_simple, poly: duplicate_vertex,
+     expect: false}
+  - {name: not_simple_collinear, fn: polygon_is_simple, poly: collinear, expect: false}
+
+  - {name: pip_inside, fn: point_in_polygon, poly: square, point: [0.5, 0.5], expect: true}
+  - {name: pip_outside, fn: point_in_polygon, poly: square, point: [1.5, 0.5], expect: false}
+  - {name: pip_on_edge_is_inside, fn: point_in_polygon, poly: square, point: [1.0, 0.5],
+     expect: true}
+  - {name: pip_on_vertex_is_inside, fn: point_in_polygon, poly: square, point: [0.0, 0.0],
+     expect: true}
+  - {name: pip_concave_notch_outside, fn: point_in_polygon, poly: l_shape, point: [1.5, 1.5],
+     expect: false}
+  - {name: pip_concave_arm_inside, fn: point_in_polygon, poly: l_shape, point: [0.5, 1.5],
+     expect: true}
+  - {name: pip_robot_origin, fn: point_in_polygon, poly: robot, point: [0.0, 0.0], expect: true}
+
+  - {name: dist_side, fn: distance_to_polygon, poly: square, point: [2.0, 0.5], expect: 1.0}
+  - {name: dist_inside_is_zero, fn: distance_to_polygon, poly: square, point: [0.5, 0.5],
+     expect: 0.0}
+  - {name: dist_boundary_is_zero, fn: distance_to_polygon, poly: square, point: [1.0, 0.5],
+     expect: 0.0}
+  - {name: dist_corner, fn: distance_to_polygon, poly: square, point: [2.0, 2.0],
+     expect: 1.4142135623730951}
+  - {name: dist_negative_side, fn: distance_to_polygon, poly: square, point: [-1.0, 0.5],
+     expect: 1.0}
+
+  - {name: extents_robot, fn: footprint_extents, poly: robot, expect: [0.10, -0.10, 0.09]}
+  - {name: extents_offset, fn: footprint_extents, poly: offset, expect: [0.2, -0.05, 0.3]}
+
+  # ---------------------------------------------------------------- scan_to_points
+  - name: scan_inf_nan_out_of_range
+    fn: scan_to_points
+    ranges: [1.0, .inf, .nan, 0.05, 20.0, 2.0]
+    angle_min: 0.0
+    angle_increment: 1.5707963267948966
+    range_min: 0.1
+    range_max: 10.0
+    tf: [0.0, 0.0, 0.0]
+    # iteration 3 (M3): the finite 0.05 m return below range_min is an obstacle at range_min
+    # (0.1 m) along its beam (angle 3 pi / 2); inf, NaN and 20 m (> range_max) are unchanged
+    expect_points: [[1.0, 0.0], [0.0, -0.1], [0.0, 2.0]]
+    expect_ratio: 0.16666666666666666
+  - name: scan_sub_range_min_and_zero_become_obstacles_at_range_min
+    fn: scan_to_points
+    ranges: [0.0, 0.05, 0.1, .inf, .nan]
+    angle_min: 0.0
+    angle_increment: 1.5707963267948966
+    range_min: 0.1
+    range_max: 10.0
+    tf: [0.0, 0.0, 0.0]
+    expect_points: [[0.1, 0.0], [0.0, 0.1], [-0.1, 0.0]]
+    expect_ratio: 0.2
+  - name: scan_sub_range_min_point_uses_the_sensor_transform
+    fn: scan_to_points
+    ranges: [0.0]
+    angle_min: 0.0
+    angle_increment: 0.01
+    range_min: 0.12
+    range_max: 10.0
+    tf: [0.04, 0.0, 3.141592653589793]
+    expect_points: [[-0.08, 0.0]]
+    expect_ratio: 0.0
+  - name: scan_inf_is_free_and_nan_counts_invalid_only
+    fn: scan_to_points
+    ranges: [.inf, .inf, .nan, .nan]
+    angle_min: 0.0
+    angle_increment: 0.1
+    range_min: 0.1
+    range_max: 10.0
+    tf: [0.0, 0.0, 0.0]
+    expect_points: []
+    expect_ratio: 0.5
+  - name: scan_urdf_yaw_and_offset
+    fn: scan_to_points
+    ranges: [1.0]
+    angle_min: 0.0
+    angle_increment: 0.01
+    range_min: 0.12
+    range_max: 12.0
+    tf: [0.01, 0.0, 3.14]
+    expect_points: [[-0.9899987317275395, 0.0015926529164868282]]
+    expect_ratio: 0.0
+  - name: scan_three_beams_pi_yaw
+    fn: scan_to_points
+    ranges: [1.5, 1.5, 1.5]
+    angle_min: -0.5
+    angle_increment: 0.5
+    range_min: 0.1
+    range_max: 10.0
+    tf: [0.1, -0.05, 3.141592653589793]
+    expect_points: [[-1.2163738428355588, 0.6691383079063047], [-1.4, -0.05],
+                    [-1.216373842835559, -0.7691383079063043]]
+    expect_ratio: 0.0
+  - name: scan_all_nan
+    fn: scan_to_points
+    ranges: [.nan, .nan, .nan, .nan]
+    angle_min: 0.0
+    angle_increment: 0.1
+    range_min: 0.1
+    range_max: 10.0
+    tf: [0.0, 0.0, 0.0]
+    expect_points: []
+    expect_ratio: 1.0
+  - name: scan_range_limits_are_inclusive
+    fn: scan_to_points
+    ranges: [0.1, 10.0]
+    angle_min: 0.0
+    angle_increment: 1.5707963267948966
+    range_min: 0.1
+    range_max: 10.0
+    tf: [0.0, 0.0, 0.0]
+    expect_points: [[0.1, 0.0], [0.0, 10.0]]
+    expect_ratio: 0.0
+  - name: scan_empty
+    fn: scan_to_points
+    ranges: []
+    angle_min: 0.0
+    angle_increment: 0.1
+    range_min: 0.1
+    range_max: 10.0
+    tf: [0.0, 0.0, 0.0]
+    expect_points: []
+    expect_ratio: 0.0
+
+  # ---------------------------------------------------------------- evaluate_points
+  - name: eval_no_points_is_inf
+    fn: evaluate_points
+    points: []
+    expect: {front_clearance: .inf, rear_clearance: .inf, nearest_distance: .inf,
+             nearest_bearing: 0.0, contact_front: false, contact_rear: false}
+  - name: eval_front_point
+    fn: evaluate_points
+    points: [[0.15, 0.0]]
+    expect: {front_clearance: 0.05, rear_clearance: .inf, nearest_distance: 0.05,
+             nearest_bearing: 0.0, contact_front: false, contact_rear: false}
+  - name: eval_rear_point
+    fn: evaluate_points
+    points: [[-0.13, 0.05]]
+    expect: {front_clearance: .inf, rear_clearance: 0.03, nearest_distance: 0.03,
+             nearest_bearing: 2.774418819771574, contact_front: false, contact_rear: false}
+  - name: eval_side_point_outside_both_corridors
+    fn: evaluate_points
+    points: [[0.0, 0.285]]
+    expect: {front_clearance: .inf, rear_clearance: .inf, nearest_distance: 0.16,
+             nearest_bearing: 1.5707963267948966, contact_front: false, contact_rear: false}
+  - name: eval_self_hit_ignored
+    fn: evaluate_points
+    points: [[0.05, 0.02], [-0.03, -0.05]]
+    expect: {front_clearance: .inf, rear_clearance: .inf, nearest_distance: .inf,
+             nearest_bearing: 0.0, contact_front: false, contact_rear: false}
+  - name: eval_inside_corridor_edge
+    fn: evaluate_points
+    points: [[0.2, 0.154]]
+    expect: {front_clearance: 0.1, rear_clearance: .inf, contact_front: false}
+  - name: eval_outside_corridor_edge
+    fn: evaluate_points
+    points: [[0.2, 0.156]]
+    expect: {front_clearance: .inf, rear_clearance: .inf}
+  - name: eval_corner_outside_corridor_nearest
+    fn: evaluate_points
+    points: [[0.12, 0.185]]
+    expect: {front_clearance: .inf, nearest_distance: 0.06324555320336758}
+  - name: eval_contact_front
+    fn: evaluate_points
+    points: [[0.11, 0.0]]
+    expect: {front_clearance: 0.01, contact_front: true, contact_rear: false}
+  - name: eval_contact_rear
+    fn: evaluate_points
+    points: [[-0.11, 0.0]]
+    expect: {rear_clearance: 0.01, contact_front: false, contact_rear: true}
+  # Iteration 3 (H1): the contact flags use only the swept path (|y| <= footprint half width
+  # 0.125); the STOP/WARNING clearance still uses the lateral margin (band 0.155).
+  - name: eval_parallel_wall_outside_the_footprint_is_stop_not_contact
+    fn: evaluate_points
+    points: [[0.105, 0.145], [0.0, 0.145], [-0.105, 0.145]]
+    expect: {front_clearance: 0.005, rear_clearance: 0.005, contact_front: false,
+             contact_rear: false}
+  - name: eval_parallel_wall_on_the_other_side_is_not_contact
+    fn: evaluate_points
+    points: [[0.105, -0.145], [-0.105, -0.145]]
+    expect: {front_clearance: 0.005, rear_clearance: 0.005, contact_front: false,
+             contact_rear: false}
+  - name: eval_point_exactly_at_the_half_width_is_in_the_swept_path
+    fn: evaluate_points
+    points: [[0.11, 0.125]]
+    expect: {front_clearance: 0.01, contact_front: true}
+  - name: eval_point_just_outside_the_half_width_is_not_contact
+    fn: evaluate_points
+    points: [[0.11, 0.126]]
+    expect: {front_clearance: 0.01, contact_front: false}
+  - name: eval_contact_needs_a_point_in_the_path_even_with_wall_points_in_the_margin
+    fn: evaluate_points
+    points: [[0.105, 0.145], [0.11, 0.0]]
+    expect: {front_clearance: 0.005, contact_front: true}
+  - name: eval_boundary_point_is_a_hit_not_a_self_hit
+    fn: evaluate_points
+    points: [[0.10, 0.0]]
+    expect: {front_clearance: 0.0, nearest_distance: 0.0, contact_front: true}
+  - name: eval_minimum_over_points_both_directions
+    fn: evaluate_points
+    points: [[0.30, 0.0], [0.20, 0.05], [-0.4, 0.0], [-0.15, -0.08]]
+    expect: {front_clearance: 0.1, rear_clearance: 0.05, nearest_distance: 0.05}
+  - name: eval_lateral_margin_zero_narrows_the_corridor
+    fn: evaluate_points
+    cfg: {lateral_margin: 0.0}
+    points: [[0.2, 0.135]]
+    expect: {front_clearance: .inf}
+  - name: eval_custom_contact_margin
+    fn: evaluate_points
+    cfg: {contact_margin: 0.08}
+    points: [[0.17, 0.0]]
+    expect: {front_clearance: 0.07, contact_front: true}
+
+  # ---------------------------------------------------------------- speed_limit
+  - {name: limit_at_margin_is_zero, fn: speed_limit, d: 0.05, margin: 0.05, expect: 0.0}
+  - {name: limit_below_margin_is_zero, fn: speed_limit, d: 0.01, margin: 0.05, expect: 0.0}
+  - {name: limit_ramp_branch, fn: speed_limit, d: 0.06, margin: 0.05,
+     expect: 0.01999999999999999}
+  - {name: limit_ramp_equals_brake, fn: speed_limit, d: 0.15, margin: 0.05,
+     expect: 0.19999999999999998}
+  - {name: limit_brake_branch_020, fn: speed_limit, d: 0.20, margin: 0.05,
+     expect: 0.2653311931459038}
+  - {name: limit_brake_branch_030, fn: speed_limit, d: 0.30, margin: 0.05,
+     expect: 0.3720153254455275}
+  - {name: limit_brake_branch_040, fn: speed_limit, d: 0.40, margin: 0.05,
+     expect: 0.4603277807866851}
+  - {name: limit_brake_branch_060, fn: speed_limit, d: 0.60, margin: 0.05,
+     expect: 0.6066372975210778}
+  - {name: limit_top_of_the_ramp_is_max, fn: speed_limit, d: 0.9, margin: 0.05, expect: 0.7}
+  - {name: limit_inf_is_max, fn: speed_limit, d: .inf, margin: 0.05, expect: 0.7}
+  - name: limit_custom_config
+    fn: speed_limit
+    cfg: {slowdown_distance: 1.0, max_linear_speed: 1.0, response_time: 0.1, max_decel: 2.0}
+    d: 0.30
+    margin: 0.01
+    expect: 0.29
+  - {name: limit_monotonic_grid_default, fn: speed_limit_grid, margin: 0.05, d_min: 0.0,
+     d_max: 1.5, n: 200}
+  - {name: limit_monotonic_grid_dock_margin, fn: speed_limit_grid, margin: 0.01, d_min: 0.0,
+     d_max: 1.0, n: 200}
+  - name: limit_monotonic_grid_custom
+    fn: speed_limit_grid
+    cfg: {slowdown_distance: 0.8, max_linear_speed: 1.2, response_time: 0.5, max_decel: 0.3}
+    margin: 0.1
+    d_min: 0.0
+    d_max: 2.5
+    n: 200
+
+  # ---------------------------------------------------------------- zone_for
+  - {name: zone_contact, fn: zone_for, d: 0.01, prev: CLEAR, margin: 0.05, expect: CONTACT}
+  - {name: zone_contact_boundary, fn: zone_for, d: 0.015, prev: CLEAR, margin: 0.05,
+     expect: CONTACT}
+  - {name: zone_stop, fn: zone_for, d: 0.03, prev: CLEAR, margin: 0.05, expect: STOP}
+  - {name: zone_stop_at_margin, fn: zone_for, d: 0.05, prev: CLEAR, margin: 0.05, expect: STOP}
+  - {name: zone_warning_entered_from_clear, fn: zone_for, d: 0.06, prev: CLEAR, margin: 0.05,
+     expect: WARNING}
+  - {name: zone_hysteresis_keeps_stop, fn: zone_for, d: 0.06, prev: STOP, margin: 0.05,
+     expect: STOP}
+  - {name: zone_hysteresis_keeps_stop_from_contact, fn: zone_for, d: 0.06, prev: CONTACT,
+     margin: 0.05, expect: STOP}
+  - {name: zone_hysteresis_releases, fn: zone_for, d: 0.075, prev: STOP, margin: 0.05,
+     expect: WARNING}
+  - {name: zone_hysteresis_releases_from_contact, fn: zone_for, d: 0.075, prev: CONTACT,
+     margin: 0.05, expect: WARNING}
+  - {name: zone_warning_inside_ramp, fn: zone_for, d: 0.39, prev: WARNING, margin: 0.05,
+     expect: WARNING}
+  - {name: zone_clear_beyond_ramp, fn: zone_for, d: 0.41, prev: WARNING, margin: 0.05,
+     expect: CLEAR}
+  - {name: zone_clear_for_inf, fn: zone_for, d: .inf, prev: UNKNOWN, margin: 0.05,
+     expect: CLEAR}
+  - {name: zone_no_contact_is_stop, fn: zone_for, d: 0.01, prev: CLEAR, margin: 0.05,
+     allow_contact: false, expect: STOP}
+  - {name: zone_dock_margin_stop, fn: zone_for, d: 0.005, prev: CLEAR, margin: 0.01,
+     allow_contact: false, expect: STOP}
+  - {name: zone_dock_margin_warning, fn: zone_for, d: 0.02, prev: CLEAR, margin: 0.01,
+     allow_contact: false, expect: WARNING}
+  - {name: zone_dock_margin_hysteresis, fn: zone_for, d: 0.012, prev: STOP, margin: 0.01,
+     allow_contact: false, expect: STOP}
+
+  # ---------------------------------------------------------------- travel_direction
+  - {name: dir_odom_forward, fn: travel_direction, v_cmd: 0.3, v_odom: 0.5, stopped: 0.02,
+     expect: 1}
+  - {name: dir_odom_wins_over_cmd, fn: travel_direction, v_cmd: 0.3, v_odom: -0.5,
+     stopped: 0.02, expect: -1}
+  - {name: dir_cmd_when_odom_stopped, fn: travel_direction, v_cmd: 0.3, v_odom: 0.0,
+     stopped: 0.02, expect: 1}
+  - {name: dir_cmd_reverse_with_noisy_odom, fn: travel_direction, v_cmd: -0.3, v_odom: 0.01,
+     stopped: 0.02, expect: -1}
+  - {name: dir_none_below_threshold, fn: travel_direction, v_cmd: 0.01, v_odom: 0.01,
+     stopped: 0.02, expect: 0}
+  - {name: dir_threshold_is_strict, fn: travel_direction, v_cmd: -0.02, v_odom: 0.0,
+     stopped: 0.02, expect: 0}
+  - {name: dir_odom_unknown_uses_cmd, fn: travel_direction, v_cmd: 0.3, v_odom: .nan,
+     stopped: 0.02, expect: 1}
+  - {name: dir_all_unknown, fn: travel_direction, v_cmd: .nan, v_odom: .nan, stopped: 0.02,
+     expect: 0}
+  - {name: dir_cmd_unknown_uses_odom, fn: travel_direction, v_cmd: .nan, v_odom: -0.1,
+     stopped: 0.02, expect: -1}
+
+  # ---------------------------------------------------------------- validate_config
+  - {name: valid_default, fn: validate_config, cfg: {}, expect_error: ""}
+  - {name: valid_lock_only, fn: validate_config, cfg: {enforcement: lock_only}, expect_error: ""}
+  - {name: valid_no_odom, fn: validate_config, cfg: {use_odom: false}, expect_error: ""}
+  - {name: valid_zero_contact_margin, fn: validate_config, cfg: {contact_margin: 0.0},
+     expect_error: ""}
+  - {name: valid_zero_recovery_and_hold, fn: validate_config,
+     cfg: {recovery_time: 0.0, brake_hold_time: 0.0}, expect_error: ""}
+  - {name: valid_dock_speed_equals_max, fn: validate_config, cfg: {dock_max_speed: 0.7},
+     expect_error: ""}
+  - {name: valid_dock_margin_equals_stop_margin, fn: validate_config,
+     cfg: {dock_stop_margin: 0.05}, expect_error: ""}
+  - {name: valid_triangle_footprint, fn: validate_config,
+     cfg: {footprint: [0.2, 0.0, -0.1, 0.15, -0.1, -0.15]}, expect_error: ""}
+  - {name: valid_origin_on_footprint_boundary, fn: validate_config,
+     cfg: {footprint: [0.0, -0.1, 0.2, -0.1, 0.2, 0.1, 0.0, 0.1]}, expect_error: ""}
+  - {name: invalid_footprint_odd_length, fn: validate_config,
+     cfg: {footprint: [0.1, 0.09, 0.1, -0.09, -0.1, -0.09, -0.1]}, expect_error_contains: footprint}
+  - {name: invalid_footprint_two_points, fn: validate_config,
+     cfg: {footprint: [0.1, 0.09, -0.1, -0.09]}, expect_error_contains: footprint}
+  - {name: invalid_footprint_empty, fn: validate_config, cfg: {footprint: []},
+     expect_error_contains: footprint}
+  - {name: invalid_footprint_bowtie, fn: validate_config,
+     cfg: {footprint: [0.1, 0.09, -0.1, -0.09, 0.1, -0.09, -0.1, 0.09]},
+     expect_error_contains: footprint}
+  - {name: invalid_footprint_origin_outside, fn: validate_config,
+     cfg: {footprint: [0.2, 0.2, 0.4, 0.2, 0.4, 0.4, 0.2, 0.4]}, expect_error_contains: footprint}
+  - {name: invalid_footprint_nan, fn: validate_config,
+     cfg: {footprint: [0.1, 0.09, .nan, -0.09, -0.1, -0.09, -0.1, 0.09]},
+     expect_error_contains: footprint}
+  - {name: invalid_footprint_inf, fn: validate_config,
+     cfg: {footprint: [.inf, 0.09, 0.1, -0.09, -0.1, -0.09, -0.1, 0.09]},
+     expect_error_contains: footprint}
+  - {name: invalid_footprint_zero_area, fn: validate_config,
+     cfg: {footprint: [0.0, 0.0, 0.1, 0.0, 0.2, 0.0]}, expect_error_contains: footprint}
+  - {name: invalid_negative_lateral_margin, fn: validate_config, cfg: {lateral_margin: -0.01},
+     expect_error_contains: lateral_margin}
+  - {name: invalid_negative_contact_margin, fn: validate_config, cfg: {contact_margin: -0.01},
+     expect_error_contains: contact_margin}
+  - {name: invalid_stop_margin_not_above_contact, fn: validate_config,
+     cfg: {stop_margin: 0.015}, expect_error_contains: stop_margin}
+  - {name: invalid_zero_slowdown_distance, fn: validate_config, cfg: {slowdown_distance: 0.0},
+     expect_error_contains: slowdown_distance}
+  - {name: invalid_zero_max_linear_speed, fn: validate_config, cfg: {max_linear_speed: 0.0},
+     expect_error_contains: max_linear_speed}
+  - {name: invalid_zero_max_decel, fn: validate_config, cfg: {max_decel: 0.0},
+     expect_error_contains: max_decel}
+  - {name: invalid_zero_scan_timeout, fn: validate_config, cfg: {scan_timeout: 0.0},
+     expect_error_contains: scan_timeout}
+  - {name: invalid_zero_odom_timeout, fn: validate_config, cfg: {odom_timeout: 0.0},
+     expect_error_contains: odom_timeout}
+  - {name: invalid_zero_cmd_timeout, fn: validate_config, cfg: {cmd_timeout: 0.0},
+     expect_error_contains: cmd_timeout}
+  - {name: invalid_negative_scan_timeout, fn: validate_config, cfg: {scan_timeout: -1.0},
+     expect_error_contains: scan_timeout}
+  - {name: invalid_zero_rate, fn: validate_config, cfg: {rate: 0.0}, expect_error_contains: rate}
+  - {name: invalid_nan_stop_margin, fn: validate_config, cfg: {stop_margin: .nan},
+     expect_error_contains: stop_margin}
+  - {name: invalid_inf_slowdown, fn: validate_config, cfg: {slowdown_distance: .inf},
+     expect_error_contains: slowdown_distance}
+  - {name: invalid_enforcement, fn: validate_config, cfg: {enforcement: bogus},
+     expect_error_contains: enforcement}
+  - {name: invalid_empty_robot_frame, fn: validate_config, cfg: {robot_frame: ""},
+     expect_error_contains: robot_frame}
+  - {name: invalid_empty_scan_topic, fn: validate_config, cfg: {scan_topic: ""},
+     expect_error_contains: scan_topic}
+  - {name: invalid_empty_lock_topic, fn: validate_config, cfg: {lock_topic: ""},
+     expect_error_contains: lock_topic}
+  - {name: invalid_in_equals_out_topic, fn: validate_config,
+     cfg: {cmd_vel_in_topic: same, cmd_vel_out_topic: same}, expect_error_contains: cmd_vel}
+  - {name: invalid_dock_max_speed_above_max, fn: validate_config, cfg: {dock_max_speed: 0.9},
+     expect_error_contains: dock_max_speed}
+  - {name: invalid_dock_max_speed_zero, fn: validate_config, cfg: {dock_max_speed: 0.0},
+     expect_error_contains: dock_max_speed}
+  - {name: invalid_dock_stop_margin_above_stop_margin, fn: validate_config,
+     cfg: {dock_stop_margin: 0.1}, expect_error_contains: dock_stop_margin}
+  - {name: invalid_dock_radius, fn: validate_config, cfg: {dock_approach_radius: 0.0},
+     expect_error_contains: dock_approach_radius}
+  - {name: invalid_dock_max_time, fn: validate_config, cfg: {dock_approach_max_time: 0.0},
+     expect_error_contains: dock_approach_max_time}
+  - {name: invalid_dock_status_timeout, fn: validate_config, cfg: {dock_status_timeout: 0.0},
+     expect_error_contains: dock_status_timeout}
+  - {name: invalid_negative_inject, fn: validate_config, cfg: {debug_inject_tick_exceptions: -1},
+     expect_error_contains: debug_inject_tick_exceptions}
+  - {name: invalid_ratio_above_one, fn: validate_config, cfg: {max_invalid_beam_ratio: 1.5},
+     expect_error_contains: max_invalid_beam_ratio}
+
+  # ---------------------------------------------------------------- DockGate
+  - name: dock_gate_episode
+    fn: dock_gate
+    cfg: {dock_approach_max_time: 3.0}
+    steps:
+      - {t: 0.0, enabled: true, state: "", age: -1.0, dist: .nan, expect: [false, no dock status]}
+      - {t: 1.0, enabled: true, state: ALIGNING, age: 0.1, dist: 0.4,
+         expect: [false, dock state ALIGNING]}
+      - {t: 2.0, enabled: true, state: DOCKING, age: 0.1, dist: 0.4,
+         expect: [true, dock approach]}
+      - {t: 3.0, enabled: true, state: DOCKING, age: 2.5, dist: 0.4,
+         expect: [false, dock status stale]}
+      - {t: 3.5, enabled: true, state: DOCKING, age: 0.1, dist: .nan,
+         expect: [false, dock TF unavailable]}
+      - {t: 4.0, enabled: true, state: DOCKING, age: 0.1, dist: 1.0,
+         expect: [false, dock out of radius]}
+      - {t: 4.5, enabled: true, state: DOCKING, age: 0.1, dist: 0.4,
+         expect: [true, dock approach]}
+      - {t: 5.1, enabled: true, state: DOCKING, age: 0.1, dist: 0.4,
+         expect: [false, dock approach time limit]}
+      - {t: 6.0, enabled: true, state: DOCKING, age: 0.1, dist: 0.4,
+         expect: [false, dock approach time limit]}
+      - {t: 7.0, enabled: true, state: UNDOCKED, age: 0.1, dist: 0.4,
+         expect: [false, dock state UNDOCKED]}
+      - {t: 8.0, enabled: true, state: DOCKING, age: 0.1, dist: 0.4,
+         expect: [true, dock approach]}
+      - {t: 9.0, enabled: false, state: DOCKING, age: 0.1, dist: 0.4,
+         expect: [false, dock approach disabled]}
+      - {t: 9.5, enabled: true, state: DOCKING, age: 0.1, dist: 0.4,
+         expect: [true, dock approach]}
+      - {t: 10.9, enabled: true, state: DOCKING, age: 0.1, dist: 0.4,
+         expect: [true, dock approach]}
+      - {t: 11.1, enabled: true, state: DOCKING, age: 0.1, dist: 0.4,
+         expect: [false, dock approach time limit]}
+  - name: dock_gate_reset_rearms
+    fn: dock_gate
+    cfg: {dock_approach_max_time: 3.0}
+    steps:
+      - {t: 0.0, enabled: true, state: DOCKING, age: 0.1, dist: 0.4,
+         expect: [true, dock approach]}
+      - {t: 3.5, enabled: true, state: DOCKING, age: 0.1, dist: 0.4,
+         expect: [false, dock approach time limit]}
+      - {t: 4.0, reset: true, enabled: true, state: DOCKING, age: 0.1, dist: 0.4,
+         expect: [true, dock approach]}
+  - name: dock_gate_radius_boundary_and_status_timeout
+    fn: dock_gate
+    steps:
+      - {t: 0.0, enabled: true, state: DOCKING, age: 1.9, dist: 0.79,
+         expect: [true, dock approach]}
+      - {t: 0.1, enabled: true, state: DOCKING, age: 2.1, dist: 0.79,
+         expect: [false, dock status stale]}
+      - {t: 0.2, enabled: true, state: DOCKING, age: 0.5, dist: 0.81,
+         expect: [false, dock out of radius]}
+      - {t: 0.3, enabled: true, state: DOCKING, age: .nan, dist: 0.5,
+         expect: [false, dock status stale]}
+
+  # ---------------------------------------------------------------- SafetyCore sequences
+  - name: core_init_to_active
+    fn: core
+    start: failsafe
+    steps:
+      - t: 0.0
+        expect: {state: INITIALIZING, locked: true, reason: waiting for scan, max_forward: 0.0,
+                 max_reverse: 0.0, front_zone: UNKNOWN, rear_zone: UNKNOWN,
+                 estop_latched: false}
+      - t: 0.05
+        set: {scan_ok: true, scan_age: 0.05, tf_ok: false,
+              tf_description: base_footprint <- laser_link}
+        expect: {state: INITIALIZING, locked: true,
+                 reason: waiting for TF base_footprint <- laser_link}
+      - t: 0.10
+        set: {tf_ok: true}
+        expect: {state: INITIALIZING, locked: true, reason: waiting for odom}
+      - t: 0.15
+        set: {odom_age: 0.05, v_odom: 0.0}
+        expect: {state: ACTIVE, locked: false, reason: "", front_zone: CLEAR, rear_zone: CLEAR,
+                 active_zone: CLEAR, max_forward: 0.7, max_reverse: 0.7, braking: false}
+  - name: core_no_odom_needed_when_use_odom_false
+    fn: core
+    start: failsafe
+    cfg: {use_odom: false}
+    steps:
+      - t: 0.0
+        set: {scan_ok: true, scan_age: 0.05, tf_ok: true}
+        expect: {state: ACTIVE, locked: false}
+  - name: core_brake_pulse_start_and_release
+    fn: core
+    start: healthy
+    steps:
+      - {t: 0.0, expect: {state: ACTIVE, locked: false, braking: false}}
+      - t: 0.1
+        set: {v_odom: 0.3, v_cmd: 0.3, evaluation: {front_clearance: 0.03}}
+        expect: {state: ACTIVE, front_zone: STOP, braking: true, locked: true, max_forward: 0.0,
+                 estop_latched: false}
+      - t: 0.2
+        set: {v_odom: 0.1}
+        expect: {braking: true, locked: true}
+      - t: 0.4
+        set: {v_odom: 0.0}
+        expect: {braking: true, locked: true}
+      - t: 0.7
+        expect: {braking: false, locked: false, front_zone: STOP, max_forward: 0.0,
+                 max_reverse: 0.7, state: ACTIVE}
+      - t: 0.8
+        set: {v_cmd: 0.3}
+        expect: {braking: false, locked: false, max_forward: 0.0}
+      - t: 0.9
+        set: {v_cmd: -0.1}
+        expect: {braking: false, locked: false, max_reverse: 0.7}
+  - name: core_brake_not_released_while_still_moving
+    fn: core
+    start: healthy
+    steps:
+      - t: 0.0
+        set: {v_odom: 0.3, v_cmd: 0.3, evaluation: {front_clearance: 0.03}}
+        expect: {braking: true, locked: true}
+      - t: 1.0
+        set: {v_odom: 0.1}
+        expect: {braking: true, locked: true}
+      - t: 1.2
+        set: {v_odom: 0.0}
+        expect: {braking: false, locked: false}
+  - name: core_front_stop_blocks_only_forward
+    fn: core
+    start: healthy
+    steps:
+      - t: 0.0
+        set: {evaluation: {front_clearance: 0.03}}
+        expect: {state: ACTIVE, front_zone: STOP, rear_zone: CLEAR, max_forward: 0.0,
+                 max_reverse: 0.7, braking: false, locked: false, active_zone: STOP}
+        limit: {v: 0.3, w: 0.5, expect: [0.0, 0.5]}
+      - t: 0.05
+        expect: {max_reverse: 0.7}
+        limit: {v: -0.1, w: 0.0, expect: [-0.1, 0.0]}
+  - name: core_rear_stop_blocks_only_reverse
+    fn: core
+    start: healthy
+    steps:
+      - t: 0.0
+        set: {evaluation: {rear_clearance: 0.03}}
+        expect: {state: ACTIVE, front_zone: CLEAR, rear_zone: STOP, max_forward: 0.7,
+                 max_reverse: 0.0, braking: false, locked: false, active_zone: STOP}
+        limit: {v: 0.3, w: 0.0, expect: [0.3, 0.0]}
+      - t: 0.05
+        limit: {v: -0.1, w: 0.0, expect: [0.0, 0.0]}
+  - name: core_forward_motion_with_rear_obstacle_does_not_brake
+    fn: core
+    start: healthy
+    steps:
+      - t: 0.0
+        set: {v_odom: 0.3, v_cmd: 0.3, evaluation: {rear_clearance: 0.03}}
+        expect: {state: ACTIVE, braking: false, locked: false, rear_zone: STOP, front_zone: CLEAR,
+                 active_zone: CLEAR}
+  - name: core_reverse_motion_into_rear_stop_brakes
+    fn: core
+    start: healthy
+    steps:
+      - t: 0.0
+        set: {v_odom: -0.2, v_cmd: -0.2, evaluation: {rear_clearance: 0.03}}
+        expect: {state: ACTIVE, braking: true, locked: true, rear_zone: STOP, active_zone: STOP}
+  - name: core_warning_limits_and_active_zone
+    fn: core
+    start: healthy
+    steps:
+      - t: 0.0
+        set: {v_odom: 0.3, v_cmd: 0.3, evaluation: {front_clearance: 0.20, rear_clearance: 0.04}}
+        expect: {state: ACTIVE, front_zone: WARNING, rear_zone: STOP, active_zone: WARNING,
+                 max_forward: 0.2653311931459038, max_reverse: 0.0, braking: false}
+      - t: 0.1
+        set: {v_odom: 0.0, v_cmd: 0.0, evaluation: {front_clearance: 0.60, rear_clearance: .inf}}
+        expect: {front_zone: CLEAR, rear_zone: CLEAR, active_zone: CLEAR,
+                 max_forward: 0.6066372975210778, max_reverse: 0.7}
+  - name: core_zone_hysteresis
+    fn: core
+    start: healthy
+    steps:
+      - {t: 0.0, set: {evaluation: {front_clearance: 0.04}}, expect: {front_zone: STOP}}
+      - {t: 0.1, set: {evaluation: {front_clearance: 0.06}},
+         expect: {front_zone: STOP, max_forward: 0.0}}
+      - {t: 0.2, set: {evaluation: {front_clearance: 0.08}},
+         expect: {front_zone: WARNING}}
+  # Iteration 3 (M6): a contact latches the e-stop only after contact_debounce_scans (3)
+  # consecutive evaluated scans (scan_seq increments); until then it is a STOP with the same
+  # limits and brake pulse. The full step set is kept, only the expectations on scans 1-2 are new.
+  - name: core_contact_latches_when_moving
+    fn: core
+    start: healthy
+    steps:
+      - t: 0.0
+        set: {scan_seq: 1, v_odom: 0.1, v_cmd: 0.1,
+              evaluation: {front_clearance: 0.01, contact_front: true}}
+        expect: {state: ACTIVE, estop_latched: false, front_zone: STOP, braking: true,
+                 locked: true, max_forward: 0.0}
+      - t: 0.05
+        set: {scan_seq: 2}
+        expect: {state: ACTIVE, estop_latched: false, front_zone: STOP, max_forward: 0.0}
+      - t: 0.1
+        set: {scan_seq: 3}
+        expect: {state: ESTOP, estop_latched: true, locked: true, reason: contact zone (front),
+                 max_forward: 0.0, max_reverse: 0.0}
+      - t: 5.0
+        set: {scan_seq: 4, v_odom: 0.0, v_cmd: 0.0,
+              evaluation: {front_clearance: .inf, contact_front: false}}
+        expect: {state: ESTOP, estop_latched: true, locked: true}
+  - name: core_contact_latches_rear_when_reversing
+    fn: core
+    start: healthy
+    steps:
+      - t: 0.0
+        set: {scan_seq: 1, v_odom: -0.1, v_cmd: -0.1,
+              evaluation: {rear_clearance: 0.01, contact_rear: true}}
+        expect: {state: ACTIVE, estop_latched: false, rear_zone: STOP, max_reverse: 0.0,
+                 braking: true, locked: true}
+      - t: 0.05
+        set: {scan_seq: 2}
+        expect: {state: ACTIVE, estop_latched: false, rear_zone: STOP, max_reverse: 0.0}
+      - t: 0.1
+        set: {scan_seq: 3}
+        expect: {state: ESTOP, estop_latched: true, reason: contact zone (rear)}
+  - name: core_contact_debounce_counts_scans_not_ticks
+    fn: core
+    start: healthy
+    steps:
+      # many ticks on the same scan (same scan_seq) never confirm the contact
+      - {t: 0.0, set: {scan_seq: 1, v_odom: 0.1, v_cmd: 0.1,
+                       evaluation: {front_clearance: 0.01, contact_front: true}},
+         expect: {estop_latched: false, front_zone: STOP}}
+      - {t: 0.05, expect: {estop_latched: false, front_zone: STOP}}
+      - {t: 0.1, expect: {estop_latched: false, front_zone: STOP}}
+      - {t: 0.15, expect: {estop_latched: false, front_zone: STOP}}
+      - {t: 0.2, set: {scan_seq: 2}, expect: {estop_latched: false, front_zone: STOP}}
+      - {t: 0.25, expect: {estop_latched: false, front_zone: STOP}}
+      - {t: 0.3, set: {scan_seq: 3}, expect: {state: ESTOP, estop_latched: true}}
+  - name: core_contact_debounce_resets_when_the_contact_disappears
+    fn: core
+    start: healthy
+    steps:
+      - {t: 0.0, set: {scan_seq: 1, v_odom: 0.1, v_cmd: 0.1,
+                       evaluation: {front_clearance: 0.01, contact_front: true}},
+         expect: {estop_latched: false}}
+      - {t: 0.05, set: {scan_seq: 2}, expect: {estop_latched: false}}
+      - {t: 0.1, set: {scan_seq: 3, evaluation: {front_clearance: 0.04, contact_front: false}},
+         expect: {estop_latched: false, front_zone: STOP}}
+      - {t: 0.15, set: {scan_seq: 4, evaluation: {front_clearance: 0.01, contact_front: true}},
+         expect: {estop_latched: false}}
+      - {t: 0.2, set: {scan_seq: 5}, expect: {estop_latched: false}}
+      - {t: 0.25, set: {scan_seq: 6}, expect: {state: ESTOP, estop_latched: true}}
+  - name: core_contact_debounce_one_scan_with_setting_one
+    fn: core
+    start: healthy
+    cfg: {contact_debounce_scans: 1}
+    steps:
+      - {t: 0.0, set: {scan_seq: 1, v_odom: 0.1, v_cmd: 0.1,
+                       evaluation: {front_clearance: 0.01, contact_front: true}},
+         expect: {state: ESTOP, estop_latched: true, reason: contact zone (front)}}
+  - name: core_contact_does_not_latch_when_stationary
+    fn: core
+    start: healthy
+    steps:
+      # stationary: a confirmed contact (scan 3) is CONTACT but never latches or brakes
+      - t: 0.0
+        set: {scan_seq: 1, v_odom: 0.0, v_cmd: 0.0,
+              evaluation: {front_clearance: 0.01, contact_front: true}}
+        expect: {state: ACTIVE, estop_latched: false, front_zone: STOP, braking: false,
+                 locked: false, max_forward: 0.0}
+      - {t: 0.05, set: {scan_seq: 2}, expect: {state: ACTIVE, estop_latched: false, braking: false}}
+      - t: 0.1
+        set: {scan_seq: 3}
+        expect: {state: ACTIVE, estop_latched: false, front_zone: CONTACT, braking: false,
+                 locked: false, max_forward: 0.0}
+      - t: 0.15
+        set: {scan_seq: 4, v_cmd: 0.3}
+        expect: {state: ACTIVE, estop_latched: false, braking: false, locked: false}
+  - name: core_contact_without_latch_on_contact_only_brakes
+    fn: core
+    start: healthy
+    cfg: {latch_on_contact: false}
+    steps:
+      - t: 0.0
+        set: {scan_seq: 1, v_odom: 0.1, v_cmd: 0.1,
+              evaluation: {front_clearance: 0.01, contact_front: true}}
+        expect: {state: ACTIVE, estop_latched: false, braking: true, locked: true,
+                 front_zone: STOP}
+      - {t: 0.05, set: {scan_seq: 2}, expect: {state: ACTIVE, estop_latched: false}}
+      - t: 0.1
+        set: {scan_seq: 3}
+        expect: {state: ACTIVE, estop_latched: false, braking: true, locked: true,
+                 front_zone: CONTACT}
+  - name: core_estop_by_request_and_reset
+    fn: core
+    start: healthy
+    steps:
+      - {t: 0.0, expect: {state: ACTIVE}, action: trigger_estop}
+      - t: 0.05
+        expect: {state: ESTOP, estop_latched: true, locked: true, reason: e-stop requested by service,
+                 max_forward: 0.0, max_reverse: 0.0}
+        limit: {v: 0.3, w: 0.2, expect: [0.0, 0.0]}
+      - {t: 5.0, expect: {state: ESTOP, estop_latched: true, locked: true}}
+      - {t: 5.05, expect: {state: ESTOP}, action: reset, expect_reset: [true, reset]}
+      - t: 5.1
+        expect: {state: ACTIVE, estop_latched: false, locked: false, reason: "", max_forward: 0.7}
+  - name: core_estop_input_refuses_reset_until_released
+    fn: core
+    start: healthy
+    steps:
+      - {t: 0.0, set: {estop_input: true},
+         expect: {state: ESTOP, estop_latched: true, locked: true, reason: estop input},
+         action: reset, expect_reset: [false, estop input active]}
+      - {t: 0.1, expect: {state: ESTOP}}
+      - {t: 0.2, set: {estop_input: false}, expect: {state: ESTOP, estop_latched: true},
+         action: reset, expect_reset: [true, reset]}
+      - {t: 0.3, expect: {state: ACTIVE, locked: false, estop_latched: false}}
+  - name: core_reset_when_not_latched
+    fn: core
+    start: healthy
+    steps:
+      - {t: 0.0, expect: {state: ACTIVE}, action: reset, expect_reset: [true, not latched]}
+      - {t: 0.1, expect: {state: ACTIVE, locked: false}}
+  - name: core_reset_refused_during_scan_dropout
+    fn: core
+    start: healthy
+    steps:
+      - {t: 0.0, action: trigger_estop}
+      - {t: 0.1, set: {scan_age: 1.0}, expect: {state: ESTOP, estop_latched: true},
+         action: reset, expect_reset: [false, "fault: scan timeout"]}
+      - {t: 0.2, set: {scan_age: 0.05}, expect: {state: ESTOP},
+         action: reset, expect_reset: [true, reset]}
+  - name: core_reset_refused_during_odom_dropout
+    fn: core
+    start: healthy
+    steps:
+      - {t: 0.0, action: trigger_estop}
+      - {t: 0.1, set: {odom_age: 1.0}, expect: {state: ESTOP},
+         action: reset, expect_reset: [false, "fault: odom timeout"]}
+  - name: core_reset_refused_with_invalid_scan
+    fn: core
+    start: healthy
+    steps:
+      - {t: 0.0, action: trigger_estop}
+      - {t: 0.1, set: {scan_ok: false, scan_invalid_reason: "invalid scan: empty ranges"},
+         expect: {state: ESTOP}, action: reset,
+         expect_reset: [false, "fault: invalid scan: empty ranges"]}
+  # Iteration 3 (H1): a one-sided contact allows a reset when nothing moves or is commanded toward
+  # it (the speed filter keeps blocking that direction); refused when moving or commanded toward
+  # it, with contact on both sides and in lock_only.
+  - name: core_reset_refused_in_front_contact_when_moving_toward_it
+    fn: core
+    start: healthy
+    steps:
+      - {t: 0.0, action: trigger_estop}
+      - {t: 0.1, set: {v_odom: 0.1, v_cmd: 0.0,
+                       evaluation: {front_clearance: 0.01, contact_front: true}},
+         expect: {state: ESTOP}, action: reset,
+         expect_reset: [false, obstacle in contact zone (front)]}
+  - name: core_reset_refused_in_front_contact_when_commanded_toward_it
+    fn: core
+    start: healthy
+    steps:
+      - {t: 0.0, action: trigger_estop}
+      - {t: 0.1, set: {v_odom: 0.0, v_cmd: 0.2,
+                       evaluation: {front_clearance: 0.01, contact_front: true}},
+         expect: {state: ESTOP}, action: reset,
+         expect_reset: [false, obstacle in contact zone (front)]}
+  - name: core_reset_accepted_in_front_contact_when_stopped
+    fn: core
+    start: healthy
+    steps:
+      - {t: 0.0, action: trigger_estop}
+      - {t: 0.1, set: {evaluation: {front_clearance: 0.01, contact_front: true}},
+         expect: {state: ESTOP}, action: reset, expect_reset: [true, reset]}
+      - t: 0.2
+        expect: {state: ACTIVE, estop_latched: false, locked: false, front_zone: STOP,
+                 max_forward: 0.0, max_reverse: 0.7}
+        limit: {v: 0.3, w: 0.0, expect: [0.0, 0.0]}
+      - t: 0.3
+        limit: {v: -0.1, w: 0.0, expect: [-0.1, 0.0]}
+  - name: core_reset_accepted_in_front_contact_when_moving_away
+    fn: core
+    start: healthy
+    steps:
+      - {t: 0.0, action: trigger_estop}
+      - {t: 0.1, set: {v_odom: -0.1, v_cmd: -0.1,
+                       evaluation: {front_clearance: 0.01, contact_front: true}},
+         expect: {state: ESTOP}, action: reset, expect_reset: [true, reset]}
+  - name: core_reset_refused_in_rear_contact_when_moving_toward_it
+    fn: core
+    start: healthy
+    steps:
+      - {t: 0.0, action: trigger_estop}
+      - {t: 0.1, set: {v_odom: -0.1, v_cmd: 0.0,
+                       evaluation: {rear_clearance: 0.01, contact_rear: true}},
+         expect: {state: ESTOP}, action: reset,
+         expect_reset: [false, obstacle in contact zone (rear)]}
+  - name: core_reset_refused_in_rear_contact_when_commanded_toward_it
+    fn: core
+    start: healthy
+    steps:
+      - {t: 0.0, action: trigger_estop}
+      - {t: 0.1, set: {v_odom: 0.0, v_cmd: -0.2,
+                       evaluation: {rear_clearance: 0.01, contact_rear: true}},
+         expect: {state: ESTOP}, action: reset,
+         expect_reset: [false, obstacle in contact zone (rear)]}
+  - name: core_reset_accepted_in_rear_contact_when_stopped
+    fn: core
+    start: healthy
+    steps:
+      - {t: 0.0, action: trigger_estop}
+      - {t: 0.1, set: {evaluation: {rear_clearance: 0.01, contact_rear: true}},
+         expect: {state: ESTOP}, action: reset, expect_reset: [true, reset]}
+      - t: 0.2
+        expect: {state: ACTIVE, estop_latched: false, rear_zone: STOP, max_reverse: 0.0,
+                 max_forward: 0.7}
+        limit: {v: -0.3, w: 0.0, expect: [0.0, 0.0]}
+  - name: core_reset_refused_with_contact_on_both_sides
+    fn: core
+    start: healthy
+    steps:
+      - {t: 0.0, action: trigger_estop}
+      - {t: 0.1, set: {evaluation: {front_clearance: 0.01, contact_front: true,
+                                    rear_clearance: 0.01, contact_rear: true}},
+         expect: {state: ESTOP}, action: reset,
+         expect_reset: [false, obstacle in contact zone (front)]}
+  - name: core_reset_refused_in_front_contact_in_lock_only
+    fn: core
+    start: healthy
+    cfg: {enforcement: lock_only}
+    steps:
+      - {t: 0.0, action: trigger_estop}
+      - {t: 0.1, set: {evaluation: {front_clearance: 0.01, contact_front: true}},
+         expect: {state: ESTOP}, action: reset,
+         expect_reset: [false, obstacle in contact zone (front)]}
+  - name: core_reset_refused_in_rear_contact_in_lock_only
+    fn: core
+    start: healthy
+    cfg: {enforcement: lock_only}
+    steps:
+      - {t: 0.0, action: trigger_estop}
+      - {t: 0.1, set: {evaluation: {rear_clearance: 0.01, contact_rear: true}},
+         expect: {state: ESTOP}, action: reset,
+         expect_reset: [false, obstacle in contact zone (rear)]}
+  - name: core_reset_accepted_in_stop_zone_and_motion_toward_it_stays_blocked
+    fn: core
+    start: healthy
+    steps:
+      - {t: 0.0, action: trigger_estop}
+      - {t: 0.1, set: {evaluation: {front_clearance: 0.04}}, expect: {state: ESTOP},
+         action: reset, expect_reset: [true, reset]}
+      - t: 0.2
+        expect: {state: ACTIVE, estop_latched: false, locked: false, front_zone: STOP,
+                 max_forward: 0.0, max_reverse: 0.7}
+        limit: {v: 0.3, w: 0.0, expect: [0.0, 0.0]}
+      - t: 0.3
+        limit: {v: -0.1, w: 0.0, expect: [-0.1, 0.0]}
+  - name: core_reset_rear_contact_exempt_in_dock_profile
+    fn: core
+    start: healthy
+    steps:
+      - {t: 0.0, action: trigger_estop}
+      - {t: 0.1, set: {dock_active: true, dock_reason: dock approach,
+                       evaluation: {rear_clearance: 0.005, contact_rear: true}},
+         expect: {state: ESTOP}, action: reset, expect_reset: [true, reset]}
+      - {t: 0.2, expect: {state: DOCK_APPROACH, estop_latched: false, rear_zone: STOP,
+                          max_reverse: 0.0, dock_profile_active: true}}
+  - name: core_reset_front_contact_not_exempt_in_dock_profile
+    fn: core
+    start: healthy
+    steps:
+      # the dock exemption covers the rear only: a front contact with motion toward it is refused
+      - {t: 0.0, action: trigger_estop}
+      - {t: 0.1, set: {dock_active: true, dock_reason: dock approach, v_odom: 0.05, v_cmd: 0.05,
+                       evaluation: {front_clearance: 0.005, contact_front: true}},
+         expect: {state: ESTOP}, action: reset,
+         expect_reset: [false, obstacle in contact zone (front)]}
+  - name: core_reset_front_contact_in_dock_profile_accepted_when_stopped
+    fn: core
+    start: healthy
+    steps:
+      - {t: 0.0, action: trigger_estop}
+      - {t: 0.1, set: {dock_active: true, dock_reason: dock approach,
+                       evaluation: {front_clearance: 0.005, contact_front: true}},
+         expect: {state: ESTOP}, action: reset, expect_reset: [true, reset]}
+      - {t: 0.2, expect: {state: DOCK_APPROACH, estop_latched: false, front_zone: STOP,
+                          max_forward: 0.0}}
+  - name: core_reset_dock_profile_rear_contact_is_exempt_so_front_contact_counts_one_sided
+    fn: core
+    start: healthy
+    steps:
+      - {t: 0.0, action: trigger_estop}
+      - {t: 0.1, set: {dock_active: true, dock_reason: dock approach,
+                       evaluation: {front_clearance: 0.005, contact_front: true,
+                                    rear_clearance: 0.005, contact_rear: true}},
+         expect: {state: ESTOP}, action: reset, expect_reset: [true, reset]}
+  - name: core_fault_scan_timeout_and_recovery
+    fn: core
+    start: healthy
+    steps:
+      - {t: 0.0, expect: {state: ACTIVE}}
+      - {t: 1.0, set: {scan_age: 0.7},
+         expect: {state: FAULT, locked: true, reason: scan timeout, max_forward: 0.0,
+                  max_reverse: 0.0, estop_latched: false}}
+      - {t: 1.1, set: {scan_age: 0.05}, expect: {state: FAULT, locked: true}}
+      - {t: 1.4, expect: {state: FAULT, locked: true}}
+      - {t: 1.7, expect: {state: ACTIVE, locked: false, reason: ""}}
+  - name: core_fault_odom_timeout
+    fn: core
+    start: healthy
+    steps:
+      - {t: 0.0, set: {odom_age: 0.6},
+         expect: {state: FAULT, locked: true, reason: odom timeout}}
+      - {t: 0.1, set: {odom_age: 0.05}, expect: {state: FAULT}}
+      - {t: 0.7, expect: {state: ACTIVE, locked: false}}
+  - name: core_odom_age_ignored_without_use_odom
+    fn: core
+    start: healthy
+    cfg: {use_odom: false}
+    steps:
+      - {t: 0.0, set: {odom_age: 30.0}, expect: {state: ACTIVE, locked: false}}
+  - name: core_fault_internal_error_and_recovery
+    fn: core
+    start: healthy
+    steps:
+      - {t: 0.0, set: {tick_exception: boom},
+         expect: {state: FAULT, locked: true, reason: "internal error: boom"}}
+      - {t: 0.05, set: {tick_exception: ""}, expect: {state: FAULT, locked: true}}
+      - {t: 0.6, expect: {state: ACTIVE, locked: false}}
+  - name: core_fault_invalid_scan_reasons
+    fn: core
+    start: healthy
+    steps:
+      - {t: 0.0, set: {scan_ok: false, scan_invalid_reason: "invalid scan: empty ranges"},
+         expect: {state: FAULT, locked: true, reason: "invalid scan: empty ranges"}}
+      - {t: 0.1, set: {scan_invalid_reason: "scan frame changed"},
+         expect: {state: FAULT, reason: scan frame changed}}
+      - {t: 0.2, set: {scan_invalid_reason: ""},
+         expect: {state: FAULT, reason: no valid scan, locked: true}}
+      - {t: 0.3, set: {scan_ok: true}, expect: {state: FAULT}}
+      - {t: 0.9, expect: {state: ACTIVE}}
+  - name: core_stale_command_is_not_a_fault
+    fn: core
+    start: healthy
+    steps:
+      - {t: 0.0, set: {cmd_age: 0.6, v_cmd: 0.3},
+         expect: {state: ACTIVE, locked: false, max_forward: 0.7}}
+      - {t: 0.1, set: {cmd_age: -1.0, v_cmd: .nan}, expect: {state: ACTIVE, locked: false}}
+  - name: core_latch_faults_latches_the_estop
+    fn: core
+    start: healthy
+    cfg: {latch_faults: true}
+    steps:
+      - {t: 0.0, expect: {state: ACTIVE}}
+      - {t: 1.0, set: {scan_age: 0.7},
+         expect: {state: ESTOP, estop_latched: true, locked: true, reason: "fault: scan timeout"}}
+      - {t: 1.1, set: {scan_age: 0.05}, expect: {state: ESTOP, estop_latched: true}}
+      - {t: 5.0, expect: {state: ESTOP, estop_latched: true, locked: true}}
+      - {t: 5.1, expect: {state: ESTOP}, action: reset, expect_reset: [true, reset]}
+      - {t: 5.2, expect: {state: ACTIVE, locked: false, estop_latched: false, reason: ""}}
+  - name: core_estop_wins_over_initializing
+    fn: core
+    start: failsafe
+    steps:
+      - {t: 0.0, action: trigger_estop}
+      - {t: 0.1, expect: {state: ESTOP, estop_latched: true, locked: true,
+                          reason: e-stop requested by service}}
+  - name: core_shutdown_locks_and_wins
+    fn: core
+    start: healthy
+    steps:
+      - {t: 0.0, expect: {state: ACTIVE}, action: shutdown}
+      - t: 0.1
+        expect: {state: SHUTDOWN, locked: true, braking: false, max_forward: 0.0, max_reverse: 0.0}
+        limit: {v: 0.3, w: 0.0, expect: [0.0, 0.0]}
+      - {t: 5.0, expect: {state: SHUTDOWN, locked: true}}
+  - name: core_reuse_after_reset_carries_no_state
+    fn: core
+    start: healthy
+    steps:
+      - {t: 0.0, set: {scan_seq: 1, v_odom: 0.3, v_cmd: 0.3, evaluation: {front_clearance: 0.03}},
+         expect: {braking: true, locked: true}}
+      # contact on scans 1-3 (debounce): STOP first, the e-stop latches on the third scan
+      - {t: 0.1, set: {scan_seq: 2, v_odom: 0.1,
+                       evaluation: {front_clearance: 0.01, contact_front: true}},
+         expect: {estop_latched: false, front_zone: STOP}}
+      - {t: 0.15, set: {scan_seq: 3}, expect: {estop_latched: false, front_zone: STOP}}
+      - {t: 0.2, set: {scan_seq: 4},
+         expect: {state: ESTOP, reason: contact zone (front), braking: false}}
+      - {t: 0.25, set: {scan_seq: 5, v_odom: 0.0, v_cmd: 0.0, evaluation: {front_clearance: .inf,
+                                                              contact_front: false}},
+         expect: {state: ESTOP}, action: reset, expect_reset: [true, reset]}
+      - {t: 0.3, expect: {state: ACTIVE, locked: false, braking: false, estop_latched: false,
+                          reason: "", front_zone: CLEAR, max_forward: 0.7}}
+      - {t: 0.4, action: trigger_estop, expect: {state: ACTIVE}}
+      - {t: 0.5, expect: {state: ESTOP, reason: e-stop requested by service}}
+  - name: core_restart_latch_requires_reset_when_configured
+    fn: core
+    start: healthy
+    cfg: {require_reset_after_restart: true}
+    steps:
+      - t: 0.0
+        expect: {state: ESTOP, estop_latched: true, locked: true,
+                 reason: "restart: reset required", max_forward: 0.0, max_reverse: 0.0}
+        limit: {v: 0.3, w: 0.2, expect: [0.0, 0.0]}
+      - {t: 5.0, expect: {state: ESTOP, estop_latched: true, locked: true}}
+      - {t: 5.05, expect: {state: ESTOP}, action: reset, expect_reset: [true, reset]}
+      - {t: 5.1, expect: {state: ACTIVE, estop_latched: false, locked: false, reason: "",
+                          max_forward: 0.7}}
+  - name: core_restart_latch_reset_refused_with_a_fault_then_accepted
+    fn: core
+    start: healthy
+    cfg: {require_reset_after_restart: true}
+    steps:
+      - {t: 0.0, set: {scan_age: 1.0}, expect: {state: ESTOP, estop_latched: true},
+         action: reset, expect_reset: [false, "fault: scan timeout"]}
+      - {t: 0.1, set: {scan_age: 0.05}, expect: {state: ESTOP}, action: reset,
+         expect_reset: [true, reset]}
+  - name: core_default_has_no_restart_latch
+    fn: core
+    start: healthy
+    steps:
+      - {t: 0.0, expect: {state: ACTIVE, estop_latched: false, locked: false}}
+  - name: core_no_brake_for_commanded_but_stationary_robot
+    fn: core
+    start: healthy
+    steps:
+      - {t: 0.0, set: {v_odom: 0.0, v_cmd: 0.3, evaluation: {front_clearance: 0.03}},
+         expect: {state: ACTIVE, braking: false, locked: false, front_zone: STOP,
+                  max_forward: 0.0}}
+      - {t: 2.0, expect: {state: ACTIVE, braking: false, locked: false}}
+  - name: core_without_odom_brake_starts_on_zone_transition_only
+    fn: core
+    start: healthy
+    cfg: {use_odom: false}
+    steps:
+      - {t: 0.0, set: {v_cmd: 0.3, v_odom: .nan, odom_age: -1.0}, expect: {state: ACTIVE,
+                                                                          braking: false}}
+      - {t: 1.0, set: {evaluation: {front_clearance: 0.03}}, expect: {braking: true, locked: true}}
+      - {t: 1.3, expect: {braking: true, locked: true}}
+      - {t: 1.6, expect: {braking: false, locked: false, front_zone: STOP}}
+      - {t: 3.0, expect: {braking: false, locked: false}}
+  - name: core_dock_profile_rear_reverse_cap
+    fn: core
+    start: healthy
+    steps:
+      - t: 0.0
+        set: {dock_active: true, dock_reason: dock approach, evaluation: {rear_clearance: 0.03}}
+        expect: {state: DOCK_APPROACH, dock_profile_active: true, rear_zone: WARNING,
+                 max_reverse: 0.04, max_forward: 0.7, locked: false}
+        limit: {v: -0.15, w: 0.0, expect: [-0.04, 0.0]}
+      - t: 0.1
+        set: {evaluation: {rear_clearance: 0.005, contact_rear: true}}
+        expect: {state: DOCK_APPROACH, rear_zone: STOP, max_reverse: 0.0, estop_latched: false}
+  # Iteration 3 (M4): max_reverse = min(dock_max_speed, speed_limit(d_rear, dock_stop_margin)).
+  # speed_limit(d, 0.01) = min(0.7, 0.7 * (d - 0.01) / 0.35, brake): the ramp binds at 0.03
+  # (0.04), the dock cap binds from d = 0.04 on (ramp 0.06), the brake term never binds here.
+  - name: core_dock_profile_rear_cap_follows_the_braking_ramp
+    fn: core
+    start: healthy
+    steps:
+      - t: 0.0
+        set: {dock_active: true, dock_reason: dock approach, evaluation: {rear_clearance: 0.03}}
+        expect: {max_reverse: 0.04}
+      - {t: 0.1, set: {evaluation: {rear_clearance: 0.02}}, expect: {max_reverse: 0.02}}
+      - {t: 0.2, set: {evaluation: {rear_clearance: 0.04}}, expect: {max_reverse: 0.06}}
+      - {t: 0.3, set: {evaluation: {rear_clearance: 0.5}}, expect: {max_reverse: 0.06}}
+      - {t: 0.4, set: {evaluation: {rear_clearance: .inf}}, expect: {max_reverse: 0.06}}
+  - name: core_dock_profile_rear_contact_while_reversing_does_not_latch
+    fn: core
+    start: healthy
+    steps:
+      - t: 0.0
+        set: {dock_active: true, dock_reason: dock approach, v_odom: -0.05, v_cmd: -0.05,
+              evaluation: {rear_clearance: 0.005, contact_rear: true}}
+        expect: {state: DOCK_APPROACH, estop_latched: false, braking: true, locked: true,
+                 rear_zone: STOP, dock_profile_active: true}
+  - name: core_dock_profile_front_protection_unchanged
+    fn: core
+    start: healthy
+    steps:
+      - t: 0.0
+        set: {scan_seq: 1, dock_active: true, dock_reason: dock approach,
+              evaluation: {front_clearance: 0.03}}
+        expect: {state: DOCK_APPROACH, front_zone: STOP, max_forward: 0.0, rear_zone: CLEAR,
+                 max_reverse: 0.06}
+      - t: 0.1
+        set: {scan_seq: 2, v_odom: 0.1, v_cmd: 0.1,
+              evaluation: {front_clearance: 0.01, contact_front: true}}
+        expect: {state: DOCK_APPROACH, estop_latched: false, front_zone: STOP, max_forward: 0.0}
+      - t: 0.15
+        set: {scan_seq: 3}
+        expect: {state: DOCK_APPROACH, estop_latched: false, front_zone: STOP}
+      - t: 0.2
+        set: {scan_seq: 4}
+        expect: {state: ESTOP, estop_latched: true, reason: contact zone (front)}
+  - name: core_dock_profile_falls_back_in_the_same_tick
+    fn: core
+    start: healthy
+    steps:
+      - t: 0.0
+        set: {dock_active: true, dock_reason: dock approach, evaluation: {rear_clearance: 0.03}}
+        expect: {state: DOCK_APPROACH, max_reverse: 0.04}
+      - t: 0.05
+        set: {dock_active: false, dock_reason: dock approach time limit}
+        expect: {state: ACTIVE, dock_profile_active: false, rear_zone: STOP, max_reverse: 0.0,
+                 reason: dock approach time limit}
+  - name: core_dock_profile_unavailable_in_lock_only
+    fn: core
+    start: healthy
+    cfg: {enforcement: lock_only}
+    steps:
+      - t: 0.0
+        set: {dock_active: true, dock_reason: dock approach, evaluation: {rear_clearance: 0.03}}
+        expect: {state: ACTIVE, dock_profile_active: false, rear_zone: STOP, max_reverse: 0.0,
+                 reason: dock profile unavailable in lock_only}
+  - name: core_dock_profile_not_active_while_locked
+    fn: core
+    start: healthy
+    steps:
+      - t: 0.0
+        set: {dock_active: true, dock_reason: dock approach, scan_age: 1.0}
+        expect: {state: FAULT, locked: true, dock_profile_active: false, max_reverse: 0.0}
+  - name: core_limit_command_clamps_and_rejects_non_finite
+    fn: core
+    start: healthy
+    steps:
+      - t: 0.0
+        expect: {state: ACTIVE}
+        limit: {v: 0.9, w: 6.0, expect: [0.7, 5.0]}
+      - t: 0.05
+        limit: {v: -0.9, w: -6.0, expect: [-0.7, -5.0]}
+      - t: 0.1
+        limit: {v: .nan, w: 0.0, expect: [0.0, 0.0]}
+      - t: 0.15
+        limit: {v: 0.3, w: .inf, expect: [0.0, 0.0]}
+      - t: 0.2
+        limit: {v: 0.3, w: 1.0, expect: [0.3, 1.0]}

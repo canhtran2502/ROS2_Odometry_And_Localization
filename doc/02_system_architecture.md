@@ -152,6 +152,8 @@ flowchart TD
     SLAM --> MapOdomTF
 ```
 
+**Safety supervisor placement.** In the simulation stack `safety_supervisor` sits after `twist_mux`: the `twist_mux` output is remapped to `safety/cmd_vel_in`, and the supervisor publishes the direction-aware limited command on `bumperbot_controller/cmd_vel_unstamped` for `twist_relay`. It also publishes the `twist_mux` lock `/safety_stop` (priority 255) on every tick, plus `/safety/status` (`SafetyStatus`). Lock semantics: `true` in INITIALIZING, FAULT, ESTOP, SHUTDOWN and during a brake pulse; it stays `true` after a clean exit (lock timeout 0.0, the last value never expires), so the robot stays stopped; after a crash the last value stays and may be `false` (see doc/12). With `safety:=legacy` the old `safety_stop` node publishes the lock and `twist_mux` feeds `twist_relay` directly. On hardware `real_robot.launch.py` starts neither; the user runs `safety_supervisor.launch.py enforcement:=lock_only`, where the node only observes the command and drives the lock. Details in [07_lidar_and_sensor_processing.md](07_lidar_and_sensor_processing.md).
+
 ---
 
 ## D. Process & Concurrency Architecture

@@ -1,0 +1,3 @@
+safety_supervisor:
+  ros__parameters:
+    contact_debounce_scans: 0

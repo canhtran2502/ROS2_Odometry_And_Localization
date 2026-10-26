@@ -50,7 +50,16 @@ This document provides a comprehensive, verified catalog of every ROS 2 node, to
 
 ### 2. Supervisory & Safety Nodes
 
-#### `safety_stop_node` (`safety_stop.cpp` / `safety_stop.py`)
+#### `safety_supervisor` (`safety_supervisor` C++ / `safety_supervisor.py`)
+- **Package**: `bumperbot_utils`; started by `simulated_robot.launch.py` (default `safety:=supervisor`, `safety_use_python:=false`) and by `bumperbot_utils/launch/safety_supervisor.launch.py`.
+- **Purpose**: Direction-aware speed limiting around the footprint, latched e-stop, sensor watchdog and the `twist_mux` lock. See doc/07 section C2.
+- **Subscriptions**: `scan` (`LaserScan`, best effort), `bumperbot_controller/odom` (`Odometry`), `safety/cmd_vel_in` (`Twist`, the remapped `twist_mux` output; in `enforcement: lock_only` the node reads `bumperbot_controller/cmd_vel_unstamped` read only instead), `safety/estop` (`std_msgs/Bool`, volatile and transient_local), `dock/status` (`DockStatus`, transient_local)
+- **Publications**: `bumperbot_controller/cmd_vel_unstamped` (`Twist`, filter mode only), `safety_stop` (`std_msgs/Bool`, the `twist_mux` lock, every tick), `safety/status` (`bumperbot_msgs/msg/SafetyStatus`, transient_local)
+- **Services** (`std_srvs/srv/Trigger`): `/safety_supervisor/trigger_estop`, `/safety_supervisor/reset` (refused while the `safety/estop` input is true, a fault exists, or an obstacle is in the swept-path contact zone in `lock_only`, on both sides or with motion toward it; see doc/07)
+- **TF**: reads `base_footprint <- laser_link` and, for the dock profile, `DockStatus.frame_id -> base_footprint`; publishes none
+- **Parameters**: `config/safety_supervisor.yaml` (`enforcement` filter/lock_only, `robot_frame`, `footprint` (default rectangle x +-0.10 m, y +-0.125 m, includes the wheels), `stop_margin`, `slowdown_distance`, `contact_margin`, `max_linear_speed`, timeouts, `latch_faults`, `contact_debounce_scans`, `require_reset_after_restart`, `dock_approach_enabled`, `dock_max_speed`, ...); configuration is ROS parameters only
+
+#### `safety_stop_node` (`safety_stop.cpp` / `safety_stop.py`, legacy, `safety:=legacy`)
 - **Package**: `bumperbot_utils`
 - **Purpose**: Two-tier reactive safety supervisor inspecting 2D LiDAR ranges. Modulates teleop velocity via actions and triggers emergency lock on `twist_mux`.
 - **Subscriptions**:
@@ -219,6 +228,10 @@ This document provides a comprehensive, verified catalog of every ROS 2 node, to
 | `/imu/out` | `sensor_msgs/msg/Imu` | `ros_gz_bridge` / `mpu6050_driver` | `imu_republisher_node` | Raw 6-DoF inertial measurements |
 | `/imu_ekf` | `sensor_msgs/msg/Imu` | `imu_republisher_node` | `robot_localization` (EKF) | Axis-corrected IMU data for fusion |
 | `/scan` | `sensor_msgs/msg/LaserScan` | `ros_gz_bridge` (LiDAR) | `safety_stop`, `nav2_amcl`, `slam_toolbox` | 2D planar laser range scan |
+| `safety/cmd_vel_in` | `geometry_msgs/msg/Twist` | `twist_mux` (output remapped in `simulated_robot.launch.py`, `safety:=supervisor`) | `safety_supervisor` | Unfiltered velocity demand; the supervisor limits it and publishes `bumperbot_controller/cmd_vel_unstamped` |
+| `/safety_stop` | `std_msgs/msg/Bool` | `safety_supervisor` (or legacy `safety_stop`) | `twist_mux` lock (255), `dock_manager` (read only) | Lock; the supervisor republishes it at 20 Hz |
+| `/safety/status` | `bumperbot_msgs/msg/SafetyStatus` | `safety_supervisor` | user, tests | State, zones, clearances, allowed speeds, lock, e-stop latch, reason, input ages (transient_local) |
+| `/safety/estop` | `std_msgs/msg/Bool` | user / external e-stop | `safety_supervisor` | `true` latches the e-stop; reset needs it back to `false` |
 | `explore_vel` | `geometry_msgs/msg/Twist` | `frontier_explorer` | `twist_mux` (input `explore`, priority 10) | Autonomous exploration velocity demand (lowest priority; joystick 99 > keyboard 90 > explore 10; the `safety_stop` lock 255 wins) |
 | `nav_vel` | `geometry_msgs/msg/Twist` | Nav2 `controller_server`, `behavior_server` | `twist_mux` (input `navigation`, priority 20) | Nav2 velocity demand (joystick 99 > keyboard 90 > navigation 20 > explore 10; the `safety_stop` lock 255 wins; nothing publishes it on the real robot) |
 | `dock_vel` | `geometry_msgs/msg/Twist` | `dock_manager` | `twist_mux` (input `docking`, priority 30) | Docking velocity demand (above `nav_vel`, below keyboard and joystick; the `safety_stop` lock still wins) |

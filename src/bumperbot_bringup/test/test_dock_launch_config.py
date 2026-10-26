@@ -231,15 +231,27 @@ def feature_base():
     return out[-1] + "^"
 
 
+def feature_end():
+    """Last commit of the auto-docking feature (later features may change simulated_robot)."""
+    out = subprocess.run(
+        ["git", "log", "-1", "--format=%H", "--", ".claude/features/auto-docking"], cwd=ROOT,
+        capture_output=True, text=True).stdout.split()
+    assert out, "no commit of the auto-docking feature was found"
+    return out[0]
+
+
 def test_real_robot_launch_unchanged_vs_main():
     res = subprocess.run(["git", "diff", "--quiet", "main", "--", UNCHANGED[0]], cwd=ROOT)
     assert res.returncode == 0, "real_robot.launch.py differs from main"
 
 
 def test_existing_launch_files_unchanged_by_the_feature():
-    """Earlier features changed simulated_robot / mission_sim after main: compare to the base."""
-    res = subprocess.run(["git", "diff", "--quiet", feature_base(), "--"] + UNCHANGED, cwd=ROOT)
-    assert res.returncode == 0, "real_robot / simulated_robot / mission_sim changed by the feature"
+    """Compare feature base..last feature commit, so later features do not fail this check."""
+    end = feature_end()
+    res = subprocess.run(["git", "diff", "--quiet", feature_base(), end, "--"] + UNCHANGED,
+                         cwd=ROOT)
+    assert res.returncode == 0, (
+        "real_robot / simulated_robot / mission_sim changed by the feature (base..{})".format(end))
 
 
 def test_existing_launch_files_still_show_args():
