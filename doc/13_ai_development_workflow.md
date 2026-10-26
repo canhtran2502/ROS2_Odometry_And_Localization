@@ -27,6 +27,11 @@ Each stage is committed on the feature branch so the history records the progres
    +-----------------------------------------------------+
                 FAIL and iteration < max          PASS -> done
                                                   stuck / max -> blocked (ask user)
+                                                     |
+                                                     v  (first PASS only)
+                                          +-------------------+  review.md
+                                          | reviewer (Opus)   | ---> coder fixes high/medium
+                                          +-------------------+      -> tester adds tests -> PASS
 ```
 
 The main Claude Code session is the **orchestrator**. Subagents cannot spawn other
@@ -58,6 +63,7 @@ subagents, so the loop runs in the main session and only delegates the work.
 | `architect` | opus | Designs architecture, numbered acceptance criteria, test plan | `plan.md` only |
 | `coder` | sonnet | Implements the plan or fixes FAIL items; builds with colcon | product code, docs |
 | `tester` | sonnet | Writes tests per AC, runs `colcon test`, gives a verdict | tests, `test-report.md` |
+| `reviewer` | opus | Adversarial review of the finished diff (concurrency, failure paths, C++/Python parity, safety) | `review.md` only |
 
 The tester never edits product code, and the coder never edits tests. This separation
 keeps the evaluation honest.
@@ -73,6 +79,10 @@ keeps the evaluation honest.
 The loop stops on PASS, when it reaches `max_iterations` (default 5), or when the same AC
 fails with the same root cause twice. The last two cases set the state to `blocked` and
 ask the user.
+
+After the first PASS the pipeline runs one Opus review round (`reviewer` agent). High and medium
+findings that are not hardware-only are fixed by the coder and covered by new tests from the
+tester; this round gets 3 extra iterations (`state.sh extend <slug> 3`).
 
 ### 3. Hooks (`.claude/settings.json`)
 | Event | Script | Effect |

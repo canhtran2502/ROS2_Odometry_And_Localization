@@ -1,0 +1,30 @@
+{
+  "slug": "auto-docking",
+  "title": "AGV auto-docking with battery monitor",
+  "stage": "done",
+  "iteration": 3,
+  "max_iterations": 8,
+  "history": [
+    {
+      "iteration": 1,
+      "verdict": "PASS",
+      "passed": 26,
+      "total": 26,
+      "at": "2026-10-24T17:49:31Z"
+    },
+    {
+      "iteration": 2,
+      "verdict": "FAIL",
+      "passed": 25,
+      "total": 27,
+      "at": "2026-10-24T19:35:13Z"
+    },
+    {
+      "iteration": 3,
+      "verdict": "PASS",
+      "passed": 27,
+      "total": 27,
+      "at": "2026-10-25T00:50:32Z"
+    }
+  ]
+}

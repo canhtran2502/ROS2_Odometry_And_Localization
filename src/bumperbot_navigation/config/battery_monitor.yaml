@@ -1,0 +1,21 @@
+# Parameters of the battery_monitor node (simulator independent).
+battery_monitor:
+  ros__parameters:
+    # Charge (0..1) below which the automatic dock sequence starts
+    low_threshold: 0.20
+    # Charge (0..1) at which the robot undocks again
+    full_threshold: 0.95
+    # After an undock the low trigger re-arms at low_threshold + rearm_hysteresis
+    rearm_hysteresis: 0.05
+    # Battery data older than this (s) counts as missing and never triggers
+    battery_timeout: 5.0
+    # Longest wait (s) for an active mission to end after the cancel request
+    mission_cancel_timeout: 180.0
+    # Delay (s) between two dock requests; rejected requests do not count as attempts
+    dock_retry_delay: 5.0
+    dock_request_timeout: 120.0
+    max_dock_attempts: 3
+    undock_when_full: true
+    update_rate: 2.0
+    # Logic time falls back to wall time after this many wall seconds without node clock progress
+    clock_stall_timeout: 5.0

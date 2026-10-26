@@ -1,0 +1,20 @@
+# SIMULATION ONLY: parameters of the battery_sim node. On the real robot the battery driver
+# publishes /battery_state and this node is not started.
+battery_sim:
+  ros__parameters:
+    initial_percentage: 1.0
+    # Drain in charge fraction per second
+    idle_drain_rate: 0.0005
+    # Additional drain per m/s and per rad/s of the odometry twist
+    linear_drain_rate: 0.004
+    angular_drain_rate: 0.001
+    # Charge fraction per second while /dock/status reports docked
+    charge_rate: 0.01
+    empty_voltage: 10.5
+    full_voltage: 12.6
+    publish_rate: 2.0
+    # Set at runtime (ros2 param set /battery_sim percentage_override 0.15) to jump to a charge
+    percentage_override: -1.0
+    odom_topic: bumperbot_controller/odom
+    dock_status_topic: dock/status
+    battery_topic: battery_state

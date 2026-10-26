@@ -25,6 +25,7 @@ setup(
         ("share/" + package_name, ["package.xml"]),
         (os.path.join("share", package_name, "launch"), glob("launch/*.py")),
         (os.path.join("share", package_name, "mjcf"), glob("mjcf/*.xml")),
+        (os.path.join("share", package_name, "config"), glob("config/*.yaml")),
     ] + data_tree("meshes", "meshes"),
     install_requires=["setuptools"],
     zip_safe=True,
@@ -36,6 +37,7 @@ setup(
     entry_points={
         "console_scripts": [
             "mujoco_sim_node = bumperbot_mujoco.mujoco_sim_node:main",
+            "dock_marker_sim = bumperbot_mujoco.dock_marker_sim:main",
         ],
     },
 )

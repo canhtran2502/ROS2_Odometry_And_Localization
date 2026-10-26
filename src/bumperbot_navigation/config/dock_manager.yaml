@@ -1,0 +1,76 @@
+# Parameters of the dock_manager node (C++ and Python versions use the same names/defaults).
+dock_manager:
+  ros__parameters:
+    # Empty: <share bumperbot_navigation>/config/stations.yaml
+    stations_file: ""
+    # Empty: the dock_station entry of the stations file (the staging pose in front of the charger)
+    dock_station: ""
+    nav_action_name: navigate_to_pose
+    # Must be three distinct names; global_frame must equal the frame_id of the stations file
+    global_frame: map
+    odom_frame: odom
+    robot_frame: base_footprint
+    # twist_mux input "docking" (priority 30, below the joystick and the keyboard)
+    cmd_vel_topic: dock_vel
+    # Abstract dock detection (PoseStamped with the charger pose in any TF-resolvable frame)
+    detection_topic: dock/detected_pose
+    # Read only: the node never publishes on safety_stop
+    safety_stop_topic: safety_stop
+    battery_topic: battery_state
+    mission_status_topic: mission/status
+    # true: back into the charger, false: drive in forward
+    dock_backwards: true
+    # Distance (m) from the staging pose to the charger pose, along the staging heading
+    staging_distance: 0.5
+    # Nav2 is skipped when the robot is already within these tolerances (m / rad) of the staging pose
+    staging_tolerance: 0.25
+    staging_yaw_tolerance: 0.6
+    # Extra Nav2 attempts to the staging pose
+    nav_max_retries: 2
+    nav_server_timeout: 10.0
+    nav_goal_timeout: 180.0
+    # none: map pose only; optional: refine with detections when available; required: fail without
+    detection_mode: optional
+    detection_timeout: 3.0
+    detection_max_age: 0.5
+    detection_max_jump: 0.3
+    detection_filter_alpha: 0.3
+    # Fixed offset from the detected marker pose to the docked robot pose
+    detection_offset_x: 0.0
+    detection_offset_y: 0.0
+    detection_offset_yaw: 0.0
+    # Tolerances of the pre-dock pose and of the final verification (m / rad)
+    align_position_tolerance: 0.02
+    align_yaw_tolerance: 0.03
+    dock_position_tolerance: 0.03
+    dock_yaw_tolerance: 0.05
+    max_linear_speed: 0.15
+    max_angular_speed: 0.6
+    # Speed of the last slow_down_distance metres of the insertion
+    approach_speed: 0.05
+    slow_down_distance: 0.15
+    # Gains of the line tracking
+    k_lateral: 2.0
+    k_heading: 2.0
+    # An insertion attempt is aborted when one of these errors is exceeded
+    max_insert_lateral_error: 0.08
+    max_insert_yaw_error: 0.3
+    # Extra docking attempts (max_retries + 1 attempts in total)
+    max_retries: 2
+    align_timeout: 30.0
+    docking_timeout: 40.0
+    undocking_timeout: 30.0
+    # Seconds with a non-zero command and almost no motion before an attempt fails
+    stall_timeout: 5.0
+    # Seconds the safety_stop lock may be held inside one phase before an attempt fails
+    safety_stop_timeout: 10.0
+    settle_time: 0.5
+    # Distance (m) from the docked pose after which the robot counts as undocked
+    undock_detect_distance: 0.10
+    tf_timeout: 1.0
+    tf_stale_timeout: 0.5
+    control_rate: 20.0
+    status_rate: 2.0
+    # A node clock (sim time) that does not advance for this many wall seconds during a goal
+    # ends the goal with an error
+    clock_stall_timeout: 5.0

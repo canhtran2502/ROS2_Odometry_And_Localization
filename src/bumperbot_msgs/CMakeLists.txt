@@ -11,8 +11,10 @@ find_package(geometry_msgs REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
+  "action/DockRobot.action"
   "action/ExecuteMission.action"
   "action/Fibonacci.action"
+  "msg/DockStatus.msg"
   "msg/MissionStatus.msg"
   "srv/AddTwoInts.srv"
   "srv/GetTransform.srv"

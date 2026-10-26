@@ -1,0 +1,28 @@
+# Goal
+uint8 COMMAND_DOCK=0
+uint8 COMMAND_UNDOCK=1
+uint8 command
+---
+# Result
+uint8 OUTCOME_DOCKED=0              # docked within tolerance
+uint8 OUTCOME_UNDOCKED=1            # undocked, robot at the staging pose
+uint8 OUTCOME_ALREADY_DOCKED=2      # DOCK while docked, no motion
+uint8 OUTCOME_CANCELED=3            # canceled, robot stopped
+uint8 OUTCOME_STAGING_FAILED=4      # Nav2 could not reach the staging pose
+uint8 OUTCOME_DETECTION_FAILED=5    # detection_mode required and no valid detection
+uint8 OUTCOME_DOCKING_FAILED=6      # alignment / insertion failed after all attempts
+uint8 OUTCOME_UNDOCKING_FAILED=7
+uint8 OUTCOME_ERROR=8               # TF lost, clock stalled, internal exception, shutdown
+uint8 outcome
+bool docked
+uint32 attempts
+float32 position_error              # m, final estimate, -1 if unknown
+float32 yaw_error                   # rad, final estimate, -1 if unknown
+string message
+---
+# Feedback
+string state
+uint32 attempt
+float32 distance_to_dock            # m, -1 if unknown
+float32 yaw_error
+bool detection_used

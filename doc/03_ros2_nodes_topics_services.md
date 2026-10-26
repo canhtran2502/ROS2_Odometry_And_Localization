@@ -145,6 +145,30 @@ This document provides a comprehensive, verified catalog of every ROS 2 node, to
 - **Parameters**: `stations_file`, `nav_action_name`, `global_frame`, `robot_frame`, `goal_tolerance`, `max_retries`, `retry_delay`, `max_consecutive_failures`, `dock_max_retries`, `return_to_dock`, `nav_server_timeout`, `nav_goal_timeout`, `tf_timeout`, `status_rate`, `behavior_tree` (see `config/mission_manager.yaml`)
 - **Launch**: `bumperbot_bringup/launch/mission_sim.launch.py` (see doc/10)
 
+#### `dock_manager` (`dock_manager.cpp` / `dock_manager.py`)
+- **Package**: `bumperbot_navigation`
+- **Purpose**: auto-docking. DOCK drives to the dock staging pose with Nav2 (skipped when already within `staging_tolerance`), aligns on the pre-dock line, backs in closed loop on odometry and verifies the final pose (retries on failure); UNDOCK drives straight out to the staging pose. The pure library `dock_logic` (C++) / `dock_logic.py` is checked against one shared case table.
+- **Action server**: `/dock_robot` (`bumperbot_msgs/action/DockRobot`); rejects an unknown command, a second goal, UNDOCK while not docked, DOCK during an active mission and any goal while TF or Nav2 is not ready
+- **Action client**: `navigate_to_pose` (`nav2_msgs/action/NavigateToPose`)
+- **Publications**: `/dock/status` (`bumperbot_msgs/msg/DockStatus`, reliable + transient_local), `dock_vel` (`geometry_msgs/Twist`, `twist_mux` input, priority 30)
+- **Subscriptions**: `/dock/detected_pose` (`PoseStamped`, abstract detector output), `/safety_stop` (read only), `/battery_state`, `/mission/status`
+- **TF Lookups**: `map -> base_footprint`, `map -> odom`, `odom -> base_footprint`; detections are transformed into `odom`. No TF is published
+- **Parameters**: see `config/dock_manager.yaml` (`stations_file`, `dock_station`, `staging_distance`, `detection_mode` none/optional/required, tolerances, speeds, timeouts, `safety_stop_timeout`, `max_retries`, ...)
+- **Launch**: `bumperbot_navigation/launch/docking.launch.py`, `bumperbot_bringup/launch/dock_sim.launch.py`
+
+#### `battery_monitor` (`battery_monitor.py`)
+- **Package**: `bumperbot_navigation` (Python only, simulator independent)
+- **Purpose**: below `low_threshold` cancels an active mission (cancel-all on `execute_mission/_action/cancel_goal`), sends `DockRobot` DOCK, stays in CHARGING until `full_threshold`, then sends UNDOCK. States: WAITING_FOR_BATTERY, MONITORING, CANCELING_MISSION, DOCKING, CHARGING, UNDOCKING, ERROR (`~/reset` leaves ERROR)
+- **Subscriptions**: `/battery_state`, `/dock/status`, `/mission/status`; **Action client**: `dock_robot`; **Service client**: `execute_mission/_action/cancel_goal` (`action_msgs/srv/CancelGoal`); **Publications**: `battery_monitor/state` (`std_msgs/String`, transient_local)
+
+#### `battery_sim` (`battery_sim.py`) -- SIMULATION ONLY
+- **Package**: `bumperbot_navigation`; started only by `dock_sim.launch.py`
+- **Purpose**: publishes `/battery_state` (`sensor_msgs/BatteryState`, 2 Hz). Drains while idle, faster with the `bumperbot_controller/odom` twist, charges while `/dock/status.docked`. `ros2 param set /battery_sim percentage_override 0.15` jumps to a charge
+
+#### `dock_marker_sim` (`dock_marker_sim.py`) -- SIMULATION ONLY
+- **Package**: `bumperbot_mujoco`; started only by `dock_sim.launch.py` with `simulator:=mujoco`
+- **Purpose**: emulates a rear-facing fiducial detector. Reads `/mujoco/ground_truth`, gates by range and field of view, adds seeded Gaussian noise and publishes the charger pose in `base_footprint` on `/dock/detected_pose`. Parameters in `bumperbot_mujoco/config/dock_marker_sim.yaml`
+
 #### Nav2 servers (`navigation.launch.py`)
 `controller_server` and `behavior_server` (`cmd_vel` remapped to `nav_vel`), `planner_server`, `bt_navigator` and `lifecycle_manager_navigation`, configured by `bumperbot_navigation/config/nav2_params.yaml`.
 
@@ -197,6 +221,11 @@ This document provides a comprehensive, verified catalog of every ROS 2 node, to
 | `/scan` | `sensor_msgs/msg/LaserScan` | `ros_gz_bridge` (LiDAR) | `safety_stop`, `nav2_amcl`, `slam_toolbox` | 2D planar laser range scan |
 | `explore_vel` | `geometry_msgs/msg/Twist` | `frontier_explorer` | `twist_mux` (input `explore`, priority 10) | Autonomous exploration velocity demand (lowest priority; joystick 99 > keyboard 90 > explore 10; the `safety_stop` lock 255 wins) |
 | `nav_vel` | `geometry_msgs/msg/Twist` | Nav2 `controller_server`, `behavior_server` | `twist_mux` (input `navigation`, priority 20) | Nav2 velocity demand (joystick 99 > keyboard 90 > navigation 20 > explore 10; the `safety_stop` lock 255 wins; nothing publishes it on the real robot) |
+| `dock_vel` | `geometry_msgs/msg/Twist` | `dock_manager` | `twist_mux` (input `docking`, priority 30) | Docking velocity demand (above `nav_vel`, below keyboard and joystick; the `safety_stop` lock still wins) |
+| `/dock/status` | `bumperbot_msgs/msg/DockStatus` | `dock_manager` | `battery_sim`, `battery_monitor`, user | Dock state, docked/charging flags, errors, staging and charger pose (transient_local) |
+| `/dock/detected_pose` | `geometry_msgs/msg/PoseStamped` | `dock_marker_sim` (sim only) / real detector | `dock_manager` | Charger pose (docked `base_footprint` pose) seen by a detector, any TF frame |
+| `/battery_state` | `sensor_msgs/msg/BatteryState` | `battery_sim` (sim only) / battery driver | `battery_monitor`, `dock_manager` | Charge level and charging status |
+| `/mujoco/ground_truth` | `nav_msgs/msg/Odometry` | `mujoco_sim_node` (sim only) | `dock_marker_sim`, tests | Exact `base_footprint` pose in the MuJoCo `world` frame (equals `map`), 50 Hz |
 | `/mission/status` | `bumperbot_msgs/msg/MissionStatus` | `mission_manager` | User / tests | Mission state, current station, progress, visited and skipped stations (transient_local) |
 | `/explore/status` | `std_msgs/msg/String` | `frontier_explorer` | User / tests | `WAITING_FOR_MAP`, `EXPLORING`, `COMPLETE`, `MAP_SAVED`, `MAP_SAVE_FAILED` (latched) |
 | `/explore/path` | `nav_msgs/msg/Path` | `frontier_explorer` | RViz2 | Current A* path |
@@ -288,3 +317,28 @@ string[] visited
 string[] skipped
 string message
 ```
+
+### 6. `action/DockRobot.action` (`/dock_robot`)
+```idl
+# Goal: COMMAND_DOCK=0, COMMAND_UNDOCK=1
+uint8 command
+---
+# Result outcome: DOCKED=0, UNDOCKED=1, ALREADY_DOCKED=2, CANCELED=3, STAGING_FAILED=4,
+# DETECTION_FAILED=5, DOCKING_FAILED=6, UNDOCKING_FAILED=7, ERROR=8
+uint8 outcome
+bool docked
+uint32 attempts
+float32 position_error   # m, -1 if unknown
+float32 yaw_error        # rad, -1 if unknown
+string message
+---
+string state
+uint32 attempt
+float32 distance_to_dock
+float32 yaw_error
+bool detection_used
+```
+SUCCEEDED for DOCKED / UNDOCKED / ALREADY_DOCKED, CANCELED for CANCELED, ABORTED otherwise.
+
+### 7. `msg/DockStatus.msg` (`/dock/status`)
+State constants: UNDOCKED, NAVIGATING_TO_STAGING, WAITING_FOR_DETECTION, ALIGNING, DOCKING, DOCKED, CHARGING, UNDOCKING, FAILED. Fields: `stamp`, `state`, `docked`, `charging`, `battery_percentage`, `attempt`, `position_error`, `yaw_error`, `detection_used`, `frame_id`, `staging_pose`, `dock_pose` (`geometry_msgs/Pose2D`), `message`.

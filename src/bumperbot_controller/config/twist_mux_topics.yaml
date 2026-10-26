@@ -23,3 +23,10 @@ twist_mux:
         topic: nav_vel
         timeout: 0.5
         priority: 20
+      # Auto-docking (dock_manager); above Nav2 so a stale nav_vel cannot fight the insertion,
+      # below the joystick and the keyboard. The safety_stop lock (255) still overrides it.
+      # Nothing publishes on dock_vel on the real robot unless docking.launch.py is started.
+      docking:
+        topic: dock_vel
+        timeout: 0.5
+        priority: 30

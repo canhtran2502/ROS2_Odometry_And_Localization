@@ -3,7 +3,7 @@
 <package format="3">
   <name>bumperbot_navigation</name>
   <version>0.0.0</version>
-  <description>AGV waypoint mission manager and Nav2 configuration for BumperBot</description>
+  <description>AGV waypoint mission manager, auto-docking, battery monitor and Nav2 configuration for BumperBot</description>
   <maintainer email="canh.tran@zimplistic.com">canhtran</maintainer>
   <license>Apache 2.0</license>
 
@@ -16,6 +16,12 @@
   <depend>bumperbot_msgs</depend>
   <depend>nav2_msgs</depend>
   <depend>geometry_msgs</depend>
+  <depend>sensor_msgs</depend>
+  <depend>std_msgs</depend>
+  <depend>std_srvs</depend>
+  <depend>action_msgs</depend>
+  <depend>nav_msgs</depend>
+  <depend>rcl_interfaces</depend>
   <depend>tf2</depend>
   <depend>tf2_ros</depend>
   <depend>tf2_geometry_msgs</depend>

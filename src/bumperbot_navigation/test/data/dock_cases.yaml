@@ -1,0 +1,1163 @@
+# Shared C++ / Python parity cases of dock_logic (AC2). Numbers are compared within 1e-9.
+# Expected controller, geometry and filter values come from an independent reference of the
+# formulas in the plan; aligner sequences are recorded and checked by property tests.
+geometry:
+  compute_dock_pose:
+  - staging: [0.0, 0.0, 0.0]
+    distance: 0.5
+    backwards: true
+    expect: [-0.5, 0.0, 0.0]
+  - staging: [0.0, 0.0, 0.0]
+    distance: 0.5
+    backwards: false
+    expect: [0.5, 0.0, 0.0]
+  - staging: [1.0, 2.0, 1.5707963267948966]
+    distance: 0.5
+    backwards: true
+    expect: [1.0, 1.5, 1.5707963267948966]
+  - staging: [1.0, 2.0, 1.5707963267948966]
+    distance: 0.5
+    backwards: false
+    expect: [1.0, 2.5, 1.5707963267948966]
+  - staging: [-3.0, 1.0, 3.14]
+    distance: 0.7
+    backwards: true
+    expect: [-2.3000008877907225, 0.9988851429584592, 3.14]
+  - staging: [2.0, -1.0, -0.5]
+    distance: 0.25
+    backwards: false
+    expect: [2.219395640472593, -1.1198563846510508, -0.5]
+  normalize_angle:
+  - {angle: 0.0, expect: 0.0}
+  - {angle: 1.5707963267948966, expect: 1.5707963267948966}
+  - {angle: 4.71238898038469, expect: -1.5707963267948966}
+  - {angle: 6.283185307179586, expect: 0.0}
+  - {angle: -4.71238898038469, expect: 1.5707963267948966}
+  - {angle: 7.0, expect: 0.7168146928204138}
+  - {angle: -7.0, expect: -0.7168146928204138}
+  - {angle: 100.0, expect: -0.5309649148733797}
+  - {angle: 3.141592653589793, expect_abs: 3.141592653589793}
+  - {angle: -3.141592653589793, expect_abs: 3.141592653589793}
+  - {angle: 9.42477796076938, expect_abs: 3.141592653589793}
+  - {angle: -9.42477796076938, expect_abs: 3.141592653589793}
+  - {angle: 3.141592653590793, expect_abs: 3.141592653589793}
+  compose:
+  - a: [1.0, 2.0, 1.5707963267948966]
+    b: [1.0, 0.0, 0.0]
+    expect: [1.0, 3.0, 1.5707963267948966]
+  - a: [0, 0, 0.0]
+    b: [1.5, -2.0, 0.3]
+    expect: [1.5, -2.0, 0.3]
+  - a: [0.5, 0.5, 3.0]
+    b: [1.0, 1.0, 1.0]
+    expect: [-0.6311125046603127, -0.3488724885405782, -2.2831853071795867]
+  inverse:
+  - a: [1.0, 2.0, 1.5707963267948966]
+    expect: [-2.0, 1.0, -1.5707963267948966]
+  - a: [0, 0, 0.0]
+    expect: [0.0, 0.0, 0.0]
+  - a: [3.0, 0.0, 0.0]
+    expect: [-3.0, 0.0, 0.0]
+  relative:
+  - frame: [1.0, 2.0, 1.5707963267948966]
+    pose: [1.0, 3.0, 1.5707963267948966]
+    expect: [1.0, 0.0, 0.0]
+  - frame: [-0.5, 0, 0.0]
+    pose: [0.0, 0.0, 0.0]
+    expect: [0.5, 0.0, 0.0]
+  - frame: [1.0, 1.0, 3.141592653589793]
+    pose: [0.0, 0.0, 0.0]
+    expect: [1.0, 1.0, 3.141592653589793]
+    expect_abs_yaw: true
+  roundtrip:
+  - [0.0, 0.0, 0.0]
+  - [1.0, 2.0, 1.5707963267948966]
+  - [-3.2, 4.1, 3.0]
+  - [10.0, -7.0, -2.5]
+  - [0.1, 0.2, 3.141592653589793]
+  - [1.0, 1.0, -3.141592653589793]
+  project_pose:
+  - frame: [1.0, 2.0, 0.0, 0.0, 0.0, 0.7071067811865475, 0.7071067811865476]
+    pose: [1.0, 0.0, 0.5, 0.0, 0.0, 0.0, 1.0]
+    expect: [1.0000000000000002, 3.0, 1.5707963267948963]
+  - frame: [0.3, -0.2, 0.1, -0.03589885551666542, 0.11908202577218482, 0.3331986473527968, 0.934617250382665]
+    pose: [0.5, 0.4, 0.2, 0.15108595181854895, 0.043487264826054944, -0.5637686762187195, 0.8108309149727977]
+    expect: [0.4619815090529343, 0.44658210586063224, -0.5747077134154739]
+  - frame: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0]
+    pose: [0.1, 0.2, 0.3, -0.03589885551666542, 0.11908202577218482, 0.3331986473527968, 0.934617250382665]
+    expect: [0.1, 0.2, 0.6865045993893262]
+controller:
+- name: insert_backwards_default
+  op: insert
+  params: {}
+  poses:
+  - [0.5, 0.0, 0.0]
+  - [0.3, 0.05, 0.1]
+  - [0.151, 0.0, 0.0]
+  - [0.149, 0.0, 0.0]
+  - [0.1, 0.02, 0.0]
+  - [0.0, 0.0, 0.1]
+  - [-0.01, 0.0, 0.0]
+  - [0.3, 0.09, 0.0]
+  - [0.3, 0.0, 0.31]
+  - [0.3, -0.04, 0.2]
+  - [0.3, 0.0, -0.3]
+  - [0.3, 0.5, 0.0]
+  - [0.08, -0.03, 0.05]
+  expect:
+  - {v: -0.15, w: 0.0, done: false, failed: false}
+  - {v: -0.15, w: 0.0, done: false, failed: false}
+  - {v: -0.15, w: 0.0, done: false, failed: false}
+  - {v: -0.05, w: 0.0, done: false, failed: false}
+  - {v: -0.05, w: 0.08, done: false, failed: false}
+  - {v: 0.0, w: -0.19999999999999998, done: true, failed: false}
+  - {v: 0.0, w: 0.0, done: true, failed: false}
+  - {v: -0.15, w: 0.36, done: false, failed: true}
+  - {v: -0.15, w: -0.6, done: false, failed: true}
+  - {v: -0.15, w: -0.56, done: false, failed: false}
+  - {v: -0.15, w: 0.6, done: false, failed: false}
+  - {v: -0.15, w: 0.6, done: false, failed: true}
+  - {v: -0.05, w: -0.22, done: false, failed: false}
+- name: insert_clamped_slow_limits
+  op: insert
+  params: {max_linear_speed: 0.1, max_angular_speed: 0.3, approach_speed: 0.04}
+  poses:
+  - [0.5, 0.0, 0.0]
+  - [0.3, 0.0, -0.3]
+  - [0.1, 0.0, 0.0]
+  - [0.3, 0.0, 0.29]
+  expect:
+  - {v: -0.1, w: 0.0, done: false, failed: false}
+  - {v: -0.1, w: 0.3, done: false, failed: false}
+  - {v: -0.04, w: 0.0, done: false, failed: false}
+  - {v: -0.1, w: -0.3, done: false, failed: false}
+- name: insert_forwards
+  op: insert
+  params: {dock_backwards: false}
+  poses:
+  - [-0.5, 0.0, 0.0]
+  - [-0.3, 0.05, 0.1]
+  - [-0.1, 0.02, 0.0]
+  - [0.0, 0.0, 0.0]
+  - [0.01, 0.0, 0.0]
+  - [-0.3, 0.09, 0.0]
+  expect:
+  - {v: 0.15, w: -0.0, done: false, failed: false}
+  - {v: 0.15, w: -0.4, done: false, failed: false}
+  - {v: 0.05, w: -0.08, done: false, failed: false}
+  - {v: 0.0, w: 0.0, done: true, failed: false}
+  - {v: 0.0, w: 0.0, done: true, failed: false}
+  - {v: 0.15, w: -0.36, done: false, failed: true}
+- name: undock_backwards_default
+  op: undock
+  params: {}
+  poses:
+  - [0.0, 0.0, 0.0]
+  - [0.2, 0.01, 0.0]
+  - [0.4, 0.01, 0.0]
+  - [0.48, 0.0, 0.05]
+  - [0.49, 0.0, 0.0]
+  - [0.5, 0.0, 0.0]
+  - [0.2, 0.09, 0.0]
+  - [0.2, 0.0, 0.31]
+  - [0.3, -0.03, -0.1]
+  expect:
+  - {v: 0.15, w: -0.0, done: false, failed: false}
+  - {v: 0.15, w: -0.04, done: false, failed: false}
+  - {v: 0.05, w: -0.04, done: false, failed: false}
+  - {v: 0.05, w: -0.1, done: false, failed: false}
+  - {v: 0.0, w: 0.0, done: true, failed: false}
+  - {v: 0.0, w: 0.0, done: true, failed: false}
+  - {v: 0.15, w: -0.36, done: false, failed: true}
+  - {v: 0.15, w: -0.6, done: false, failed: true}
+  - {v: 0.15, w: 0.32000000000000006, done: false, failed: false}
+- name: undock_forwards
+  op: undock
+  params: {dock_backwards: false}
+  poses:
+  - [0.0, 0.0, 0.0]
+  - [-0.2, 0.01, 0.0]
+  - [-0.4, 0.01, 0.0]
+  - [-0.49, 0.0, 0.0]
+  - [-0.5, 0.0, 0.0]
+  expect:
+  - {v: -0.15, w: 0.0, done: false, failed: false}
+  - {v: -0.15, w: 0.04, done: false, failed: false}
+  - {v: -0.05, w: 0.04, done: false, failed: false}
+  - {v: 0.0, w: 0.0, done: true, failed: false}
+  - {v: 0.0, w: 0.0, done: true, failed: false}
+- name: undock_clamped
+  op: undock
+  params: {max_linear_speed: 0.08, approach_speed: 0.03}
+  poses:
+  - [0.0, 0.0, 0.0]
+  - [0.4, 0.0, 0.0]
+  expect:
+  - {v: 0.08, w: -0.0, done: false, failed: false}
+  - {v: 0.03, w: -0.0, done: false, failed: false}
+aligner:
+- name: align_rotate_drive_rotate
+  params: {}
+  poses:
+  - [0.0, 0.0, 0.0]
+  - [0.0, 0.3, 1.0]
+  - [0.1, 0.25, 0.6]
+  - [0.2, 0.1, 0.2]
+  - [0.3, 0.02, 0.0]
+  - [0.45, 0.0, 0.0]
+  - [0.49, 0.0, 0.0]
+  - [0.5, 0.0, 0.2]
+  - [0.5, 0.0, 0.1]
+  - [0.5, 0.0, 0.0]
+  - [0.5, 0.03, 0.0]
+  - [0.5, 0.06, 0.0]
+  expect:
+  - {v: 0.15, w: -0.0, done: false}
+  - {v: 0.0, w: -0.6, done: false}
+  - {v: 0.0, w: -0.6, done: false}
+  - {v: 0.0, w: -0.6, done: false}
+  - {v: 0.15, w: -0.19933730498232405, done: false}
+  - {v: 0.04999999999999999, w: -0.0, done: false}
+  - {v: 0.0, w: 0.0, done: true}
+  - {v: 0.0, w: -0.4, done: false}
+  - {v: 0.0, w: -0.19999999999999998, done: false}
+  - {v: 0.0, w: 0.0, done: true}
+  - {v: 0.0, w: -0.05, done: false}
+  - {v: 0.0, w: -0.6, done: false}
+- name: align_forwards
+  params: {dock_backwards: false}
+  poses:
+  - [0.0, 0.0, 0.0]
+  - [-0.2, 0.3, 0.5]
+  - [-0.5, 0.0, 0.5]
+  - [-0.5, 0.0, 0.0]
+  expect:
+  - {v: 0.0, w: -0.6, done: false}
+  - {v: 0.0, w: -0.6, done: false}
+  - {v: 0.0, w: -0.6, done: false}
+  - {v: 0.0, w: 0.0, done: true}
+- name: align_already_aligned
+  params: {}
+  poses:
+  - [0.5, 0.0, 0.0]
+  - [0.505, 0.01, 0.01]
+  expect:
+  - {v: 0.0, w: 0.0, done: true}
+  - {v: 0.0, w: 0.0, done: true}
+- name: align_clamped
+  params: {max_linear_speed: 0.05, max_angular_speed: 0.2}
+  poses:
+  - [-1.0, 1.0, 2.0]
+  - [-1.0, 1.0, -0.7]
+  - [0.0, 0.0, -3.0]
+  expect:
+  - {v: 0.0, w: -0.2, done: false}
+  - {v: 0.0, w: 0.2, done: false}
+  - {v: 0.0, w: 0.2, done: false}
+filter:
+- name: accept_ema
+  max_jump: 0.3
+  alpha: 0.3
+  estimate: [1.0, 2.0, 0.5]
+  detection: [1.1, 2.0, 0.7]
+  expect_accepted: true
+  expect: [1.03, 2.0, 0.56]
+- name: reject_nan_x
+  max_jump: 0.3
+  alpha: 0.3
+  estimate: [1.0, 2.0, 0.5]
+  detection: [.nan, 2.0, 0.7]
+  expect_accepted: false
+  expect: [1.0, 2.0, 0.5]
+- name: reject_nan_yaw
+  max_jump: 0.3
+  alpha: 0.3
+  estimate: [1.0, 2.0, 0.5]
+  detection: [1.0, 2.0, .nan]
+  expect_accepted: false
+  expect: [1.0, 2.0, 0.5]
+- name: reject_inf_y
+  max_jump: 0.3
+  alpha: 0.3
+  estimate: [1.0, 2.0, 0.5]
+  detection: [1.0, .inf, 0.5]
+  expect_accepted: false
+  expect: [1.0, 2.0, 0.5]
+- name: reject_jump_far
+  max_jump: 0.3
+  alpha: 0.3
+  estimate: [1.0, 2.0, 0.5]
+  detection: [1.5, 2.0, 0.5]
+  expect_accepted: false
+  expect: [1.0, 2.0, 0.5]
+- name: reject_jump_just_over
+  max_jump: 0.3
+  alpha: 0.3
+  estimate: [0.0, 0.0, 0.0]
+  detection: [0.31, 0.0, 0.0]
+  expect_accepted: false
+  expect: [0.0, 0.0, 0.0]
+- name: accept_jump_just_under
+  max_jump: 0.3
+  alpha: 0.3
+  estimate: [0.0, 0.0, 0.0]
+  detection: [0.29, 0.0, 0.0]
+  expect_accepted: true
+  expect: [0.087, 0.0, 0.0]
+- name: reject_jump_diagonal
+  max_jump: 0.3
+  alpha: 0.3
+  estimate: [0.0, 0.0, 0.0]
+  detection: [0.25, 0.25, 0.0]
+  expect_accepted: false
+  expect: [0.0, 0.0, 0.0]
+- name: yaw_wrap_positive
+  max_jump: 0.3
+  alpha: 0.3
+  estimate: [0.0, 0.0, 3.1]
+  detection: [0.0, 0.0, -3.1]
+  expect_accepted: true
+  expect: [0.0, 0.0, 3.124955592153876]
+- name: yaw_wrap_negative
+  max_jump: 0.3
+  alpha: 0.3
+  estimate: [0.0, 0.0, -3.1]
+  detection: [0.0, 0.0, 3.1]
+  expect_accepted: true
+  expect: [0.0, 0.0, -3.124955592153876]
+- name: yaw_wrap_at_pi
+  max_jump: 0.3
+  alpha: 0.3
+  estimate: [0.0, 0.0, 3.14]
+  detection: [0.0, 0.0, -3.14]
+  expect_accepted: true
+  expect: [0.0, 0.0, 3.140955592153876]
+- name: alpha_one_takes_detection
+  max_jump: 0.3
+  alpha: 1.0
+  estimate: [0.0, 0.0, 3.1]
+  detection: [0.1, -0.1, -3.1]
+  expect_accepted: true
+  expect: [0.1, -0.1, -3.1]
+- name: alpha_small
+  max_jump: 1.0
+  alpha: 0.05
+  estimate: [2.0, 2.0, 0.0]
+  detection: [2.5, 1.5, 1.0]
+  expect_accepted: true
+  expect: [2.025, 1.975, 0.05]
+- name: same_pose
+  max_jump: 0.3
+  alpha: 0.3
+  estimate: [1.0, 1.0, 1.0]
+  detection: [1.0, 1.0, 1.0]
+  expect_accepted: true
+  expect: [1.0, 1.0, 1.0]
+timer:
+- name: node_time_expiry
+  timeout: 2.0
+  clock_stall_timeout: 5.0
+  start: [10.0, 100.0]
+  events:
+  - [10.5, 100.5, false, false]
+  - [11.9, 101.0, false, false]
+  - [12.0, 101.5, true, false]
+  - [13.0, 102.0, true, false]
+- name: wall_fallback_when_node_time_stops
+  timeout: 100.0
+  clock_stall_timeout: 5.0
+  start: [0.0, 0.0]
+  events:
+  - [0.0, 4.0, false, false]
+  - [0.0, 5.0, true, true]
+  - [0.0, 6.0, true, true]
+- name: node_progress_resets_wall_reference
+  timeout: 100.0
+  clock_stall_timeout: 5.0
+  start: [0.0, 0.0]
+  events:
+  - [1.0, 4.0, false, false]
+  - [1.0, 8.0, false, false]
+  - [1.0, 9.0, true, true]
+- name: fallback_disabled
+  timeout: 100.0
+  clock_stall_timeout: 0.0
+  start: [0.0, 0.0]
+  events:
+  - [0.0, 1000.0, false, false]
+  - [101.0, 1001.0, true, false]
+- name: restart_clears_stall
+  timeout: 100.0
+  clock_stall_timeout: 2.0
+  start: [5.0, 50.0]
+  events:
+  - [5.0, 53.0, true, true]
+  restart: [6.0, 60.0]
+  events_after:
+  - [6.5, 60.5, false, false]
+- name: stalled_stays_true_even_if_time_resumes
+  timeout: 100.0
+  clock_stall_timeout: 2.0
+  start: [0.0, 0.0]
+  events:
+  - [0.0, 3.0, true, true]
+  - [0.5, 3.1, true, true]
+tracker:
+- name: success_first_attempt
+  params: {}
+  goals:
+  - command: DOCK
+    docked: false
+    near: false
+    events:
+    - nav:ok
+    - det:ok
+    - phase:OK
+    - phase:OK
+    - verify: [0.01, 0.02]
+    expect:
+      steps: ['NAVIGATE_STAGING:1', 'WAIT_DETECTION:1', 'ALIGN:1', 'INSERT:1', 'SETTLE_VERIFY:1', FINISHED]
+      outcome: 0
+      docked: true
+      state: DOCKED
+      attempt: 1
+      detection_used: true
+- name: near_staging_skips_nav
+  params: {}
+  goals:
+  - command: DOCK
+    docked: false
+    near: true
+    events:
+    - det:ok
+    - phase:OK
+    - phase:OK
+    - verify: [0.01, 0.02]
+    expect:
+      steps: ['WAIT_DETECTION:1', 'ALIGN:1', 'INSERT:1', 'SETTLE_VERIFY:1', FINISHED]
+      outcome: 0
+      docked: true
+      state: DOCKED
+      attempt: 1
+      detection_used: true
+- name: mode_none_skips_wait_detection
+  params: {detection_mode: none}
+  goals:
+  - command: DOCK
+    docked: false
+    near: false
+    events:
+    - nav:ok
+    - phase:OK
+    - phase:OK
+    - verify: [0.01, 0.02]
+    expect:
+      steps: ['NAVIGATE_STAGING:1', 'ALIGN:1', 'INSERT:1', 'SETTLE_VERIFY:1', FINISHED]
+      outcome: 0
+      docked: true
+      state: DOCKED
+      attempt: 1
+      detection_used: false
+- name: mode_none_near_staging_starts_with_align
+  params: {detection_mode: none}
+  goals:
+  - command: DOCK
+    docked: false
+    near: true
+    events:
+    - phase:OK
+    - phase:OK
+    - verify: [0.01, 0.02]
+    expect:
+      steps: ['ALIGN:1', 'INSERT:1', 'SETTLE_VERIFY:1', FINISHED]
+      outcome: 0
+      docked: true
+      state: DOCKED
+      attempt: 1
+      detection_used: false
+- name: nav_fails_all_attempts
+  params: {}
+  goals:
+  - command: DOCK
+    docked: false
+    near: false
+    events: ['nav:fail', 'nav:fail', 'nav:fail']
+    expect:
+      steps: ['NAVIGATE_STAGING:1', 'NAVIGATE_STAGING:2', 'NAVIGATE_STAGING:3', FINISHED]
+      outcome: 4
+      docked: false
+      state: FAILED
+      attempt: 3
+- name: nav_fails_with_nav_max_retries_zero
+  params: {nav_max_retries: 0}
+  goals:
+  - command: DOCK
+    docked: false
+    near: false
+    events: ['nav:fail']
+    expect:
+      steps: ['NAVIGATE_STAGING:1', FINISHED]
+      outcome: 4
+      docked: false
+      state: FAILED
+      attempt: 1
+- name: nav_retry_then_success
+  params: {}
+  goals:
+  - command: DOCK
+    docked: false
+    near: false
+    events:
+    - nav:fail
+    - nav:ok
+    - det:ok
+    - phase:OK
+    - phase:OK
+    - verify: [0.01, 0.02]
+    expect:
+      steps: ['NAVIGATE_STAGING:1', 'NAVIGATE_STAGING:2', 'WAIT_DETECTION:1', 'ALIGN:1', 'INSERT:1', 'SETTLE_VERIFY:1',
+        FINISHED]
+      outcome: 0
+      docked: true
+      state: DOCKED
+      attempt: 1
+      detection_used: true
+- name: required_without_detection
+  params: {detection_mode: required}
+  goals:
+  - command: DOCK
+    docked: false
+    near: false
+    events: ['nav:ok', 'det:fail']
+    expect:
+      steps: ['NAVIGATE_STAGING:1', 'WAIT_DETECTION:1', FINISHED]
+      outcome: 5
+      docked: false
+      state: FAILED
+      attempt: 1
+      detection_used: false
+- name: required_with_detection
+  params: {detection_mode: required}
+  goals:
+  - command: DOCK
+    docked: false
+    near: false
+    events:
+    - nav:ok
+    - det:ok
+    - phase:OK
+    - phase:OK
+    - verify: [0.01, 0.02]
+    expect:
+      steps: ['NAVIGATE_STAGING:1', 'WAIT_DETECTION:1', 'ALIGN:1', 'INSERT:1', 'SETTLE_VERIFY:1', FINISHED]
+      outcome: 0
+      docked: true
+      state: DOCKED
+      attempt: 1
+      detection_used: true
+- name: optional_without_detection_continues
+  params: {}
+  goals:
+  - command: DOCK
+    docked: false
+    near: false
+    events:
+    - nav:ok
+    - det:fail
+    - phase:OK
+    - phase:OK
+    - verify: [0.01, 0.02]
+    expect:
+      steps: ['NAVIGATE_STAGING:1', 'WAIT_DETECTION:1', 'ALIGN:1', 'INSERT:1', 'SETTLE_VERIFY:1', FINISHED]
+      outcome: 0
+      docked: true
+      state: DOCKED
+      attempt: 1
+      detection_used: false
+- name: verify_failure_retry_then_success
+  params: {}
+  goals:
+  - command: DOCK
+    docked: false
+    near: false
+    events:
+    - nav:ok
+    - det:ok
+    - phase:OK
+    - phase:OK
+    - verify: [0.1, 0.0]
+    - phase:OK
+    - phase:OK
+    - verify: [0.01, 0.02]
+    expect:
+      steps: ['NAVIGATE_STAGING:1', 'WAIT_DETECTION:1', 'ALIGN:1', 'INSERT:1', 'SETTLE_VERIFY:1', 'ALIGN:2', 'INSERT:2',
+        'SETTLE_VERIFY:2', FINISHED]
+      outcome: 0
+      docked: true
+      state: DOCKED
+      attempt: 2
+      detection_used: true
+- name: verify_yaw_failure_retry_then_success
+  params: {}
+  goals:
+  - command: DOCK
+    docked: false
+    near: true
+    events:
+    - det:ok
+    - phase:OK
+    - phase:OK
+    - verify: [0.01, 0.2]
+    - phase:OK
+    - phase:OK
+    - verify: [0.01, 0.02]
+    expect:
+      steps: ['WAIT_DETECTION:1', 'ALIGN:1', 'INSERT:1', 'SETTLE_VERIFY:1', 'ALIGN:2', 'INSERT:2', 'SETTLE_VERIFY:2',
+        FINISHED]
+      outcome: 0
+      docked: true
+      state: DOCKED
+      attempt: 2
+      detection_used: true
+- name: verify_at_tolerance_is_ok
+  params: {}
+  goals:
+  - command: DOCK
+    docked: false
+    near: true
+    events:
+    - det:ok
+    - phase:OK
+    - phase:OK
+    - verify: [0.03, 0.05]
+    expect:
+      steps: ['WAIT_DETECTION:1', 'ALIGN:1', 'INSERT:1', 'SETTLE_VERIFY:1', FINISHED]
+      outcome: 0
+      docked: true
+      state: DOCKED
+      attempt: 1
+      detection_used: true
+- name: verify_nan_is_failure
+  params: {}
+  goals:
+  - command: DOCK
+    docked: false
+    near: true
+    events:
+    - det:ok
+    - phase:OK
+    - phase:OK
+    - verify: [.nan, 0.0]
+    - phase:TIMEOUT
+    - phase:TIMEOUT
+    expect:
+      steps: ['WAIT_DETECTION:1', 'ALIGN:1', 'INSERT:1', 'SETTLE_VERIFY:1', 'ALIGN:2', 'ALIGN:3', FINISHED]
+      outcome: 6
+      docked: false
+      state: FAILED
+      attempt: 3
+- name: docking_failed_timeouts
+  params: {}
+  goals:
+  - command: DOCK
+    docked: false
+    near: true
+    events: ['det:ok', 'phase:TIMEOUT', 'phase:TIMEOUT', 'phase:TIMEOUT']
+    expect:
+      steps: ['WAIT_DETECTION:1', 'ALIGN:1', 'ALIGN:2', 'ALIGN:3', FINISHED]
+      outcome: 6
+      docked: false
+      state: FAILED
+      attempt: 3
+- name: docking_failed_mixed_reasons
+  params: {}
+  goals:
+  - command: DOCK
+    docked: false
+    near: true
+    events: ['det:ok', 'phase:OK', 'phase:STALL', 'phase:SAFETY_TIMEOUT', 'phase:OK', 'phase:MISALIGNED']
+    expect:
+      steps: ['WAIT_DETECTION:1', 'ALIGN:1', 'INSERT:1', 'ALIGN:2', 'ALIGN:3', 'INSERT:3', FINISHED]
+      outcome: 6
+      docked: false
+      state: FAILED
+      attempt: 3
+- name: docking_failed_every_attempt_verify
+  params: {}
+  goals:
+  - command: DOCK
+    docked: false
+    near: true
+    events:
+    - det:ok
+    - phase:OK
+    - phase:OK
+    - verify: [0.1, 0.0]
+    - phase:OK
+    - phase:OK
+    - verify: [0.1, 0.0]
+    - phase:OK
+    - phase:OK
+    - verify: [0.1, 0.0]
+    expect:
+      steps: ['WAIT_DETECTION:1', 'ALIGN:1', 'INSERT:1', 'SETTLE_VERIFY:1', 'ALIGN:2', 'INSERT:2', 'SETTLE_VERIFY:2',
+        'ALIGN:3', 'INSERT:3', 'SETTLE_VERIFY:3', FINISHED]
+      outcome: 6
+      docked: false
+      state: FAILED
+      attempt: 3
+- name: docking_failed_max_retries_zero
+  params: {max_retries: 0}
+  goals:
+  - command: DOCK
+    docked: false
+    near: true
+    events: ['det:ok', 'phase:STALL']
+    expect:
+      steps: ['WAIT_DETECTION:1', 'ALIGN:1', FINISHED]
+      outcome: 6
+      docked: false
+      state: FAILED
+      attempt: 1
+- name: docking_failed_max_retries_four
+  params: {max_retries: 4}
+  goals:
+  - command: DOCK
+    docked: false
+    near: true
+    events: ['det:ok', 'phase:TIMEOUT', 'phase:TIMEOUT', 'phase:TIMEOUT', 'phase:TIMEOUT', 'phase:TIMEOUT']
+    expect:
+      steps: ['WAIT_DETECTION:1', 'ALIGN:1', 'ALIGN:2', 'ALIGN:3', 'ALIGN:4', 'ALIGN:5', FINISHED]
+      outcome: 6
+      docked: false
+      state: FAILED
+      attempt: 5
+- name: cancel_during_navigation
+  params: {}
+  goals:
+  - command: DOCK
+    docked: false
+    near: false
+    events: [cancel]
+    expect:
+      steps: ['NAVIGATE_STAGING:1', FINISHED]
+      outcome: 3
+      docked: false
+      state: UNDOCKED
+      attempt: 1
+- name: cancel_during_wait_detection
+  params: {}
+  goals:
+  - command: DOCK
+    docked: false
+    near: false
+    events: ['nav:ok', cancel]
+    expect:
+      steps: ['NAVIGATE_STAGING:1', 'WAIT_DETECTION:1', FINISHED]
+      outcome: 3
+      docked: false
+      state: UNDOCKED
+      attempt: 1
+- name: cancel_during_align
+  params: {}
+  goals:
+  - command: DOCK
+    docked: false
+    near: false
+    events: ['nav:ok', 'det:ok', cancel]
+    expect:
+      steps: ['NAVIGATE_STAGING:1', 'WAIT_DETECTION:1', 'ALIGN:1', FINISHED]
+      outcome: 3
+      docked: false
+      state: UNDOCKED
+      attempt: 1
+- name: cancel_during_insert
+  params: {}
+  goals:
+  - command: DOCK
+    docked: false
+    near: true
+    events: ['det:ok', 'phase:OK', cancel]
+    expect:
+      steps: ['WAIT_DETECTION:1', 'ALIGN:1', 'INSERT:1', FINISHED]
+      outcome: 3
+      docked: false
+      state: UNDOCKED
+      attempt: 1
+- name: cancel_during_verify
+  params: {}
+  goals:
+  - command: DOCK
+    docked: false
+    near: true
+    events: ['det:ok', 'phase:OK', 'phase:OK', cancel]
+    expect:
+      steps: ['WAIT_DETECTION:1', 'ALIGN:1', 'INSERT:1', 'SETTLE_VERIFY:1', FINISHED]
+      outcome: 3
+      docked: false
+      state: UNDOCKED
+      attempt: 1
+- name: cancel_during_retry_attempt
+  params: {}
+  goals:
+  - command: DOCK
+    docked: false
+    near: true
+    events: ['det:ok', 'phase:STALL', cancel]
+    expect:
+      steps: ['WAIT_DETECTION:1', 'ALIGN:1', 'ALIGN:2', FINISHED]
+      outcome: 3
+      docked: false
+      state: UNDOCKED
+      attempt: 2
+- name: cancel_during_undock
+  params: {}
+  goals:
+  - command: UNDOCK
+    docked: true
+    near: false
+    events: [cancel]
+    expect:
+      steps: ['UNDOCK:1', FINISHED]
+      outcome: 3
+      docked: false
+      state: UNDOCKED
+      attempt: 1
+- name: cancel_without_motion_keeps_nothing_docked
+  params: {}
+  goals:
+  - command: DOCK
+    docked: false
+    near: true
+    events: [cancel]
+    expect:
+      steps: ['WAIT_DETECTION:1', FINISHED]
+      outcome: 3
+      docked: false
+      state: UNDOCKED
+      attempt: 1
+- name: abort_during_navigation
+  params: {}
+  goals:
+  - command: DOCK
+    docked: false
+    near: false
+    events: [abort]
+    expect:
+      steps: ['NAVIGATE_STAGING:1', FINISHED]
+      outcome: 8
+      docked: false
+      state: FAILED
+      attempt: 1
+- name: abort_during_align
+  params: {}
+  goals:
+  - command: DOCK
+    docked: false
+    near: false
+    events: ['nav:ok', 'det:ok', abort]
+    expect:
+      steps: ['NAVIGATE_STAGING:1', 'WAIT_DETECTION:1', 'ALIGN:1', FINISHED]
+      outcome: 8
+      docked: false
+      state: FAILED
+      attempt: 1
+- name: abort_during_insert
+  params: {}
+  goals:
+  - command: DOCK
+    docked: false
+    near: true
+    events: ['det:ok', 'phase:OK', abort]
+    expect:
+      steps: ['WAIT_DETECTION:1', 'ALIGN:1', 'INSERT:1', FINISHED]
+      outcome: 8
+      docked: false
+      state: FAILED
+      attempt: 1
+- name: abort_during_verify
+  params: {}
+  goals:
+  - command: DOCK
+    docked: false
+    near: true
+    events: ['det:ok', 'phase:OK', 'phase:OK', abort]
+    expect:
+      steps: ['WAIT_DETECTION:1', 'ALIGN:1', 'INSERT:1', 'SETTLE_VERIFY:1', FINISHED]
+      outcome: 8
+      docked: false
+      state: FAILED
+      attempt: 1
+- name: abort_during_undock
+  params: {}
+  goals:
+  - command: UNDOCK
+    docked: true
+    near: false
+    events: [abort]
+    expect:
+      steps: ['UNDOCK:1', FINISHED]
+      outcome: 8
+      docked: false
+      state: FAILED
+      attempt: 1
+- name: cancel_after_finish_is_ignored
+  params: {}
+  goals:
+  - command: DOCK
+    docked: false
+    near: true
+    events:
+    - det:ok
+    - phase:OK
+    - phase:OK
+    - verify: [0.01, 0.02]
+    expect:
+      steps: ['WAIT_DETECTION:1', 'ALIGN:1', 'INSERT:1', 'SETTLE_VERIFY:1', FINISHED]
+      outcome: 0
+      docked: true
+      state: DOCKED
+      attempt: 1
+      detection_used: true
+    after_finish: [cancel, abort]
+- name: undock_success
+  params: {}
+  goals:
+  - command: UNDOCK
+    docked: true
+    near: false
+    events: ['phase:OK']
+    expect:
+      steps: ['UNDOCK:1', FINISHED]
+      outcome: 1
+      docked: false
+      state: UNDOCKED
+      attempt: 1
+    first_step_expect: {docked: false}
+- name: undock_failure_timeout
+  params: {}
+  goals:
+  - command: UNDOCK
+    docked: true
+    near: false
+    events: ['phase:TIMEOUT']
+    expect:
+      steps: ['UNDOCK:1', FINISHED]
+      outcome: 7
+      docked: false
+      state: FAILED
+      attempt: 1
+- name: undock_failure_stall
+  params: {}
+  goals:
+  - command: UNDOCK
+    docked: true
+    near: false
+    events: ['phase:STALL']
+    expect:
+      steps: ['UNDOCK:1', FINISHED]
+      outcome: 7
+      docked: false
+      state: FAILED
+      attempt: 1
+- name: undock_failure_safety_timeout
+  params: {}
+  goals:
+  - command: UNDOCK
+    docked: true
+    near: false
+    events: ['phase:SAFETY_TIMEOUT']
+    expect:
+      steps: ['UNDOCK:1', FINISHED]
+      outcome: 7
+      docked: false
+      state: FAILED
+      attempt: 1
+- name: undock_failure_misaligned
+  params: {}
+  goals:
+  - command: UNDOCK
+    docked: true
+    near: false
+    events: ['phase:MISALIGNED']
+    expect:
+      steps: ['UNDOCK:1', FINISHED]
+      outcome: 7
+      docked: false
+      state: FAILED
+      attempt: 1
+- name: dock_while_docked_is_already_docked
+  params: {}
+  goals:
+  - command: DOCK
+    docked: true
+    near: false
+    events: []
+    expect:
+      steps: [FINISHED]
+      outcome: 2
+      docked: true
+      state: DOCKED
+      attempt: 1
+- name: reuse_after_failure_starts_clean
+  params: {}
+  goals:
+  - command: DOCK
+    docked: false
+    near: true
+    events: ['det:ok', 'phase:TIMEOUT', 'phase:TIMEOUT', 'phase:TIMEOUT']
+    expect:
+      steps: ['WAIT_DETECTION:1', 'ALIGN:1', 'ALIGN:2', 'ALIGN:3', FINISHED]
+      outcome: 6
+      docked: false
+      state: FAILED
+      attempt: 3
+  - command: DOCK
+    docked: false
+    near: false
+    events:
+    - nav:ok
+    - det:ok
+    - phase:OK
+    - phase:OK
+    - verify: [0.01, 0.02]
+    expect:
+      steps: ['NAVIGATE_STAGING:1', 'WAIT_DETECTION:1', 'ALIGN:1', 'INSERT:1', 'SETTLE_VERIFY:1', FINISHED]
+      outcome: 0
+      docked: true
+      state: DOCKED
+      attempt: 1
+      detection_used: true
+    start_expect: {attempt: 1, message: '', docked: false, detection_used: false}
+- name: reuse_after_cancel_starts_clean
+  params: {}
+  goals:
+  - command: DOCK
+    docked: false
+    near: false
+    events: [cancel]
+    expect:
+      steps: ['NAVIGATE_STAGING:1', FINISHED]
+      outcome: 3
+      docked: false
+      state: UNDOCKED
+      attempt: 1
+  - command: DOCK
+    docked: false
+    near: true
+    events:
+    - det:ok
+    - phase:OK
+    - phase:OK
+    - verify: [0.01, 0.02]
+    expect:
+      steps: ['WAIT_DETECTION:1', 'ALIGN:1', 'INSERT:1', 'SETTLE_VERIFY:1', FINISHED]
+      outcome: 0
+      docked: true
+      state: DOCKED
+      attempt: 1
+      detection_used: true
+    start_expect: {attempt: 1, message: '', docked: false}
+- name: reuse_after_docked_clears_flag_on_motion
+  params: {}
+  goals:
+  - command: DOCK
+    docked: false
+    near: true
+    events:
+    - det:ok
+    - phase:OK
+    - phase:OK
+    - verify: [0.01, 0.02]
+    expect:
+      steps: ['WAIT_DETECTION:1', 'ALIGN:1', 'INSERT:1', 'SETTLE_VERIFY:1', FINISHED]
+      outcome: 0
+      docked: true
+      state: DOCKED
+      attempt: 1
+      detection_used: true
+  - command: UNDOCK
+    docked: true
+    near: false
+    events: ['phase:OK']
+    expect:
+      steps: ['UNDOCK:1', FINISHED]
+      outcome: 1
+      docked: false
+      state: UNDOCKED
+      attempt: 1
+    start_expect: {attempt: 1, message: '', docked: true}
+    first_step_expect: {docked: false}
+  - command: DOCK
+    docked: false
+    near: true
+    events:
+    - det:ok
+    - phase:STALL
+    - phase:OK
+    - phase:OK
+    - verify: [0.01, 0.02]
+    expect:
+      steps: ['WAIT_DETECTION:1', 'ALIGN:1', 'ALIGN:2', 'INSERT:2', 'SETTLE_VERIFY:2', FINISHED]
+      outcome: 0
+      docked: true
+      state: DOCKED
+      attempt: 2
+      detection_used: true
+    start_expect: {attempt: 1, message: '', docked: false}
+- name: reuse_after_staging_failure_resets_attempts
+  params: {}
+  goals:
+  - command: DOCK
+    docked: false
+    near: false
+    events: ['nav:fail', 'nav:fail', 'nav:fail']
+    expect:
+      steps: ['NAVIGATE_STAGING:1', 'NAVIGATE_STAGING:2', 'NAVIGATE_STAGING:3', FINISHED]
+      outcome: 4
+      docked: false
+      state: FAILED
+      attempt: 3
+  - command: DOCK
+    docked: false
+    near: false
+    events:
+    - nav:fail
+    - nav:ok
+    - det:ok
+    - phase:OK
+    - phase:OK
+    - verify: [0.01, 0.02]
+    expect:
+      steps: ['NAVIGATE_STAGING:1', 'NAVIGATE_STAGING:2', 'WAIT_DETECTION:1', 'ALIGN:1', 'INSERT:1', 'SETTLE_VERIFY:1',
+        FINISHED]
+      outcome: 0
+      docked: true
+      state: DOCKED
+      attempt: 1
+      detection_used: true
+    start_expect: {attempt: 1}
+- name: reuse_after_dock_failure_then_undock_not_docked_flag
+  params: {}
+  goals:
+  - command: DOCK
+    docked: false
+    near: true
+    events: ['det:ok', 'phase:STALL', 'phase:STALL', 'phase:STALL']
+    expect:
+      steps: ['WAIT_DETECTION:1', 'ALIGN:1', 'ALIGN:2', 'ALIGN:3', FINISHED]
+      outcome: 6
+      docked: false
+      state: FAILED
+      attempt: 3
+  - command: UNDOCK
+    docked: true
+    near: false
+    events: ['phase:OK']
+    expect:
+      steps: ['UNDOCK:1', FINISHED]
+      outcome: 1
+      docked: false
+      state: UNDOCKED
+      attempt: 1
+    start_expect: {attempt: 1, message: ''}
