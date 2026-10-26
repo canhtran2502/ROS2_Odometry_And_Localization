@@ -144,7 +144,7 @@ robot xacro --(simulator:=mujoco)--> topic_based_ros2_control/TopicBasedSystem
                                           |--> /clock, /scan (5 Hz), /imu/out (100 Hz)
 ```
 
-- `ros2_control_node` hosts `diff_drive_controller` (there is no simulator plugin to host it); the hardware plugin exchanges wheel velocity commands and joint states with `mujoco_sim_node`.
+- `ros2_control_node` hosts `diff_drive_controller` (there is no simulator plugin to host it); the hardware plugin exchanges wheel velocity commands and joint states with `mujoco_sim_node`. The xacro sets `trigger_joint_command_threshold=-1` for this plugin, otherwise it publishes commands only once the wheel positions have drifted past 1e-5 (see doc/12, 3b).
 - `mujoco_sim_node` wraps `bumperbot_mujoco/sim_core.py` (pure Python, no ROS). Wheels use velocity servos, the IMU uses MuJoCo `gyro`/`accelerometer`/`framequat` sensors with the Gazebo noise values, and the lidar casts 360 rays with `mj_multiRay` against the world collision geoms only.
 - Geom groups: 1 robot visual, 2 world visual, 3 robot collision, 4 world collision (hidden in the viewer, hit by the lidar).
 
@@ -159,8 +159,21 @@ python3 src/bumperbot_mujoco/tools/sdf_to_mjcf.py      # worlds/*.world -> mjcf/
 
 Differences from Gazebo to be aware of:
 - MuJoCo cannot load Collada; visual meshes are decimated STL with one flat colour per material (textures are not carried over) and collision meshes are convex decompositions (CoACD).
+- Collision geometry follows two paths in `sdf_to_mjcf.py`. Small concave models (furniture) are split into at most `MAX_HULLS = 8` convex hulls with CoACD. Large thin concave structures (XY extent >= `FOOTPRINT_MIN_EXTENT` = 4 m, in practice the outer house wall `residential_HouseWallB_01`) are NOT decomposed: eight hulls cannot follow a 19 m x 11 m wall, and each hull then fills whole strips of the house (diagonal walls in the lidar scan and in every SLAM map). They become axis-aligned thin boxes from the mesh footprint: the mesh is sliced at the middle of z layers (the layer edges include every horizontal face level, so window sills and door heads are kept), rasterised at 0.05 m, the gap between the two faces of a wall (up to 0.45 m) is filled, and the raster is merged into rectangles stacked over consecutive layers. The boxes need no mesh files and the result is deterministic. Regeneration needs `scipy` in addition to the converter dependencies; install them in a virtualenv (`python3 -m venv --system-site-packages <dir>`), not into the system Python.
+- Fidelity check: a lidar-style ground truth of the MuJoCo world (horizontal `mj_ray` at the laser height from free reference cells) compared with `maps/small_house/map.pgm` through `map_compare.compare_maps` gives inlier fraction ~0.99, max tile rotation < 1 deg and max tile shift 0.10 m (AC11).
 - All world models are static (Gazebo treats a few warehouse props as dynamic).
 - Wheel/ground friction and caster behaviour are tuned for MuJoCo; expect slightly different wheel slip than Gazebo.
+
+### MuJoCo contact parameters (why the model has `priority` and `solref`)
+
+Wheel odometry in the simulation must agree with the true motion, otherwise SLAM gets a biased odometry prior and draws a warped (fanned) map. Two contact settings in `generate_robot.py` (and therefore `mjcf/robot.xml`) make that true:
+
+| Geom | Setting | Reason |
+|---|---|---|
+| `caster_front_link_collision`, `caster_rear_link_collision` | `condim="1" priority="1"` | MuJoCo mixes the contact parameters of the two geoms: with equal priority it takes the larger `condim`, and the ground has `condim 3`, so a caster `condim="1"` alone is ignored (contacts stay `dim 3`, frictional). The sticky casters then dragged the robot and over-reported rotation by about 4 %. `priority="1"` makes the caster's frictionless contact win. |
+| `wheel_left_link_collision`, `wheel_right_link_collision` | `priority="1" solref="0.004 1"` | The default soft contact (`solref 0.02 1`) lets the wheels sink about 0.5 mm, which shrinks the effective wheel radius (about 1 % heading scale error). A stiffer contact fixes it; keep `solref[0]` at least 2 x the timestep (0.002 s). `priority="1"` also keeps the wheel friction (1.5) and `solref` in effect. |
+
+Result (`BumperbotSim`, encoder dead reckoning, empty world): 2 m square heading error below 1 deg, 4 turns in place below 3 deg, 3 m straight below 2 mm. Only the MuJoCo model changed; the URDF, Gazebo, `ros2_control` parameters and the real robot are untouched. `test/test_odometry_drift.py` pins this behavior. The generator needs `fast_simplification` (trimesh decimation) for the meshes; the contact settings can be checked with `python3 -c "import mujoco; ..."` by looking at `contact.dim` of the casters (must be 1).
 
 ```bash
 ros2 launch bumperbot_mujoco mujoco.launch.py world_name:=small_house   # empty | small_house | small_warehouse

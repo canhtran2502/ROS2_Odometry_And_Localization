@@ -8,7 +8,11 @@ For every model used by a world this script:
     (textures are not carried over, the average texture colour is used instead).
 All models are emitted as static bodies. Geom groups follow tools/generate_robot.py.
 
-Requires: mujoco, trimesh, pycollada, coacd, fast-simplification, numpy.
+Large thin concave structures (the outer house wall) are not decomposed into hulls: a handful of
+convex hulls fills whole strips of the house and shows up as diagonal walls in the lidar scans.
+They are converted to axis-aligned boxes over the mesh footprint instead (see footprint_boxes).
+
+Requires: mujoco, trimesh, pycollada, coacd, fast-simplification, numpy, scipy.
 
 Usage:
   python3 tools/sdf_to_mjcf.py                       # convert all worlds
@@ -24,6 +28,7 @@ import coacd
 import numpy as np
 import trimesh
 from PIL import Image
+from scipy import ndimage
 
 PKG_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 DESCRIPTION_DIR = os.path.join(os.path.dirname(PKG_DIR), "bumperbot_description")
@@ -37,6 +42,12 @@ VISUAL_FACE_BUDGET = 6000
 # Collision meshes are decimated to this many faces before the convex decomposition
 COLLISION_FACE_LIMIT = 1500
 MAX_HULLS = 8
+# Concave meshes with an XY extent of at least this many metres use the box footprint, not hulls
+FOOTPRINT_MIN_EXTENT = 4.0
+# Footprint raster: XY cell size, largest wall thickness that is filled solid and z layer step
+FOOTPRINT_PITCH = 0.05
+FOOTPRINT_MAX_THICKNESS = 0.45
+FOOTPRINT_LAYER_STEP = 0.5
 # Floor safety net below the world, so the robot cannot fall forever when leaving the mapped area
 SAFETY_FLOOR_Z = -0.1
 
@@ -157,6 +168,85 @@ def decompose(mesh, name):
     return hulls
 
 
+def _close_1d(mask, length, axis):
+    """Fill gaps shorter than `length` cells between occupied cells along one axis."""
+    shape = [1, 1]
+    shape[axis] = length
+    return ndimage.binary_closing(mask, structure=np.ones(shape, bool))
+
+
+def _merge_rectangles(mask):
+    """Greedy cover of a boolean grid by rectangles; returns (i0, i1, j0, j1) with exclusive ends."""
+    rects = []
+    open_rows = {}  # (j0, j1) -> i0 of the rectangle that is still growing
+    for i in range(mask.shape[0] + 1):
+        runs = set()
+        if i < mask.shape[0]:
+            padded = np.concatenate([[0], mask[i].astype(np.int8), [0]])
+            edges = np.flatnonzero(np.diff(padded))
+            runs = {(int(a), int(b)) for a, b in zip(edges[::2], edges[1::2])}
+        for run in list(open_rows):
+            if run not in runs:
+                rects.append((open_rows.pop(run), i, run[0], run[1]))
+        for run in runs:
+            open_rows.setdefault(run, i)
+    return rects
+
+
+def footprint_boxes(mesh, name):
+    """Cover a thin, large, possibly non-watertight mesh (a house wall) by axis-aligned boxes.
+
+    The mesh is sliced (plane/triangle intersection, so open meshes work) at the middle of z layers (the layer edges include every horizontal face
+    level, so window sills and door heads are kept). Each slice is rasterised, thin gaps between the
+    two faces of a wall are filled and the raster is merged into rectangles, which are then stacked
+    over consecutive layers when identical. Returns a list of (centre, half_size) in the mesh frame.
+    """
+    pitch = FOOTPRINT_PITCH
+    lo, hi = mesh.bounds
+    normals = mesh.face_normals
+    levels = mesh.triangles_center[np.abs(normals[:, 2]) > 0.99][:, 2]
+    edges = np.unique(np.round(np.concatenate([[lo[2], hi[2]], levels,
+                                               np.arange(lo[2], hi[2], FOOTPRINT_LAYER_STEP)]), 3))
+    edges = edges[(edges >= lo[2] - 1e-6) & (edges <= hi[2] + 1e-6)]
+    origin = np.floor(lo[:2] / pitch) * pitch - 4 * pitch
+    size = np.ceil((hi[:2] - origin) / pitch).astype(int) + 4
+    gap = int(round(FOOTPRINT_MAX_THICKNESS / pitch))
+    layers = []  # (z0, z1, mask)
+    for z0, z1 in zip(edges[:-1], edges[1:]):
+        if z1 - z0 < 1e-3:
+            continue
+        # Raw plane/triangle segments: unlike Path loops they also work for open (non-watertight) meshes
+        segments = trimesh.intersections.mesh_plane(mesh, [0, 0, 1], [0, 0, 0.5 * (z0 + z1)])
+        mask = np.zeros(size, bool)
+        for a, b in segments:
+            count = max(2, int(np.linalg.norm(b[:2] - a[:2]) / (0.25 * pitch)) + 1)
+            points = a[:2] + np.linspace(0.0, 1.0, count)[:, None] * (b[:2] - a[:2])
+            cells = np.floor((points - origin) / pitch).astype(int)
+            mask[cells[:, 0], cells[:, 1]] = True
+        mask = _close_1d(mask, gap, 0) | _close_1d(mask, gap, 1)
+        layers.append((z0, z1, mask))
+    # Stack identical rectangles of consecutive layers into one tall box
+    boxes = []
+    active = {}  # rectangle -> [z_bottom, z_top] of the box that is still growing
+    for z0, z1, mask in layers + [(None, None, np.zeros(size, bool))]:
+        rects = set(_merge_rectangles(mask))
+        for rect in list(active):
+            if rect not in rects:
+                boxes.append((rect, active.pop(rect)))
+        for rect in rects:
+            if rect in active:
+                active[rect][1] = z1
+            else:
+                active[rect] = [z0, z1]
+    result = []
+    for (i0, i1, j0, j1), (z0, z1) in sorted(boxes):
+        low = np.array([origin[0] + i0 * pitch, origin[1] + j0 * pitch, z0])
+        high = np.array([origin[0] + i1 * pitch, origin[1] + j1 * pitch, z1])
+        result.append((0.5 * (low + high), 0.5 * (high - low)))
+    print("  %s: %d footprint box(es)" % (name, len(result)))
+    return result
+
+
 def convert_model(model_name):
     """Convert one SDF model; returns {'assets': [(mesh_name, file)], 'geoms': [xml attribute dicts]}."""
     if model_name in _model_cache:
@@ -191,6 +281,11 @@ def convert_model(model_name):
             meshes = load_dae(mesh_element.findtext("uri"), scale)
             whole = trimesh.util.concatenate(meshes)
             whole.apply_transform(pose)
+            if not is_nearly_convex(whole) and max(whole.extents[:2]) >= FOOTPRINT_MIN_EXTENT:
+                for box_index, (centre, half) in enumerate(footprint_boxes(whole, "%s/%s" % (short, link.get("name")))):
+                    result["geoms"].append({"type": "box", "size": fmt(half), "pos": fmt(centre),
+                                            "group": GROUP_COLLISION, "kind": "collision"})
+                continue
             for hull_index, hull in enumerate(decompose(whole, "%s/%s" % (short, link.get("name")))):
                 name = "%s_%s_c%d_%d" % (short, link.get("name"), index, hull_index)
                 hull.export(os.path.join(out_dir, name + ".stl"))

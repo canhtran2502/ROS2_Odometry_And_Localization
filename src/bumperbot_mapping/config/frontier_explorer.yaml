@@ -1,0 +1,60 @@
+# Default parameters of the frontier_explorer node.
+# Keep the number types as written (floats with a decimal point, ints without).
+frontier_explorer:
+  ros__parameters:
+    # TF frames
+    global_frame: "map"
+    robot_frame: "base_footprint"
+    # Output topic: a low-priority twist_mux input (priority 10)
+    cmd_vel_topic: "explore_vel"
+    # Follower and safety loop rate (Hz)
+    control_rate: 10.0
+    # Replan period on the latest map (s)
+    replan_period: 2.0
+
+    # Planning
+    robot_radius: 0.12
+    # Cells closer than this to an obstacle are not traversable (m)
+    inflation_radius: 0.30
+    # The planner only crosses known free cells
+    unknown_is_obstacle: true
+    # Minimum frontier cluster size (cells)
+    min_frontier_size: 8
+    # Goals closer than this to a failed or reached goal are skipped (m)
+    goal_blacklist_radius: 0.5
+    # Seconds without 0.1 m of progress before the goal is blacklisted
+    progress_timeout: 20.0
+    # Ranking weight of the frontier size (m of distance per m of frontier length)
+    frontier_size_weight: 0.5
+
+    # Path following (pure pursuit)
+    max_linear_speed: 0.15
+    max_angular_speed: 0.8
+    lookahead_distance: 0.35
+    # Rotate without translating above this heading error (rad)
+    rotate_in_place_angle: 0.8
+    goal_tolerance: 0.25
+
+    # Reactive safety on /scan (stricter than safety_stop_node, whose danger zone is 0.2 m)
+    stop_distance: 0.25
+    slow_distance: 0.45
+    front_sector_half_angle: 0.6
+    # Side/rear clearance (m): closer obstacles at any beam angle steer the robot away and
+    # slow it, so it stays above the safety_stop_node 0.2 m lock threshold
+    side_clearance: 0.30
+
+    # One 360 degree turn at start to seed the map
+    initial_spin: true
+
+    # Completion: consecutive replans AND seconds without any valid frontier
+    completion_hysteresis: 3
+    completion_timeout: 10.0
+    # Stop, save and report COMPLETE after this time (s); 0.0 = unlimited
+    max_exploration_time: 0.0
+
+    # Map saving (nav2 map_saver, fallback slam_toolbox/save_map)
+    save_map_on_complete: true
+    map_save_path: "~/bumperbot_maps/explored_map"
+    save_map_timeout: 5.0
+    # Exit the node after saving
+    shutdown_on_complete: false

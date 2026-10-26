@@ -37,6 +37,9 @@ IMU_GYRO_NOISE = 2e-4
 IMU_ACCEL_NOISE = 1.7e-2
 
 WHEEL_FRICTION = "1.5 0.005 0.0001"
+# Stiffer wheel contact than the MuJoCo default (0.02 1): the soft default lets the wheels sink
+# ~0.5 mm and shrinks the effective wheel radius (odometry heading scale error). Must stay >= 2 x timestep.
+WHEEL_SOLREF = "0.004 1"
 # Velocity servo gain [N*m/(rad/s)], torque limit [N*m] and speed limit [rad/s] of the wheel motors
 WHEEL_KV = 0.2
 WHEEL_TORQUE_LIMIT = 0.3
@@ -131,10 +134,18 @@ def postprocess(root):
                                          "visual" if geom.get("group") == "1" else "collision"))
 
     for name in ("wheel_left_link", "wheel_right_link"):
-        find_body(root, name).find("geom[@name='%s_collision']" % name).set("friction", WHEEL_FRICTION)
+        geom = find_body(root, name).find("geom[@name='%s_collision']" % name)
+        geom.set("friction", WHEEL_FRICTION)
+        # priority 1 makes these contact parameters (friction, solref) win over the ground's
+        geom.set("priority", "1")
+        geom.set("solref", WHEEL_SOLREF)
     for name in ("caster_front_link", "caster_rear_link"):
-        # Free-rolling casters: frictionless contact (condim 1), otherwise they drag the robot
-        find_body(root, name).find("geom[@name='%s_collision']" % name).set("condim", "1")
+        # Free-rolling casters: frictionless contact (condim 1), otherwise they drag the robot.
+        # MuJoCo uses the geom with the higher priority for contact parameters, and on equal priority
+        # the max condim; the ground has condim 3, so the caster needs priority 1 for condim 1 to win.
+        geom = find_body(root, name).find("geom[@name='%s_collision']" % name)
+        geom.set("condim", "1")
+        geom.set("priority", "1")
 
     # The base is a free-floating body; start 1 mm above the ground to avoid initial penetration
     base = find_body(root, "base_footprint")

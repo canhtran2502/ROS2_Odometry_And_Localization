@@ -1,0 +1,37 @@
+{
+  "slug": "auto-explore-slam",
+  "title": "Autonomous frontier exploration with SLAM",
+  "stage": "done",
+  "iteration": 4,
+  "max_iterations": 7,
+  "history": [
+    {
+      "iteration": 1,
+      "verdict": "FAIL",
+      "passed": 6,
+      "total": 8,
+      "at": "2026-10-23T10:34:41Z"
+    },
+    {
+      "iteration": 2,
+      "verdict": "PASS",
+      "passed": 8,
+      "total": 8,
+      "at": "2026-10-23T10:41:08Z"
+    },
+    {
+      "iteration": 3,
+      "verdict": "FAIL",
+      "passed": 8,
+      "total": 10,
+      "at": "2026-10-23T11:54:15Z"
+    },
+    {
+      "iteration": 4,
+      "verdict": "PASS",
+      "passed": 11,
+      "total": 11,
+      "at": "2026-10-23T13:40:20Z"
+    }
+  ]
+}

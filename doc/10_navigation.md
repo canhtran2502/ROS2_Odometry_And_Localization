@@ -18,7 +18,11 @@ A static and dynamic code inspection confirms the following boundary:
 5. **Simultaneous Localization and Mapping**: `slam_toolbox` graph-based SLAM.
 6. **Actuation Execution**: `ros2_control` velocity tracking via `diff_drive_controller`.
 
-### NOT FOUND in Repository:
+7. **Autonomous Exploration (without Nav2)**: `frontier_explorer` (`bumperbot_mapping`) uses its own grid A* planner on an inflated costmap and a pure-pursuit follower to explore an unknown map with `slam_toolbox`; launched with `auto_explore.launch.py`. It does not depend on Nav2. See [08_mapping_and_slam.md](08_mapping_and_slam.md).
+
+> Note: the Nav2 packages (`nav2_planner`, `nav2_controller`, `nav2_bt_navigator`, ...) are installed in the development environment now, but no Nav2 navigation stack is configured or launched by this workspace, and the exploration feature does not use them. The blueprint below is still the roadmap for Nav2 integration.
+
+### NOT FOUND in Repository (as a Nav2 stack):
 - **Global Path Planners**: NavFn, Smac Planner ($A^*$, Hybrid $A^*$), or Dijkstra algorithms.
 - **Local Trajectory Controllers**: DWB (Dynamic Window Approach), TEB, or Regulated Pure Pursuit.
 - **Costmap Generation**: Nav2 2D Costmaps (Global Costmap, Local Costmap, inflation layers, obstacle voxel layers).

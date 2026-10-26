@@ -34,7 +34,8 @@ bumperbot_ws/
     │   ├── package.xml
     │   └── launch/
     │       ├── real_robot.launch.py                   # Physical AMR hardware launch
-    │       └── simulated_robot.launch.py              # Full simulation bringup (Gazebo/RViz/SLAM/AMCL)
+    │       ├── simulated_robot.launch.py              # Full simulation bringup (Gazebo/MuJoCo, RViz/SLAM/AMCL)
+    │       └── auto_explore.launch.py                 # SLAM + frontier_explorer autonomous exploration
     │
     ├── bumperbot_controller/                          # Kinematics, odometry, velocity multiplexing
     │   ├── CMakeLists.txt
@@ -139,9 +140,12 @@ bumperbot_ws/
     │   │   └── mapping_with_known_poses.cpp           # Known-pose ray projection grid generator
     │   ├── bumperbot_mapping/
     │   │   ├── __init__.py
-    │   │   └── mapping_with_known_poses.py            # Multi-threaded Python occupancy grid generator
+    │   │   ├── mapping_with_known_poses.py            # Multi-threaded Python occupancy grid generator
+    │   │   ├── frontier_exploration.py                # Pure-Python exploration core (frontiers, A*, pure pursuit, state machine)
+    │   │   └── frontier_explorer.py                   # ROS 2 node wrapper: autonomous frontier exploration + map saving
     │   ├── config/
-    │   │   └── slam_toolbox.yaml                      # Ceres-solver scan-matching SLAM configuration
+    │   │   ├── slam_toolbox.yaml                      # Ceres-solver scan-matching SLAM configuration
+    │   │   └── frontier_explorer.yaml                 # frontier_explorer parameters
     │   ├── maps/
     │   │   └── small_house/                           # Pre-built map assets
     │   │       ├── map.yaml                           # Occupancy grid metadata
@@ -262,7 +266,7 @@ The repository dependencies form a clean layered architecture without circular r
 | `bumperbot_firmware` | `ament_cmake` | `bumperbot_controller`, `bumperbot_description` | `hardware_interface`, `pluginlib`, `rclcpp`, `rclpy`, `libserial-dev` |
 | `bumperbot_utils` | `ament_cmake` | None | `rclcpp`, `rclpy`, `sensor_msgs`, `std_msgs`, `visualization_msgs`, `twist_mux_msgs` |
 | `bumperbot_localization`| `ament_cmake` | `bumperbot_controller` | `rclcpp`, `rclpy`, `nav_msgs`, `sensor_msgs`, `geometry_msgs`, `robot_localization`, `nav2_amcl`, `nav2_map_server` |
-| `bumperbot_mapping` | `ament_cmake` | None | `rclcpp`, `rclpy`, `sensor_msgs`, `nav_msgs`, `tf2`, `tf2_ros`, `slam_toolbox`, `nav2_map_server` |
+| `bumperbot_mapping` | `ament_cmake` | None | `rclcpp`, `rclpy`, `sensor_msgs`, `nav_msgs`, `tf2`, `tf2_ros`, `slam_toolbox`, `nav2_map_server`, `nav2_msgs`, `visualization_msgs`, `numpy`, `scipy` |
 | `bumperbot_bringup` | `ament_cmake` | `bumperbot_description`, `bumperbot_controller`, `bumperbot_firmware`, `bumperbot_localization`, `bumperbot_mapping`, `bumperbot_utils` | `rviz2` |
 | `bumperbot_cpp_examples`| `ament_cmake` | `bumperbot_msgs` | `rclcpp`, `rclcpp_action`, `rclcpp_lifecycle`, `tf2`, `tf2_ros`, `turtlesim` |
 | `bumperbot_py_examples` | `ament_python`| `bumperbot_msgs` | `rclpy`, `tf2_ros`, `turtlesim` |

@@ -3,3 +3,5 @@ install/
 log/
 __pycache__/
 .pytest_cache/
+.claude/features/.active
+.claude/settings.local.json
